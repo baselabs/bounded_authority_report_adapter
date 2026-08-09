@@ -44,6 +44,13 @@ defmodule BoundedAuthorityReportAdapter.Conformance.VectorCase do
                  "grant-holder-proof.json"
                ])
 
+  # @external_resource binds recompilation to the vector file: without it, an
+  # in-place edit to the dep's grant-holder-proof.json would NOT recompile this
+  # module, so the harness could silently certify a stale copy of the oracle
+  # (a dep REF bump forces a full recompile, so the practical window is a
+  # locally-patched dep — but the binding closes it anyway). Cross-vendor note.
+  @external_resource @vector_path
+
   @vector File.read!(@vector_path) |> :json.decode()
 
   @doc "The decoded published vector."
@@ -52,10 +59,20 @@ defmodule BoundedAuthorityReportAdapter.Conformance.VectorCase do
   @doc "The expected_context block (shared across the published cases)."
   def expected_context, do: @vector["expected_context"]
 
-  @doc "The 32-byte raw issuer public key (from `public_keys.issuer.raw_base64url`)."
+  @doc """
+  The 32-byte raw issuer public key — the verifier's TRUST ANCHOR.
+
+  Sourced from `expected_context.trusted_issuer.public_key_base64url` (the
+  authoritative trust anchor the verifier is configured with), NOT from
+  `public_keys.issuer.raw_base64url` (the signer's own published key). The two
+  match in the published vector, but sourcing from the expected_context means
+  a hypothetical signer-key/context-key mismatch fails the trust-anchor check
+  rather than silently verifying against the signer key (cross-vendor CV-trust
+  finding).
+  """
   def issuer_public_key do
     Base.url_decode64!(
-      @vector["public_keys"]["issuer"]["raw_base64url"],
+      @vector["expected_context"]["trusted_issuer"]["public_key_base64url"],
       padding: false
     )
   end
@@ -147,13 +164,22 @@ defmodule BoundedAuthorityReportAdapter.Conformance.VectorCase do
     }
   end
 
-  # Per-case nonce derivation (design §1.6 C). A proof payload that carries a
-  # "nonce" key -> {:required, that_nonce}; otherwise :not_required. The shared
-  # expected_context.nonce would red the nonce_absent declared-valid case.
+  # Per-case nonce derivation (design §1.6 C; cross-vendor CV-nonce fix). The
+  # nonce EXPECTATION must come from the authoritative expected_context, NOT
+  # from the proof under test — deriving it from the proof payload makes BAP's
+  # nonce_matches?/2 compare the proof's nonce against itself (a tautology that
+  # a drifted nonce would pass). So: when the proof payload carries a nonce,
+  # the expectation is {:required, expected_context.nonce["required"]} (the
+  # oracle value); when the proof carries NO nonce (nonce_absent), the
+  # expectation is :not_required. The shared expected_context.nonce would red
+  # the nonce_absent declared-valid case, so the derivation keys off the proof
+  # payload's nonce PRESENCE (the only thing the proof can tell us) and takes
+  # the VALUE from the authoritative context.
   defp nonce_for(proof_payload) when is_map(proof_payload) do
-    case proof_payload["nonce"] do
-      nil -> :not_required
-      nonce -> {:required, nonce}
+    if Map.has_key?(proof_payload, "nonce") do
+      {:required, @vector["expected_context"]["nonce"]["required"]}
+    else
+      :not_required
     end
   end
 

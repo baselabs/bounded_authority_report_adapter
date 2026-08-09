@@ -28,6 +28,14 @@ defmodule BoundedAuthorityReportAdapter.Conformance.Tag do
       iex> from_json(["null"])
       :null
   """
+  # The null tagged value is encoded as a SINGLE-element array `["null"]`
+  # (BAP's typed JSON form has no value slot for null), so it has its own clause
+  # head before the 2-element `[type, value]` match — otherwise the documented
+  # arm is unreachable and `from_json(["null"])` raises FunctionClauseError
+  # (cross-vendor CV-null finding). The vector carries no null values today,
+  # but the translator must be correct for any future vector encoding.
+  def from_json(["null"]), do: :null
+
   def from_json([type, value]) do
     case type do
       "object" -> {:object, Enum.map(value, fn {k, v} -> {k, from_json(v)} end)}
@@ -36,7 +44,6 @@ defmodule BoundedAuthorityReportAdapter.Conformance.Tag do
       "boolean" -> {:boolean, value}
       "float" -> {:float, value}
       "array" -> {:array, Enum.map(value, &from_json/1)}
-      "null" -> :null
     end
   end
 end
