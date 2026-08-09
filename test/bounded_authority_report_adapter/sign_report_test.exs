@@ -90,6 +90,26 @@ defmodule BoundedAuthorityReportAdapter.SignReportTest do
                  expected_request(report, issuer_pub)
                )
     end
+
+    test "the default-generated proof_id (a UUID v4, not pinned) verifies green" do
+      # Closes the coverage gap flagged by the correctness closeout lens: the
+      # round-trip above pins a fixed proof_id via opts; this one omits :proof_id
+      # so the adapter's generate_uuid/0 default flows through check_envelope,
+      # exercising that the generated jti satisfies BAP's valid_identifier? gate.
+      report = build_report()
+      issuer_pub = issuer_pub()
+
+      assert {:ok, %{proof: proof}} =
+               BoundedAuthorityReportAdapter.sign_report(report, holder_handle(), %{
+                 issued_at: @now - 50
+               })
+
+      assert {:ok, _envelope_facts} =
+               V1.check_envelope(
+                 %V1.Credentials{grant: report.grant_compact, proof: proof},
+                 expected_request(report, issuer_pub)
+               )
+    end
   end
 
   describe "C1 enforcement: the adapter signs ONLY the proof (never the grant)" do
