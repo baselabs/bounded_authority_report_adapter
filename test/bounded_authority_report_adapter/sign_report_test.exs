@@ -219,6 +219,33 @@ defmodule BoundedAuthorityReportAdapter.SignReportTest do
       assert {:error, :invalid_report} =
                BoundedAuthorityReportAdapter.sign_report(incomplete_report, holder_handle(), %{})
     end
+
+    # Cross-vendor closeout finding (Codex + Claude): sign_via_handle/2's case
+    # was non-total — a sign/2 returning :ok / nil / a bare binary (not {:ok,_}/
+    # {:error,_}) raised CaseClauseError out of sign_report/3. The catch-all
+    # clause now maps it to :signing_failed (no raise escapes).
+    test "sign/2 returning a non-tuple (e.g. :ok) yields {:error, :signing_failed}, not a raise" do
+      report = build_report()
+      bad_contract_handle = {BadContractHandle, TestKeys.holder_keypair()}
+
+      assert {:error, :signing_failed} =
+               BoundedAuthorityReportAdapter.sign_report(report, bad_contract_handle, %{
+                 issued_at: @now - 50
+               })
+    end
+
+    # Cross-vendor closeout finding: a short public key passed the is_binary
+    # guard then failed downstream as {:producer_error, :invalid} instead of the
+    # documented :invalid_key_handle. The guard now requires 32 bytes.
+    test "a handle returning a short public key yields {:error, :invalid_key_handle}" do
+      report = build_report()
+      short_key_handle = {ShortKeyHandle, :x}
+
+      assert {:error, :invalid_key_handle} =
+               BoundedAuthorityReportAdapter.sign_report(report, short_key_handle, %{
+                 issued_at: @now - 50
+               })
+    end
   end
 
   # --- helpers ---
@@ -301,4 +328,44 @@ defmodule FailingKeyHandle do
     {:ok, raw} = BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
     {:ok, raw}
   end
+end
+
+defmodule BadContractHandle do
+  @moduledoc """
+  A key-handle whose sign/2 violates the {:ok,_}|{:error,_} contract (returns :ok).
+  Cross-vendor closeout finding: sign_via_handle/2 was non-total; a non-tuple
+  return raised CaseClauseError. The catch-all now maps it to :signing_failed.
+  """
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  def sign(_message, _handle), do: :ok
+
+  @impl true
+  def public_key({public_key, _private_key}), do: {:ok, public_key}
+
+  @impl true
+  def thumbprint({public_key, _private_key}) do
+    {:ok, raw} = BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
+    {:ok, raw}
+  end
+end
+
+defmodule ShortKeyHandle do
+  @moduledoc """
+  A key-handle whose public_key/1 returns a short (non-32-byte) key.
+  Cross-vendor closeout finding: a short key passed the is_binary guard then
+  failed downstream as {:producer_error, :invalid}. The guard now requires 32
+  bytes, so this fails fast as :invalid_key_handle.
+  """
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  def sign(_message, _handle), do: {:error, :unused}
+
+  @impl true
+  def public_key(_handle), do: {:ok, <<0::16>>}
+
+  @impl true
+  def thumbprint(_handle), do: {:ok, <<0::256>>}
 end
