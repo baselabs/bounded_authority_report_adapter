@@ -390,12 +390,15 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     # compact = protected.payload.signature. Flip an INTERIOR byte of the payload
     # that lands inside a string VALUE (not a structural byte: " : , { } ), so
     # the re-encoded payload is still valid JSON with a CHANGED value. This
-    # forces check_envelope's red to come from verify_proof_parsed (the signature
-    # no longer covers the tampered payload), NOT from parse_proof's JSON decode
-    # (cross-vendor CV-payload finding: a flip of the closing brace `}` reds at
-    # parse, which a verifier that omitted the payload from signature coverage
-    # would still pass — proving malformed-body rejection, not body-signature
-    # binding).
+    # forces check_envelope's red to come from verify_proof_parsed's field-binding
+    # checks (secure_equal? of the tampered field — e.g. the request_hash at
+    # runtime.ex:491 — which run BEFORE verify_signature), NOT from parse_proof's
+    # JSON decode (cross-vendor CV-payload finding: a flip of the closing brace
+    # `}` reds at parse, which a verifier that omitted the payload from signature
+    # coverage would still pass — proving malformed-body rejection, not that the
+    # tampered field is bound to the verified payload). The functional point
+    # stands: the red is a BODY-BINDING check inside verify_proof_parsed, not a
+    # parse reject.
     [protected, payload_b64, signature_b64] = String.split(compact, ".")
     payload = Base.url_decode64!(payload_b64, padding: false)
     flipped = flip_interior_value_byte(payload)
