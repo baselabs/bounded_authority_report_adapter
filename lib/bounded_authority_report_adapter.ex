@@ -107,8 +107,10 @@ defmodule BoundedAuthorityReportAdapter do
   ## Errors (closed-atom set — no key material or report content in errors)
 
     * `:invalid_report` — a required report field is missing.
-    * `:invalid_key_handle` — the handle's `public_key/1` or `sign/2` rejected.
-    * `:signing_failed` — the holder's `sign/2` callback returned an error.
+    * `:invalid_key_handle` — the handle is malformed, or the handle's
+      `public_key/1` rejected / returned a non-32-byte key.
+    * `:signing_failed` — the holder's `sign/2` callback rejected, returned a
+      non-64-byte signature, or violated the `{:ok, _} | {:error, _}` contract.
     * `{:producer_error, :invalid}` — BAP's producer or assembler rejected the
       proof (the input violated a bound or field constraint).
   """
@@ -174,10 +176,15 @@ defmodule BoundedAuthorityReportAdapter do
   defp resolve_public_key({module, handle}) when is_atom(module) do
     # The callback is caller-supplied; a missing module, a function-clause
     # raise inside it, or any other fault must map to the closed-atom error
-    # rather than escape sign_report/3 (mirrors BAP's fixed/1 wrapper).
+    # rather than escape sign_report/3 (mirrors BAP's fixed/1 wrapper). The
+    # public key must be a 32-byte Ed25519 key — a short/malformed key fails
+    # HERE as :invalid_key_handle, not downstream as a producer error.
     case safe_callback(module, :public_key, [handle]) do
-      {:ok, public_key} when is_binary(public_key) -> {:ok, public_key}
-      _ -> {:error, :invalid_key_handle}
+      {:ok, public_key} when is_binary(public_key) and byte_size(public_key) == 32 ->
+        {:ok, public_key}
+
+      _malformed_key_or_callback ->
+        {:error, :invalid_key_handle}
     end
   end
 
@@ -218,9 +225,14 @@ defmodule BoundedAuthorityReportAdapter do
     # caller-supplied, so wrap it the same way (a raise inside sign/2 maps to
     # :signing_failed rather than escaping).
     case safe_callback(module, :sign, [message, handle]) do
-      {:ok, signature} when is_binary(signature) -> {:ok, signature}
-      {:ok, _invalid_signature} -> {:error, :signing_failed}
-      {:error, _reason} -> {:error, :signing_failed}
+      {:ok, signature} when is_binary(signature) and byte_size(signature) == 64 ->
+        {:ok, signature}
+
+      # A signature that isn't a 64-byte binary (short, wrong type, or the
+      # callback returned a non-{:ok,_}/{:error,_} shape like :ok / nil / a bare
+      # binary) is a callback contract violation -> :signing_failed, never a raise.
+      _callback_contract_violation ->
+        {:error, :signing_failed}
     end
   end
 
