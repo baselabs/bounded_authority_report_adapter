@@ -387,19 +387,25 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
   end
 
   defp flip_payload_byte(compact) do
-    # compact = protected.payload.signature. Flip a byte STRICTLY INSIDE a string
-    # VALUE field (the proof's `jti`), not a structural byte or a key-name byte.
-    # This guarantees the re-encoded payload is valid JSON with unchanged keys
-    # but a CHANGED string value, so check_envelope's red comes from
-    # verify_proof_parsed's field-binding checks (secure_equal? of the tampered
-    # `jti` -> proof_id mismatch), NOT from parse_proof's JSON decode or its
-    # closed_map key-set check. Prior heuristic attempts (structural-byte
-    # exclusion from the payload middle) landed on key-name characters and reds
-    # at parse-side closed_map_one_of; targeting a known string value's interior
-    # closes that (cross-vendor CV-payload + delta-review + diff-review).
+    # compact = protected.payload.signature. Flip a byte STRICTLY INSIDE the
+    # `ba_req` string VALUE (the request-hash binding), not a structural byte or
+    # a key-name byte. `ba_req` is bound in verify_proof_parsed via
+    # secure_equal?(proof.request_hash, request_hash) (runtime.ex:491) — a
+    # FIELD-BINDING check, distinct from the signature check the
+    # flip_signature_byte test already covers. This guarantees the re-encoded
+    # payload is valid JSON with unchanged keys but a CHANGED ba_req value, so
+    # the red fires at the request-hash binding check, NOT at parse_proof's JSON
+    # decode or closed_map key-set check, AND exercises a genuinely different
+    # property than the signature flip.
+    #
+    # Targeting history (three prior iterations on byte selection): the
+    # structural-byte-exclusion heuristic landed on key-name chars (red at
+    # parse-side closed_map_one_of); targeting jti landed on a parsed-but-
+    # never-bound field (red at verify_signature, redundant with the sig flip).
+    # ba_req is bound at runtime.ex:491 — the correct target.
     [protected, payload_b64, signature_b64] = String.split(compact, ".")
     payload = Base.url_decode64!(payload_b64, padding: false)
-    flipped = flip_jti_value_byte(payload)
+    flipped = flip_string_value_byte(payload, "ba_req")
 
     protected <>
       "." <>
@@ -407,25 +413,22 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       "." <> signature_b64
   end
 
-  # Locate the proof payload's `"jti":"<value>"` member and flip one byte inside
-  # the value (between the opening and closing quotes). The JCS-canonical payload
-  # encodes jti as `,"jti":"<proof_id>"` or `"jti":"<proof_id>",` — a quoted
-  # string value. Flipping an interior value byte changes the decoded proof_id
-  # while keeping the JSON valid and the key set unchanged, so the red fires in
-  # verify_proof_parsed (the proof_id field-binding check), never at parse.
-  defp flip_jti_value_byte(payload) do
+  # Locate the proof payload's `"<field>":"<value>"` member and flip the first
+  # byte strictly inside the value (between the opening and closing quotes).
+  # The JCS-canonical payload encodes string fields as `"<field>":"<value>"` —
+  # flipping the first value byte changes the decoded value while keeping the
+  # JSON valid and the key set unchanged, so the red fires in verify_proof_parsed
+  # (never at parse). Use a field that is BOUND via secure_equal? in
+  # verify_proof_parsed (ath, ba_req, method, target_uri, invocation_id,
+  # operation) — NOT jti (parsed but only format-checked at runtime.ex:417).
+  defp flip_string_value_byte(payload, field) do
     bytes = :binary.bin_to_list(payload)
+    key = String.to_charlist("\"#{field}\"")
+    {key_end, _} = find_subsequence(bytes, key) || raise "no #{field} key in payload"
 
-    # Find the jti key `"jti"`. key_end is the index just past the closing quote.
-    key = ~c'"jti"'
-    {key_end, _} = find_subsequence(bytes, key) || raise "no jti key in payload"
-
-    # From key_end, the next non-whitespace byte is `:`; the one after that is
-    # the opening `"` of the value; the one after THAT is the first value byte.
     rest = Enum.drop(bytes, key_end)
     {:ok, colon_idx} = find_next_nonstructural(rest, 0)
     {:ok, open_quote_idx} = find_next_nonstructural(rest, colon_idx + 1)
-    # The first value byte is at open_quote_idx + 1 (absolute index in `bytes`).
     value_byte_abs = key_end + open_quote_idx + 1
     {head, [target | tail]} = Enum.split(bytes, value_byte_abs)
     IO.iodata_to_binary(head ++ [Bitwise.bxor(target, 0x01)] ++ tail)
