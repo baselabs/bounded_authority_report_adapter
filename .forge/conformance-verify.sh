@@ -57,11 +57,20 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 
 # --- stage 1: parse the matrix; reject empty/malformed ---
 # Each data row is TAB-separated: class<TAB>surface<TAB>evidence. The evidence
-# column (field 3) is the named test phrase. Extract every evidence phrase and
-# confirm the matrix carries at least one red-capable row.
+# column (field 3) is the named test phrase. Extract every NON-EMPTY evidence
+# phrase and confirm the matrix carries at least one red-capable row. A row with
+# an empty field-3 is malformed (no named test) and is rejected, not silently
+# passed (an empty grep -qF "" matches any file, so empty phrases must be
+# filtered before the presence check).
 mapfile -t EVIDENCE_PHRASES < <(
-  awk -F'\t' '/^#/ || /^$/ {next} {print $3}' "$MATRIX"
+  awk -F'\t' '/^#/ || /^$/ {next} $3 == "" {bad=1; next} {print $3} END {exit bad}' "$MATRIX"
 )
+awk_status=$?
+
+if [ "$awk_status" -ne 0 ]; then
+  echo "conformance-verify: FAIL — matrix $MATRIX has a data row with an empty evidence (field 3); every row must name its red-capable test" >&2
+  exit 1
+fi
 
 if [ "${#EVIDENCE_PHRASES[@]}" -eq 0 ]; then
   echo "conformance-verify: FAIL — matrix $MATRIX carries no data rows (empty/malformed); a conformance matrix must name its red-capable cells" >&2
