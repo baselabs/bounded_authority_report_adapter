@@ -106,10 +106,17 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     end
 
     @tag :conformance
-    test "negative_cases.duplicate_member goes red (invalid — malformed header)" do
-      # A bare compact with a duplicated "alg" member in the protected header.
-      # check_envelope rejects at decode (duplicate member); feeding it as the
-      # proof against the top-level grant reds.
+    test "negative_cases.duplicate_member goes red (invalid)" do
+      # The duplicate_member case compact is multiply-defective by construction
+      # (its protected header carries a duplicated "alg" member, AND its payload
+      # is `{"v":1}` missing every required proof member, AND its embedded
+      # thumbprint differs from the grant's cnf.jkt). check_envelope returns an
+      # opaque {:error, :invalid}, so this assert proves the envelope REDS but
+      # cannot attribute the red to the duplicate-member rejection specifically
+      # (a verifier that tolerated duplicate members would still red here on the
+      # other defects). The duplicate-member rejection is isolated below by
+      # decoding the protected header directly through BAP's normative JSON
+      # decoder, which rejects duplicate object members.
       v = VectorCase.vector()
       dm = v["negative_cases"]["duplicate_member"]
 
@@ -120,6 +127,18 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
                    proof: dm["compact"]
                  },
                  VectorCase.expected_request(:top_level)
+               )
+
+      # Isolate the duplicate-member rejection: BAP's Json.decode rejects an
+      # object with a duplicated member key. The case's protected header JSON
+      # is `{"alg":"EdDSA","alg":"HS256","typ":"ba+cap"}` (a duplicated alg);
+      # decoding it through BAP's normative decoder must red.
+      protected_segment = dm["protected_segment"]
+
+      assert {:error, :invalid} =
+               BoundedAuthorityProtocol.V1.Json.decode(
+                 Base.url_decode64!(protected_segment, padding: false),
+                 V1.Bounds.maximum()
                )
     end
 
@@ -151,6 +170,35 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
                  },
                  VectorCase.expected_request(sd)
                )
+    end
+
+    @tag :conformance
+    test "every nonce-carrying published case's nonce VALUE equals expected_context.nonce (no silent drift)" do
+      # The harness derives the nonce EXPECTATION's presence from the proof
+      # payload (the only per-case signal the vector offers) but its VALUE from
+      # expected_context.nonce["required"] (the authoritative oracle). This test
+      # closes the residual a cross-vendor note named: a hypothetical future
+      # nonce-carrying case whose proof nonce DRIFTED from expected_context would
+      # otherwise compare the proof's nonce against the authoritative value and
+      # red — but only if such a case were added. Asserting here that every
+      # CURRENT nonce-carrying published case's proof nonce equals the
+      # authoritative value makes the invariant explicit and pins it: a future
+      # vector edit that drifts a carrying case's nonce reds this test, not just
+      # the per-case verify.
+      v = VectorCase.vector()
+      authoritative = v["expected_context"]["nonce"]["required"]
+
+      carrying =
+        [v["proof"], v["received_member_order_variant"]["proof"]]
+        |> Kernel.++(Enum.map(Map.values(v["negative_cases"]["selector_denied"]), & &1["proof"]))
+        |> Kernel.++([v["negative_cases"]["wrong_holder"]["proof"]])
+
+      for proof <- carrying do
+        payload_nonce = proof["payload"]["nonce"]
+
+        assert payload_nonce == authoritative,
+               "a published nonce-carrying proof's nonce drifted from expected_context.nonce: #{inspect(payload_nonce)} != #{inspect(authoritative)}"
+      end
     end
   end
 
