@@ -111,12 +111,19 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       # (its protected header carries a duplicated "alg" member, AND its payload
       # is `{"v":1}` missing every required proof member, AND its embedded
       # thumbprint differs from the grant's cnf.jkt). check_envelope returns an
-      # opaque {:error, :invalid}, so this assert proves the envelope REDS but
-      # cannot attribute the red to the duplicate-member rejection specifically
-      # (a verifier that tolerated duplicate members would still red here on the
-      # other defects). The duplicate-member rejection is isolated below by
-      # decoding the protected header directly through BAP's normative JSON
-      # decoder, which rejects duplicate object members.
+      # opaque {:error, :invalid}, so the first assert proves the envelope REDS
+      # but CANNOT attribute the red to the duplicate-member rejection
+      # specifically — a verifier that tolerated duplicate members would still
+      # red here on the other defects (cross-vendor finding: this is not an
+      # isolation of duplicate-member rejection).
+      #
+      # The second assert (decoding the protected header through BAP's normative
+      # Json.decode) is an INDEPENDENT property: it proves BAP's JSON decoder
+      # rejects objects with duplicated member keys, applied to the case's
+      # `{"alg":"EdDSA","alg":"HS256","typ":"ba+cap"}` header. This is a
+      # decoder property, not an envelope-verifier attribution — the two
+      # asserts together show (a) the published case reds and (b) BAP's decoder
+      # rejects duplicate members, but not that (a) is caused by (b).
       v = VectorCase.vector()
       dm = v["negative_cases"]["duplicate_member"]
 
@@ -129,14 +136,12 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
                  VectorCase.expected_request(:top_level)
                )
 
-      # Isolate the duplicate-member rejection: BAP's Json.decode rejects an
-      # object with a duplicated member key. The case's protected header JSON
-      # is `{"alg":"EdDSA","alg":"HS256","typ":"ba+cap"}` (a duplicated alg);
-      # decoding it through BAP's normative decoder must red.
+      # BAP's normative Json.decode rejects an object with a duplicated member
+      # key — an independent decoder property, verified on the case's header.
       protected_segment = dm["protected_segment"]
 
       assert {:error, :invalid} =
-               BoundedAuthorityProtocol.V1.Json.decode(
+               V1.Json.decode(
                  Base.url_decode64!(protected_segment, padding: false),
                  V1.Bounds.maximum()
                )
@@ -322,8 +327,12 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     # injected defect is proven RED; the un-tampered envelope is green.
 
     setup do
-      # Build the green envelope once (bar iii's mechanism).
-      {holder_pub, _holder_priv} = TestKeys.holder_keypair()
+      # Build the green envelope once (bar iii's mechanism). The holder private
+      # key is kept so the payload-tamper test can RE-SIGN a tampered payload
+      # (a byte-flip that keeps the original signature reds at verify_signature,
+      # making it redundant with the signature-flip test; re-signing isolates
+      # the field-binding property).
+      {holder_pub, holder_priv} = TestKeys.holder_keypair()
       thumb = TestKeys.holder_thumbprint_raw(holder_pub)
 
       {grant_compact, issuer_pub} =
@@ -371,7 +380,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       # prove nothing (they would red for the wrong reason).
       assert {:ok, _} = V1.check_envelope(%Credentials{grant: grant, proof: proof}, expected)
 
-      %{grant: grant, proof: proof, expected: expected}
+      %{grant: grant, proof: proof, expected: expected, holder_priv: holder_priv}
     end
 
     @tag :conformance
@@ -396,12 +405,23 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     end
 
     @tag :conformance
-    test "a flipped proof-payload byte goes RED", %{
-      grant: grant,
-      proof: proof,
-      expected: expected
-    } do
-      tampered = flip_payload_byte(proof)
+    test "a tampered ba_req payload (RE-SIGNED so the signature stays valid) goes RED at the field binding",
+         %{
+           grant: grant,
+           proof: proof,
+           expected: expected,
+           holder_priv: holder_priv
+         } do
+      # A payload byte-flip that keeps the original signature reds at
+      # verify_signature (the signature covers protected.payload), making it
+      # redundant with the signature-flip test. To exercise the ba_req
+      # FIELD-BINDING check (runtime.ex:491) independently, this test tampers
+      # the ba_req value AND RE-SIGNS the tampered payload with the holder key —
+      # so the signature is valid over the tampered payload, verify_signature
+      # passes, and the red MUST come from the request-hash field binding
+      # (recomputed request hash != tampered ba_req). This is a genuinely
+      # different property from the signature-flip test.
+      tampered = tamper_and_resign_ba_req(proof, holder_priv)
 
       assert {:error, :invalid} =
                V1.check_envelope(%Credentials{grant: grant, proof: tampered}, expected)
@@ -493,78 +513,34 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     |> Enum.join(".")
   end
 
-  defp flip_payload_byte(compact) do
-    # compact = protected.payload.signature. Flip a byte STRICTLY INSIDE the
-    # `ba_req` string VALUE (the request-hash binding), not a structural byte or
-    # a key-name byte. `ba_req` is bound in verify_proof_parsed via
-    # secure_equal?(proof.request_hash, request_hash) (runtime.ex:491) — a
-    # FIELD-BINDING check, distinct from the signature check the
-    # flip_signature_byte test already covers. This guarantees the re-encoded
-    # payload is valid JSON with unchanged keys but a CHANGED ba_req value, so
-    # the red fires at the request-hash binding check, NOT at parse_proof's JSON
-    # decode or closed_map key-set check, AND exercises a genuinely different
-    # property than the signature flip.
-    #
-    # Targeting history (three prior iterations on byte selection): the
-    # structural-byte-exclusion heuristic landed on key-name chars (red at
-    # parse-side closed_map_one_of); targeting jti landed on a parsed-but-
-    # never-bound field (red at verify_signature, redundant with the sig flip).
-    # ba_req is bound at runtime.ex:491 — the correct target.
-    [protected, payload_b64, signature_b64] = String.split(compact, ".")
-    payload = Base.url_decode64!(payload_b64, padding: false)
-    flipped = flip_string_value_byte(payload, "ba_req")
+  # Tamper the ba_req value in the proof payload AND re-sign with the holder
+  # private key, so the signature is valid over the tampered payload. A
+  # byte-flip that keeps the original signature reds at verify_signature (the
+  # signature covers protected.payload), making it redundant with the
+  # signature-flip test. Re-signing isolates the ba_req FIELD-BINDING check
+  # (runtime.ex:491: secure_equal?(proof.request_hash, request_hash)) — the
+  # tampered ba_req no longer matches the recomputed request hash, so check_envelope
+  # reds there, with verify_signature passing.
+  defp tamper_and_resign_ba_req(compact, holder_priv) do
+    [protected_seg, payload_seg, _old_sig] = String.split(compact, ".")
+    payload_bytes = Base.url_decode64!(payload_seg, padding: false)
+    {:ok, {:object, members}} = V1.Json.decode(payload_bytes, V1.Bounds.maximum())
 
-    protected <>
-      "." <>
-      Base.url_encode64(flipped, padding: false) <>
-      "." <> signature_b64
-  end
+    tampered_members =
+      Enum.map(members, fn
+        {"ba_req", _} ->
+          # A different valid-shape 43-char base64url string (32-byte digest).
+          {"ba_req", {:string, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}}
 
-  # Locate the proof payload's `"<field>":"<value>"` member and flip the first
-  # byte strictly inside the value (between the opening and closing quotes).
-  # The JCS-canonical payload encodes string fields as `"<field>":"<value>"` —
-  # flipping the first value byte changes the decoded value while keeping the
-  # JSON valid and the key set unchanged, so the red fires in verify_proof_parsed
-  # (never at parse). Use a field that is BOUND via secure_equal? in
-  # verify_proof_parsed (ath, ba_req, method, target_uri, invocation_id,
-  # operation) — NOT jti (parsed but only format-checked at runtime.ex:417).
-  defp flip_string_value_byte(payload, field) do
-    bytes = :binary.bin_to_list(payload)
-    key = String.to_charlist("\"#{field}\"")
-    {key_end, _} = find_subsequence(bytes, key) || raise "no #{field} key in payload"
+        other ->
+          other
+      end)
 
-    rest = Enum.drop(bytes, key_end)
-    {:ok, colon_idx} = find_next_nonstructural(rest, 0)
-    {:ok, open_quote_idx} = find_next_nonstructural(rest, colon_idx + 1)
-    value_byte_abs = key_end + open_quote_idx + 1
-    {head, [target | tail]} = Enum.split(bytes, value_byte_abs)
-    IO.iodata_to_binary(head ++ [Bitwise.bxor(target, 0x01)] ++ tail)
-  end
-
-  # First index in `list` (from `start`) whose byte is not a JSON whitespace byte.
-  defp find_next_nonstructural(list, start) do
-    ws = MapSet.new([?\s, ?\t, ?\n, ?\r])
-
-    list
-    |> Enum.drop(start)
-    |> Enum.with_index(start)
-    |> Enum.find_value(fn {b, i} -> if not MapSet.member?(ws, b), do: i end)
-    |> case do
-      nil -> :error
-      i -> {:ok, i}
-    end
-  end
-
-  # First index in `list` where the subsequence `sub` begins; returns
-  # {index_after_match, true} or nil.
-  defp find_subsequence(list, sub) do
-    sub_len = length(sub)
-    n = length(list)
-
-    0..max(0, n - sub_len)
-    |> Enum.find_value(fn i ->
-      if Enum.slice(list, i, sub_len) == sub, do: {i + sub_len, true}
-    end)
+    {:ok, tampered_canon} = V1.Jcs.encode({:object, tampered_members}, V1.Bounds.maximum())
+    new_payload_seg = Base.url_encode64(tampered_canon, padding: false)
+    new_message = protected_seg <> "." <> new_payload_seg
+    new_sig = :crypto.sign(:eddsa, :ed25519, new_message, [holder_priv, :ed25519])
+    new_message <> "." <> Base.url_encode64(new_sig, padding: false)
   end
 
   # Splits a binary into {all-but-last-byte, last-byte} via a list (avoids the
