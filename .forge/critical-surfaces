@@ -25,3 +25,14 @@ lib/bounded_authority_report_adapter/**/*.ex
 # here silently re-introduces a private runtime dep and collapses the wall B1
 # built in verifier application. The gate that proves it lives here.
 test/**/dependency_direction_test.exs
+
+# RA2 — the conformance harness. The harness's value IS its verdict: a wrong
+# harness (a vacuous-green round-trip, a mis-built cast_arguments, a shared-nonce
+# assumption) ships a broken crypto contract that fails QUIET in production —
+# the test passes green locally while the wire format it claims to validate has
+# drifted. The harness GUARDS the silent-failure lib/ surface above; a wrong
+# harness is itself a silent regression on that surface, so it is declared here
+# (design §1.10 C3 — folded into the single enforcement manifest, not a second
+# unenforced one). The local test reds noisily, but the production contract it
+# certifies fails silent.
+test/bounded_authority_report_adapter/conformance_roundtrip_test.exs

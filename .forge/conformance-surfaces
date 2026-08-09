@@ -1,0 +1,19 @@
+# .forge/conformance-surfaces — the forge-skill's conformance-surface declaration.
+#
+# Distinct from .forge/critical-surfaces (which names silent-failure surfaces for
+# the commit-hook gauge): this manifest names the surfaces a CONFORMANCE slice
+# exercises, so --ledger-check --stage design/--range grades the per-slice class
+# matrix (.forge/conformance/<slice>) against the touched owner-surfaces.
+#
+# The obligation is forge-skill process authority (the T2 conformance loop, per
+# the user-level AGENTS.md), NOT a landed repo document — the product-contract
+# authority for the harness itself is ROADMAP RA2 + charter §6 invariant 2.
+#
+# This manifest is FORCE-TRACKED (git add -f) past the broad .forge/ ignore.
+# Globs match the full repo-relative path; `*` matches any chars including `/`;
+# a bare-dir prefix also matches.
+
+# RA2 — the conformance round-trip harness. The one surface it exercises is
+# BAP's envelope verifier (check_envelope/2) + the grant-only verifier
+# (verify_grant/3 for the grant_time_cases). The harness file IS the surface.
+test/bounded_authority_report_adapter/conformance_roundtrip_test.exs
