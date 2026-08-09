@@ -1,0 +1,19 @@
+/_build/
+/deps/
+/doc/
+/cover/
+/tmp/
+erl_crash.dump
+*.ez
+bounded_authority_report_adapter-*.tar
+
+/.elixir_ls/
+/.lexical/
+/.serena/
+/graphify-out/
+/.env
+/.env.*
+
+# Forge lifecycle artifacts are local; only the critical-surface declaration is tracked.
+/.forge/*
+!/.forge/critical-surfaces
