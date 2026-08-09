@@ -52,14 +52,19 @@ if [ ! -f "$TEST_FILE" ]; then
   exit 1
 fi
 
+# Private work dir for all temp artifacts (logs + the throwaway negative-control
+# test). mktemp -d yields an unpredictable path under $TMPDIR — avoids the
+# CWE-377 predictable-/tmp-path class (concurrent-run clobber, symlink planting).
+# A single EXIT trap reclaims it on every exit path.
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
 echo "conformance-verify: running the conformance suite (every named cell's red-assertion must hold)"
-if ! mix test "$TEST_FILE" >/tmp/cv-verify-out.log 2>&1; then
+if ! mix test "$TEST_FILE" >"$WORK_DIR/suite.log" 2>&1; then
   echo "conformance-verify: FAIL — conformance suite did not pass; at least one named red-capable cell's assertion did not hold under its injected defect:" >&2
-  tail -20 /tmp/cv-verify-out.log >&2
-  rm -f /tmp/cv-verify-out.log
+  tail -20 "$WORK_DIR/suite.log" >&2
   exit 1
 fi
-rm -f /tmp/cv-verify-out.log
 
 # --- the named red-capable cells must be PRESENT in the test file (not dropped) ---
 # Each red-capable cell maps to a test whose name carries its identifying phrase.
@@ -88,10 +93,7 @@ done
 # bytes) and confirms check_envelope stays GREEN — i.e. the test's red is caused
 # by the tamper, not by re-encoding or some other guard. Run as a throwaway ExUnit
 # case so the working tree is never touched.
-NEGATIVE_CONTROL_DIR="$(mktemp -d)"
-trap 'rm -rf "$NEGATIVE_CONTROL_DIR"' EXIT
-
-cat > "$NEGATIVE_CONTROL_DIR/negative_control_test.exs" <<'ELIXIR'
+cat > "$WORK_DIR/negative_control_test.exs" <<'ELIXIR'
 defmodule Ra2ConformanceVerifyNegativeControlTest do
   use ExUnit.Case, async: true
   alias BoundedAuthorityProtocol.V1
@@ -164,13 +166,11 @@ end
 ELIXIR
 
 echo "conformance-verify: running negative control (re-encode without flip must stay GREEN)"
-if ! mix test "$NEGATIVE_CONTROL_DIR/negative_control_test.exs" >/tmp/cv-neg-out.log 2>&1; then
+if ! mix test "$WORK_DIR/negative_control_test.exs" >"$WORK_DIR/negative.log" 2>&1; then
   echo "conformance-verify: FAIL — negative control red; the tamper tests' reds are not attributable to the flip (vacuous)" >&2
-  tail -20 /tmp/cv-neg-out.log >&2
-  rm -f /tmp/cv-neg-out.log
+  tail -20 "$WORK_DIR/negative.log" >&2
   exit 1
 fi
-rm -f /tmp/cv-neg-out.log
 
 echo "conformance-verify: OK — every named red-capable cell is real (red-assertion holds under its injected defect; tamper reds depend on the flip)"
 exit 0
