@@ -387,21 +387,19 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
   end
 
   defp flip_payload_byte(compact) do
-    # compact = protected.payload.signature. Flip an INTERIOR byte of the payload
-    # that lands inside a string VALUE (not a structural byte: " : , { } ), so
-    # the re-encoded payload is still valid JSON with a CHANGED value. This
-    # forces check_envelope's red to come from verify_proof_parsed's field-binding
-    # checks (secure_equal? of the tampered field — e.g. the request_hash at
-    # runtime.ex:491 — which run BEFORE verify_signature), NOT from parse_proof's
-    # JSON decode (cross-vendor CV-payload finding: a flip of the closing brace
-    # `}` reds at parse, which a verifier that omitted the payload from signature
-    # coverage would still pass — proving malformed-body rejection, not that the
-    # tampered field is bound to the verified payload). The functional point
-    # stands: the red is a BODY-BINDING check inside verify_proof_parsed, not a
-    # parse reject.
+    # compact = protected.payload.signature. Flip a byte STRICTLY INSIDE a string
+    # VALUE field (the proof's `jti`), not a structural byte or a key-name byte.
+    # This guarantees the re-encoded payload is valid JSON with unchanged keys
+    # but a CHANGED string value, so check_envelope's red comes from
+    # verify_proof_parsed's field-binding checks (secure_equal? of the tampered
+    # `jti` -> proof_id mismatch), NOT from parse_proof's JSON decode or its
+    # closed_map key-set check. Prior heuristic attempts (structural-byte
+    # exclusion from the payload middle) landed on key-name characters and reds
+    # at parse-side closed_map_one_of; targeting a known string value's interior
+    # closes that (cross-vendor CV-payload + delta-review + diff-review).
     [protected, payload_b64, signature_b64] = String.split(compact, ".")
     payload = Base.url_decode64!(payload_b64, padding: false)
-    flipped = flip_interior_value_byte(payload)
+    flipped = flip_jti_value_byte(payload)
 
     protected <>
       "." <>
@@ -409,45 +407,54 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       "." <> signature_b64
   end
 
-  # Flip an interior byte that is NOT a JSON structural character
-  # (`"`, `:`, `,`, `{`, `}`, `[`, `]`, whitespace) AND whose single-bit flip
-  # also yields a non-structural byte (so the flipped payload stays valid JSON
-  # with a CHANGED value). Starts at the middle of the payload (reliably inside
-  # a string value for these JCS-sorted payloads) and walks forward to the first
-  # qualifying byte. Operates on the byte list directly to avoid the compiler's
-  # "accessed inside size()" warning on a size derived from the bound binary.
-  @structural_bytes MapSet.new([
-                      ?",
-                      ?:,
-                      ?,,
-                      ?{,
-                      ?},
-                      ?[,
-                      ?],
-                      ?\s,
-                      ?\t,
-                      ?\n,
-                      ?\r
-                    ])
-
-  defp flip_interior_value_byte(payload) do
+  # Locate the proof payload's `"jti":"<value>"` member and flip one byte inside
+  # the value (between the opening and closing quotes). The JCS-canonical payload
+  # encodes jti as `,"jti":"<proof_id>"` or `"jti":"<proof_id>",` — a quoted
+  # string value. Flipping an interior value byte changes the decoded proof_id
+  # while keeping the JSON valid and the key set unchanged, so the red fires in
+  # verify_proof_parsed (the proof_id field-binding check), never at parse.
+  defp flip_jti_value_byte(payload) do
     bytes = :binary.bin_to_list(payload)
-    start = div(length(bytes), 2)
 
-    target_idx =
-      bytes
-      |> Enum.drop(start)
-      |> Enum.with_index(start)
-      |> Enum.find_value(fn {byte, idx} ->
-        flipped = Bitwise.bxor(byte, 0x01)
+    # Find the jti key `"jti"`. key_end is the index just past the closing quote.
+    key = ~c'"jti"'
+    {key_end, _} = find_subsequence(bytes, key) || raise "no jti key in payload"
 
-        if not MapSet.member?(@structural_bytes, byte) and
-             not MapSet.member?(@structural_bytes, flipped),
-           do: idx
-      end) || raise "no interior non-structural byte found in payload"
+    # From key_end, the next non-whitespace byte is `:`; the one after that is
+    # the opening `"` of the value; the one after THAT is the first value byte.
+    rest = Enum.drop(bytes, key_end)
+    {:ok, colon_idx} = find_next_nonstructural(rest, 0)
+    {:ok, open_quote_idx} = find_next_nonstructural(rest, colon_idx + 1)
+    # The first value byte is at open_quote_idx + 1 (absolute index in `bytes`).
+    value_byte_abs = key_end + open_quote_idx + 1
+    {head, [target | tail]} = Enum.split(bytes, value_byte_abs)
+    IO.iodata_to_binary(head ++ [Bitwise.bxor(target, 0x01)] ++ tail)
+  end
 
-    {pre_bytes, [target | rest_bytes]} = Enum.split(bytes, target_idx)
-    IO.iodata_to_binary(pre_bytes ++ [Bitwise.bxor(target, 0x01)] ++ rest_bytes)
+  # First index in `list` (from `start`) whose byte is not a JSON whitespace byte.
+  defp find_next_nonstructural(list, start) do
+    ws = MapSet.new([?\s, ?\t, ?\n, ?\r])
+
+    list
+    |> Enum.drop(start)
+    |> Enum.with_index(start)
+    |> Enum.find_value(fn {b, i} -> if not MapSet.member?(ws, b), do: i end)
+    |> case do
+      nil -> :error
+      i -> {:ok, i}
+    end
+  end
+
+  # First index in `list` where the subsequence `sub` begins; returns
+  # {index_after_match, true} or nil.
+  defp find_subsequence(list, sub) do
+    sub_len = length(sub)
+    n = length(list)
+
+    0..max(0, n - sub_len)
+    |> Enum.find_value(fn i ->
+      if Enum.slice(list, i, sub_len) == sub, do: {i + sub_len, true}
+    end)
   end
 
   # Splits a binary into {all-but-last-byte, last-byte} via a list (avoids the
