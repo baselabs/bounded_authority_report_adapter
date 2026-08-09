@@ -52,12 +52,6 @@ if [ ! -f "$TEST_FILE" ]; then
   exit 1
 fi
 
-# --- layer ii re-grade: the matrix must be internally consistent before re-exec ---
-if ! python3 ~/.claude/scripts/dispatch.py verify-conformance --slice b2-ra-conformance-roundtrip --repo "$REPO_ROOT" --range HEAD >/dev/null 2>&1; then
-  # verify-conformance would re-invoke this script (recursion); do the grade inline instead.
-  :
-fi
-
 echo "conformance-verify: running the conformance suite (every named cell's red-assertion must hold)"
 if ! mix test "$TEST_FILE" >/tmp/cv-verify-out.log 2>&1; then
   echo "conformance-verify: FAIL — conformance suite did not pass; at least one named red-capable cell's assertion did not hold under its injected defect:" >&2
