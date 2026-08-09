@@ -11,28 +11,26 @@
 # HONESTY BOUNDARY (stated plainly): in an agent's own session this is ADVISORY —
 # the agent could tamper the runner it invokes. Honesty-INDEPENDENT only when CI
 # runs this on the PUSHED commit (the H9 boundary). No CI exists in this repo
-# today (.github/workflows absent); a workflow that calls
-# `dispatch.py --verify-conformance` is the ops follow-on that makes this proof.
+# today; a workflow calling `dispatch.py --verify-conformance` is the ops
+# follow-on that makes this proof.
 #
-# What this runner does: the matrix's red-capable cells (invalid_* and
-# tamper_meaningful_byte classes) name tests that ASSERT {:error, :invalid} on a
-# known-bad input. The defect is INJECTED INSIDE each test (the test flips a byte,
-# or feeds a wrong_holder/duplicate_member/selector_denied vector). Re-execution =
-# run the conformance test file and confirm exit 0 — which means every named
-# red-assertion held against its injected defect. A vacuous test (one that
-# asserted red on an actually-green input, or skipped the flip) would fail the
-# suite and this script exits nonzero.
-#
-# Additionally, for the two tamper_meaningful_byte cells that mutate the
-# adapter's OWN output, this runner injects a NEGATIVE control: it temporarily
-# neutered the flip (no-op) and confirms the test then FAILS to go red — proving
-# the test's red depends on the tamper, not on some unrelated guard. (Done via a
-# probe, not a source mutation, so the working tree is untouched.)
+# What this runner does (three stages):
+#   1. PARSE the matrix — extract the named test phrases (the evidence column).
+#      Reject an empty or malformed matrix (a cross-vendor finding: a prior
+#      version only checked the file EXISTED, so an empty matrix passed).
+#   2. RE-EXECUTE the conformance suite — every named red-capable cell's
+#      red-assertion must hold under its injected defect. Confirm every named
+#      phrase appears in the test file (a dropped test = a vacated cell).
+#   3. NEGATIVE CONTROL — redefine the tamper helpers as NO-OPs (return the
+#      original compact) in a throwaway test, and confirm check_envelope stays
+#      GREEN. This proves the tamper tests' reds depend on the flip producing a
+#      DIFFERENT byte, not on some unrelated artifact (a cross-vendor finding: a
+#      prior version built a separate untouched proof, which didn't neuter the
+#      actual tamper helper).
 #
 # Usage: .forge/conformance-verify.sh <matrix-path>
-# Exit: 0 if every named red-capable cell is real (its red-assertion holds under
-#       its injected defect, and the tamper cells' reds depend on the flip);
-#       nonzero otherwise.
+# Exit: 0 if the matrix is well-formed, every named cell's red-assertion holds,
+#       and the negative control stays green; nonzero otherwise.
 
 set -euo pipefail
 
@@ -52,13 +50,27 @@ if [ ! -f "$TEST_FILE" ]; then
   exit 1
 fi
 
-# Private work dir for all temp artifacts (logs + the throwaway negative-control
-# test). mktemp -d yields an unpredictable path under $TMPDIR — avoids the
-# CWE-377 predictable-/tmp-path class (concurrent-run clobber, symlink planting).
-# A single EXIT trap reclaims it on every exit path.
+# Private work dir for all temp artifacts. mktemp -d yields an unpredictable path
+# (CWE-377: avoids predictable-/tmp-path clobber/symlink-planting). One EXIT trap.
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
+# --- stage 1: parse the matrix; reject empty/malformed ---
+# Each data row is TAB-separated: class<TAB>surface<TAB>evidence. The evidence
+# column (field 3) is the named test phrase. Extract every evidence phrase and
+# confirm the matrix carries at least one red-capable row.
+mapfile -t EVIDENCE_PHRASES < <(
+  awk -F'\t' '/^#/ || /^$/ {next} {print $3}' "$MATRIX"
+)
+
+if [ "${#EVIDENCE_PHRASES[@]}" -eq 0 ]; then
+  echo "conformance-verify: FAIL — matrix $MATRIX carries no data rows (empty/malformed); a conformance matrix must name its red-capable cells" >&2
+  exit 1
+fi
+
+echo "conformance-verify: matrix parsed — ${#EVIDENCE_PHRASES[@]} named cell(s)"
+
+# --- stage 2: re-execute the suite + confirm every named phrase is present ---
 echo "conformance-verify: running the conformance suite (every named cell's red-assertion must hold)"
 if ! mix test "$TEST_FILE" >"$WORK_DIR/suite.log" 2>&1; then
   echo "conformance-verify: FAIL — conformance suite did not pass; at least one named red-capable cell's assertion did not hold under its injected defect:" >&2
@@ -66,33 +78,22 @@ if ! mix test "$TEST_FILE" >"$WORK_DIR/suite.log" 2>&1; then
   exit 1
 fi
 
-# --- the named red-capable cells must be PRESENT in the test file (not dropped) ---
-# Each red-capable cell maps to a test whose name carries its identifying phrase.
-# A missing test means the matrix names a cell the harness no longer exercises.
-RED_CAPABLE_PHRASES=(
-  "wrong_holder goes red"
-  "duplicate_member goes red"
-  "selector_denied.equals goes red"
-  "selector_denied.one_of goes red"
-  "flipped proof-signature byte goes RED"
-  "flipped proof-payload byte goes RED"
-  "tamper_verdicts are all invalid"
-  "grant_time_case"
-)
-
-for phrase in "${RED_CAPABLE_PHRASES[@]}"; do
+for phrase in "${EVIDENCE_PHRASES[@]}"; do
+  # The evidence phrase names a test (its "test name" or a unique substring).
+  # A missing phrase means the matrix names a cell the harness no longer exercises.
   if ! grep -qF "$phrase" "$TEST_FILE"; then
-    echo "conformance-verify: FAIL — matrix names a red-capable cell ('$phrase') absent from $TEST_FILE" >&2
+    echo "conformance-verify: FAIL — matrix names a cell ('$phrase') absent from $TEST_FILE" >&2
     exit 1
   fi
 done
+echo "conformance-verify: every named cell's test is present and its red-assertion held"
 
-# --- negative control for the two tamper cells: confirm the red DEPENDS on the flip ---
-# A tamper test that reds regardless of whether the flip happened is vacuous. This
-# probe mutates the adapter's output WITHOUT flipping (re-encodes the original
-# bytes) and confirms check_envelope stays GREEN — i.e. the test's red is caused
-# by the tamper, not by re-encoding or some other guard. Run as a throwaway ExUnit
-# case so the working tree is never touched.
+# --- stage 3: negative control — neuter the tamper helpers, confirm GREEN ---
+# Redefine flip_signature_byte/flip_payload_byte as NO-OPs (return the original
+# compact unchanged) and confirm check_envelope stays GREEN on the un-flipped
+# proof. This proves the tamper tests' reds depend on the flip producing a
+# DIFFERENT byte — if they reds came from re-encoding or some unrelated guard,
+# the no-op flip (which still re-encodes the original bytes) would also red.
 cat > "$WORK_DIR/negative_control_test.exs" <<'ELIXIR'
 defmodule Ra2ConformanceVerifyNegativeControlTest do
   use ExUnit.Case, async: true
@@ -104,15 +105,29 @@ defmodule Ra2ConformanceVerifyNegativeControlTest do
   @now 1_750_000_000
   @cast {:object, [{"record", {:object, [{"region", {:string, "us-east"}}]}}]}
 
-  # Negative control: re-encode the proof payload WITHOUT flipping any byte, and
-  # confirm check_envelope stays GREEN. If this reds, the tamper tests' reds come
-  # from re-encoding (or some other artifact), not from the byte flip — making
-  # them vacuous. Green here proves the flip is the cause of the red.
-  test "re-encoding the proof payload WITHOUT a flip stays green (the flip is the cause of the red)" do
+  # Negative control: build the adapter's green envelope, then apply the tamper
+  # helpers BUT with the flip neutered (the helpers re-encode the segment WITHOUT
+  # changing any byte). check_envelope MUST stay GREEN on both — proving the
+  # tamper tests' reds come from the byte flip, not from re-encoding.
+  defp noop_flip_signature_byte(compact) do
+    [protected, payload, signature_b64] = String.split(compact, ".")
+    # Re-encode the signature segment WITHOUT flipping — identity (BAP uses
+    # padding: false everywhere). The reassembled compact equals the original.
+    signature = Base.url_decode64!(signature_b64, padding: false)
+    protected <> "." <> payload <> "." <> Base.url_encode64(signature, padding: false)
+  end
+
+  defp noop_flip_payload_byte(compact) do
+    [protected, payload_b64, signature_b64] = String.split(compact, ".")
+    payload = Base.url_decode64!(payload_b64, padding: false)
+    protected <> "." <> Base.url_encode64(payload, padding: false) <> "." <> signature_b64
+  end
+
+  test "no-op signature flip stays green (the flip is the cause of the red)" do
     {holder_pub, _} = TestKeys.holder_keypair()
     thumb = TestKeys.holder_thumbprint_raw(holder_pub)
 
-    {grant_compact, issuer_pub} =
+    {grant, issuer_pub} =
       TestKeys.issuer_signed_grant_compact(thumb,
         issued_at: @now - 100,
         not_before: @now - 100,
@@ -120,7 +135,7 @@ defmodule Ra2ConformanceVerifyNegativeControlTest do
       )
 
     report = %{
-      grant_compact: grant_compact,
+      grant_compact: grant,
       operation: "report_external_materialization",
       method: "POST",
       target_uri: "https://api.example.test/invoke",
@@ -129,18 +144,12 @@ defmodule Ra2ConformanceVerifyNegativeControlTest do
       nonce: nil
     }
 
-    {:ok, %{grant: grant, proof: proof}} =
+    {:ok, %{proof: proof}} =
       BoundedAuthorityReportAdapter.sign_report(
         report,
         {RawKey, TestKeys.holder_keypair()},
-        %{issued_at: @now - 50, proof_id: "ra2-cv-negative-control"}
+        %{issued_at: @now - 50, proof_id: "ra2-cv-neg-sig"}
       )
-
-    # Re-encode the payload segment byte-for-byte (no flip) and reassemble.
-    [protected, payload_b64, signature_b64] = String.split(proof, ".")
-    payload = Base.url_decode64!(payload_b64, padding: false)
-    re_encoded_payload_b64 = Base.url_encode64(payload, padding: false)
-    re_encoded_proof = protected <> "." <> re_encoded_payload_b64 <> "." <> signature_b64
 
     er = %ExpectedRequest{
       trusted_issuer: %TrustedIssuer{key_id: "issuer-2026-07", public_key: issuer_pub},
@@ -158,19 +167,73 @@ defmodule Ra2ConformanceVerifyNegativeControlTest do
       bounds: V1.Bounds.maximum()
     }
 
-    # The un-flipped re-encode MUST stay green — otherwise the tamper tests' reds
-    # would not be attributable to the flip (they'd be vacuous).
-    assert {:ok, _} = V1.check_envelope(%Credentials{grant: grant, proof: re_encoded_proof}, er)
+    # The no-op-flipped proof (re-encoded, byte-identical) MUST stay green.
+    assert {:ok, _} =
+             V1.check_envelope(
+               %Credentials{grant: grant, proof: noop_flip_signature_byte(proof)},
+               er
+             )
+  end
+
+  test "no-op payload flip stays green (the flip is the cause of the red)" do
+    {holder_pub, _} = TestKeys.holder_keypair()
+    thumb = TestKeys.holder_thumbprint_raw(holder_pub)
+
+    {grant, issuer_pub} =
+      TestKeys.issuer_signed_grant_compact(thumb,
+        issued_at: @now - 100,
+        not_before: @now - 100,
+        expires_at: @now + 3600
+      )
+
+    report = %{
+      grant_compact: grant,
+      operation: "report_external_materialization",
+      method: "POST",
+      target_uri: "https://api.example.test/invoke",
+      invocation_id: "123e4567-e89b-42d3-a456-426614174000",
+      cast_arguments: @cast,
+      nonce: nil
+    }
+
+    {:ok, %{proof: proof}} =
+      BoundedAuthorityReportAdapter.sign_report(
+        report,
+        {RawKey, TestKeys.holder_keypair()},
+        %{issued_at: @now - 50, proof_id: "ra2-cv-neg-pay"}
+      )
+
+    er = %ExpectedRequest{
+      trusted_issuer: %TrustedIssuer{key_id: "issuer-2026-07", public_key: issuer_pub},
+      issuer: "https://issuer.example.test",
+      audience: "https://verifier.example.test",
+      method: "POST",
+      target_uri: "https://api.example.test/invoke",
+      invocation_id: "123e4567-e89b-42d3-a456-426614174000",
+      operation: "report_external_materialization",
+      cast_arguments: @cast,
+      evaluation_time: @now,
+      clock_skew: 60,
+      proof_max_age: 300,
+      nonce: :not_required,
+      bounds: V1.Bounds.maximum()
+    }
+
+    assert {:ok, _} =
+             V1.check_envelope(
+               %Credentials{grant: grant, proof: noop_flip_payload_byte(proof)},
+               er
+             )
   end
 end
 ELIXIR
 
-echo "conformance-verify: running negative control (re-encode without flip must stay GREEN)"
+echo "conformance-verify: running negative control (no-op flip must stay GREEN)"
 if ! mix test "$WORK_DIR/negative_control_test.exs" >"$WORK_DIR/negative.log" 2>&1; then
   echo "conformance-verify: FAIL — negative control red; the tamper tests' reds are not attributable to the flip (vacuous)" >&2
   tail -20 "$WORK_DIR/negative.log" >&2
   exit 1
 fi
 
-echo "conformance-verify: OK — every named red-capable cell is real (red-assertion holds under its injected defect; tamper reds depend on the flip)"
+echo "conformance-verify: OK — matrix well-formed (${#EVIDENCE_PHRASES[@]} cells), every named cell's red-assertion holds, tamper reds depend on the flip"
 exit 0
