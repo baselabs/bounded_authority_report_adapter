@@ -171,11 +171,22 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp validate_nonce(_nonce), do: {:error, :invalid_report}
 
-  defp resolve_public_key({module, handle}) do
-    case module.public_key(handle) do
+  defp resolve_public_key({module, handle}) when is_atom(module) do
+    # The callback is caller-supplied; a missing module, a function-clause
+    # raise inside it, or any other fault must map to the closed-atom error
+    # rather than escape sign_report/3 (mirrors BAP's fixed/1 wrapper).
+    case safe_callback(module, :public_key, [handle]) do
       {:ok, public_key} when is_binary(public_key) -> {:ok, public_key}
       _ -> {:error, :invalid_key_handle}
     end
+  end
+
+  defp resolve_public_key(_handle), do: {:error, :invalid_key_handle}
+
+  defp safe_callback(module, function, args) do
+    apply(module, function, args)
+  rescue
+    _error -> {:error, :callback_failed}
   end
 
   defp build_proof(report, holder_public_key, proof_id, issued_at) do
@@ -201,7 +212,12 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   defp sign_via_handle({module, handle}, message) do
-    case module.sign(message, handle) do
+    # `key_handle` shape is validated upstream by resolve_public_key/1 (the only
+    # path here is through the `with` after a successful resolve), so the handle
+    # is guaranteed a valid {atom, term} 2-tuple. The callback itself is still
+    # caller-supplied, so wrap it the same way (a raise inside sign/2 maps to
+    # :signing_failed rather than escaping).
+    case safe_callback(module, :sign, [message, handle]) do
       {:ok, signature} when is_binary(signature) -> {:ok, signature}
       {:ok, _invalid_signature} -> {:error, :signing_failed}
       {:error, _reason} -> {:error, :signing_failed}
