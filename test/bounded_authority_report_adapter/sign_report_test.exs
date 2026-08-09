@@ -234,7 +234,7 @@ defmodule CountingKeyHandle do
   def public_key({public_key, _private_key}), do: {:ok, public_key}
 
   @impl true
-  def thumbprint({public_key, _public_key}) do
+  def thumbprint({public_key, _private_key}) do
     {:ok, raw} = BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
     {:ok, raw}
   end
@@ -258,7 +258,7 @@ defmodule CapturingKeyHandle do
   def public_key({public_key, _private_key}), do: {:ok, public_key}
 
   @impl true
-  def thumbprint({public_key, _public_key}) do
+  def thumbprint({public_key, _private_key}) do
     {:ok, raw} = BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
     {:ok, raw}
   end
@@ -277,7 +277,7 @@ defmodule FailingKeyHandle do
   def public_key({public_key, _private_key}), do: {:ok, public_key}
 
   @impl true
-  def thumbprint({public_key, _public_key}) do
+  def thumbprint({public_key, _private_key}) do
     {:ok, raw} = BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
     {:ok, raw}
   end
