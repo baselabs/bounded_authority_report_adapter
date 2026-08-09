@@ -246,6 +246,33 @@ defmodule BoundedAuthorityReportAdapter.SignReportTest do
                  issued_at: @now - 50
                })
     end
+
+    # Cross-vendor round 2 (blocking): safe_callback rescued exceptions but not
+    # exit/throw — a production HSM/key-server callback that times out (a
+    # GenServer.call timeout = an :exit) crashed the caller instead of returning
+    # {:error, _}. The catch clauses now contain exits + throws.
+    test "a callback that exit/1s yields {:error, :invalid_key_handle}, not a crash" do
+      report = build_report()
+      exiting_handle = {ExitingKeyHandle, :x}
+
+      assert {:error, :invalid_key_handle} =
+               BoundedAuthorityReportAdapter.sign_report(report, exiting_handle, %{})
+    end
+
+    # Cross-vendor round 2 (should-fix): sign_via_handle validated only 64-byte
+    # length, never that the signature verifies against the resolved public key.
+    # A wrong-key sign (public_key/1 returns key A, sign/2 uses key B) produced
+    # a {pub_A, sig_B} envelope returned as {:ok, _} — false success. The
+    # adapter now verifies the signature against the public key before accepting.
+    test "a signature signed with the wrong key yields {:error, :signing_failed}" do
+      report = build_report()
+      wrong_key_handle = {WrongKeyHandle, TestKeys.holder_keypair()}
+
+      assert {:error, :signing_failed} =
+               BoundedAuthorityReportAdapter.sign_report(report, wrong_key_handle, %{
+                 issued_at: @now - 50
+               })
+    end
   end
 
   # --- helpers ---
@@ -368,4 +395,51 @@ defmodule ShortKeyHandle do
 
   @impl true
   def thumbprint(_handle), do: {:ok, <<0::256>>}
+end
+
+defmodule ExitingKeyHandle do
+  @moduledoc """
+  A key-handle whose public_key/1 calls exit/1 (simulating a GenServer.call
+  timeout in a production HSM/key-server callback). Cross-vendor round 2
+  blocking finding: rescue did not catch exits, so this crashed the caller.
+  The catch clauses now contain it -> :invalid_key_handle.
+  """
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  def sign(_message, _handle), do: exit(:simulated_hsm_timeout)
+
+  @impl true
+  def public_key(_handle), do: exit(:simulated_hsm_timeout)
+
+  @impl true
+  def thumbprint(_handle), do: {:ok, <<0::256>>}
+end
+
+defmodule WrongKeyHandle do
+  @moduledoc """
+  A key-handle whose public_key/1 returns key A but whose sign/2 signs with a
+  DIFFERENT key B (a rotation/misconfiguration race). Cross-vendor round 2
+  should-fix finding: the adapter validated only 64-byte length, not that the
+  signature verifies against the resolved public key. The adapter now verifies
+  the signature against the public key -> :signing_failed.
+  """
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  # Returns the handle's declared public key (key A).
+  def public_key({public_key, _private_key}), do: {:ok, public_key}
+
+  @impl true
+  # Signs with a DIFFERENT key (key B) — the wrong key.
+  def sign(message, _handle) do
+    {_other_pub, other_priv} = :crypto.generate_key(:eddsa, :ed25519, <<99::256>>)
+    {:ok, :crypto.sign(:eddsa, :ed25519, message, [other_priv, :ed25519])}
+  end
+
+  @impl true
+  def thumbprint({public_key, _private_key}) do
+    {:ok, raw} = BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
+    {:ok, raw}
+  end
 end

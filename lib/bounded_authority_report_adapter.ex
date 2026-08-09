@@ -126,10 +126,28 @@ defmodule BoundedAuthorityReportAdapter do
          proof = build_proof(report, holder_public_key, proof_id, issued_at),
          {:ok, signing_input} <- produce_proof_signing_input(proof, bounds),
          {:ok, signature} <- sign_via_handle(key_handle, signing_input.message),
+         :ok <- verify_signature(signing_input.message, signature, holder_public_key),
          {:ok, proof_compact} <- assemble_proof(signing_input, signature) do
       {:ok, %{grant: report.grant_compact, proof: proof_compact}}
     end
   end
+
+  # Cross-vendor closeout finding (CV round 2): the adapter validated only the
+  # signature's 64-byte length, never that it verifies against the resolved
+  # holder public key. A callback signing with the wrong key (a rotation/
+  # misconfiguration race — the handle's public_key/1 returns key A, but sign/2
+  # uses key B) produced a {pub_A, sig_B} envelope that the adapter returned as
+  # {:ok, envelope}, deferring the failure to check_envelope downstream. Verify
+  # the signature against the public key HERE so a wrong-key sign is :signing_failed,
+  # not a silent false-success.
+  defp verify_signature(message, signature, holder_public_key)
+       when is_binary(message) and is_binary(signature) and is_binary(holder_public_key) do
+    if :crypto.verify(:eddsa, :none, message, signature, [holder_public_key, :ed25519]),
+      do: :ok,
+      else: {:error, :signing_failed}
+  end
+
+  defp verify_signature(_message, _signature, _public_key), do: {:error, :signing_failed}
 
   defp validate_report(report) when is_map(report) do
     with {:ok, grant_compact} <- required_binary(report, :grant_compact),
@@ -194,6 +212,14 @@ defmodule BoundedAuthorityReportAdapter do
     apply(module, function, args)
   rescue
     _error -> {:error, :callback_failed}
+  catch
+    # A production key-handle callback (HSM / key server) that times out does
+    # so via exit/1 (e.g. a GenServer.call timeout) — rescue catches exceptions
+    # only, so :exit/:throw would escape sign_report/3 and crash the caller.
+    # Map them to the same callback-failure shape the rescue uses. This is the
+    # production path the moduledoc steers real holders toward.
+    :exit, _reason -> {:error, :callback_failed}
+    :throw, _reason -> {:error, :callback_failed}
   end
 
   defp build_proof(report, holder_public_key, proof_id, issued_at) do
