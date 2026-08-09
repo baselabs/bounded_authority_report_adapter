@@ -234,8 +234,11 @@ defmodule BoundedAuthorityReportAdapter do
   defp generate_uuid do
     # UUID v4 per RFC 4122: 16 random bytes, then overwrite byte 6's high nibble
     # with the version (0100 = 4) and byte 8's high two bits with the variant
-    # (10). BAP's proof decoder (`valid_uuid?`) enforces the 8-4-1-3-1-3-12
-    # lowercase-hex shape with version char in 1-5 and variant char in 8/9/a/b.
+    # (10). The proof's `jti` (proof_id) is gated by BAP's `valid_identifier?`
+    # → `StringOrUri.valid?` (a looser URI-safe-string check, not UUID-only), so
+    # a UUID is chosen by convention (DPoP `jti` is conventionally a UUID), not
+    # because BAP requires it — but the canonical UUID shape also satisfies the
+    # `valid_uuid?` gate that the caller's `invocation_id` must pass.
     import Bitwise
 
     <<b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15>> =

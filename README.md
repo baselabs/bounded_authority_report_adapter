@@ -30,8 +30,14 @@ dependency + release posture.
 
 ## Status
 
-Scaffolded (2026-08-09). The signing API is not yet implemented; see
-`docs/ROADMAP.md` for the build arc.
+`sign_report/3` shipped (RA1, 2026-08-09): binds an issuer-signed grant to a
+application report by producing a holder proof, returning the grant + proof envelope
+the verifier verifies via `BoundedAuthorityProtocol.V1.check_envelope/2`.
+The round-trip is green against the real BAP verifier. The holder key never
+enters the adapter (callers supply a `{module(), term()}` key-handle callback).
+The full conformance-corpus round-trip (RA2), the dependency-direction structural
+test (RA3), and the tracked topology ADR (RA6) land in later slices; see
+`docs/ROADMAP.md`.
 
 ## Installation (private git dep)
 
