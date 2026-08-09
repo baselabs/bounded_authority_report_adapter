@@ -408,12 +408,55 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     end
 
     @tag :conformance
-    test "the published vector's tamper_verdicts are all invalid (the oracle agrees)" do
-      tamper_verdicts = VectorCase.vector()["expected"]["tamper_verdicts"]
+    test "the published vector's tamper_verdicts all go RED through check_envelope (the oracle + the verifier agree)" do
+      # The published expected.tamper_verdicts declares 7 tamper classes. The
+      # prior version of this test only asserted the metadata strings equal
+      # "invalid" — it constructed no tampered credential and never called
+      # check_envelope, so it tested the JSON file's self-description, not BAP's
+      # rejection (a cross-vendor blocking finding: vacuous for the verifier).
+      # This version constructs each tampered credential and confirms
+      # check_envelope reds on every one.
+      v = VectorCase.vector()
+      grant = v["grant"]["compact"]
+      proof = v["proof"]["compact"]
+      expected = VectorCase.expected_request(:top_level)
 
-      for {tamper_class, verdict} <- tamper_verdicts do
+      # The 6 byte-flip tamper classes: flip a byte in the named segment of the
+      # named compact. Each must red through check_envelope.
+      flips = %{
+        "grant_protected_byte_flip" => {:grant, 0},
+        "grant_payload_byte_flip" => {:grant, 1},
+        "grant_signature_byte_flip" => {:grant, 2},
+        "proof_protected_byte_flip" => {:proof, 0},
+        "proof_payload_byte_flip" => {:proof, 1},
+        "proof_signature_byte_flip" => {:proof, 2}
+      }
+
+      for {tamper_class, verdict} <- v["expected"]["tamper_verdicts"] do
         assert verdict == "invalid",
                "published tamper_verdict #{tamper_class} is #{verdict}, expected invalid"
+
+        case Map.fetch(flips, tamper_class) do
+          {:ok, {which, segment}} ->
+            tampered =
+              case which do
+                :grant -> %Credentials{grant: flip_segment_byte(grant, segment), proof: proof}
+                :proof -> %Credentials{grant: grant, proof: flip_segment_byte(proof, segment)}
+              end
+
+            assert {:error, :invalid} = V1.check_envelope(tampered, expected),
+                   "tamper #{tamper_class} did not go RED through check_envelope"
+
+          :error when tamper_class == "request_operation_drift" ->
+            drifted = %{expected | operation: "write_record"}
+
+            assert {:error, :invalid} =
+                     V1.check_envelope(%Credentials{grant: grant, proof: proof}, drifted),
+                   "tamper request_operation_drift did not go RED through check_envelope"
+
+          :error ->
+            flunk("unhandled published tamper class: #{tamper_class}")
+        end
       end
     end
   end
@@ -432,6 +475,22 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     flipped = <<pre::binary, Bitwise.bxor(last, 0x01)>>
 
     protected <> "." <> payload <> "." <> Base.url_encode64(flipped, padding: false)
+  end
+
+  # Flip a byte in segment `segment_index` (0=protected, 1=payload, 2=signature)
+  # of a compact JWS. Used by the published-tamper test to exercise every one of
+  # the vector's 6 byte-flip tamper classes through check_envelope. Flips the
+  # LAST byte of the decoded segment (a meaningful byte in every segment: a
+  # header/payload content byte or the signature's high byte).
+  defp flip_segment_byte(compact, segment_index) do
+    segments = String.split(compact, ".")
+    {seg_b64, rest} = List.pop_at(segments, segment_index)
+    decoded = Base.url_decode64!(seg_b64, padding: false)
+    {pre, <<last>> = _rest} = split_last(decoded)
+    flipped = <<pre::binary, Bitwise.bxor(last, 0x01)>>
+
+    List.insert_at(rest, segment_index, Base.url_encode64(flipped, padding: false))
+    |> Enum.join(".")
   end
 
   defp flip_payload_byte(compact) do
