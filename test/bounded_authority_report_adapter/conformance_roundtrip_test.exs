@@ -374,7 +374,10 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
 
   defp flip_signature_byte(compact) do
     # compact = protected.payload.signature. Flip the LAST byte of the signature
-    # segment (a meaningful byte — the low-order byte of the Ed25519 signature).
+    # segment (byte 63 of the 64-byte Ed25519 signature — the high byte of the
+    # second half, S). A single-bit change invalidates the signature; the red
+    # comes from verify_signature/3 in verify_proof_parsed (the signature no
+    # longer verifies against the holder public key), proving signature binding.
     [protected, payload, signature_b64] = String.split(compact, ".")
     signature = Base.url_decode64!(signature_b64, padding: false)
     {pre, <<last>> = _rest} = split_last(signature)
@@ -384,19 +387,64 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
   end
 
   defp flip_payload_byte(compact) do
-    # compact = protected.payload.signature. Flip the LAST byte of the payload
-    # segment (a meaningful byte — a payload content byte). The base64url
-    # encoding of a flipped byte is itself valid base64url, so the segment
-    # decodes but to DIFFERENT bytes (a tampered payload).
+    # compact = protected.payload.signature. Flip an INTERIOR byte of the payload
+    # that lands inside a string VALUE (not a structural byte: " : , { } ), so
+    # the re-encoded payload is still valid JSON with a CHANGED value. This
+    # forces check_envelope's red to come from verify_proof_parsed (the signature
+    # no longer covers the tampered payload), NOT from parse_proof's JSON decode
+    # (cross-vendor CV-payload finding: a flip of the closing brace `}` reds at
+    # parse, which a verifier that omitted the payload from signature coverage
+    # would still pass — proving malformed-body rejection, not body-signature
+    # binding).
     [protected, payload_b64, signature_b64] = String.split(compact, ".")
     payload = Base.url_decode64!(payload_b64, padding: false)
-    {pre, <<last>> = _rest} = split_last(payload)
-    flipped = <<pre::binary, Bitwise.bxor(last, 0x01)>>
+    flipped = flip_interior_value_byte(payload)
 
     protected <>
       "." <>
       Base.url_encode64(flipped, padding: false) <>
       "." <> signature_b64
+  end
+
+  # Flip an interior byte that is NOT a JSON structural character
+  # (`"`, `:`, `,`, `{`, `}`, `[`, `]`, whitespace) AND whose single-bit flip
+  # also yields a non-structural byte (so the flipped payload stays valid JSON
+  # with a CHANGED value). Starts at the middle of the payload (reliably inside
+  # a string value for these JCS-sorted payloads) and walks forward to the first
+  # qualifying byte. Operates on the byte list directly to avoid the compiler's
+  # "accessed inside size()" warning on a size derived from the bound binary.
+  @structural_bytes MapSet.new([
+                      ?",
+                      ?:,
+                      ?,,
+                      ?{,
+                      ?},
+                      ?[,
+                      ?],
+                      ?\s,
+                      ?\t,
+                      ?\n,
+                      ?\r
+                    ])
+
+  defp flip_interior_value_byte(payload) do
+    bytes = :binary.bin_to_list(payload)
+    start = div(length(bytes), 2)
+
+    target_idx =
+      bytes
+      |> Enum.drop(start)
+      |> Enum.with_index(start)
+      |> Enum.find_value(fn {byte, idx} ->
+        flipped = Bitwise.bxor(byte, 0x01)
+
+        if not MapSet.member?(@structural_bytes, byte) and
+             not MapSet.member?(@structural_bytes, flipped),
+           do: idx
+      end) || raise "no interior non-structural byte found in payload"
+
+    {pre_bytes, [target | rest_bytes]} = Enum.split(bytes, target_idx)
+    IO.iodata_to_binary(pre_bytes ++ [Bitwise.bxor(target, 0x01)] ++ rest_bytes)
   end
 
   # Splits a binary into {all-but-last-byte, last-byte} via a list (avoids the
