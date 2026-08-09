@@ -14,6 +14,7 @@ bounded_authority_report_adapter-*.tar
 /.env
 /.env.*
 
-# Forge lifecycle artifacts are local; only the critical-surface declaration is tracked.
+# Forge lifecycle artifacts are local; the surface declarations (critical + conformance) are tracked.
 /.forge/*
 !/.forge/critical-surfaces
+!/.forge/conformance-surfaces
