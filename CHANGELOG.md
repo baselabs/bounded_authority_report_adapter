@@ -24,10 +24,39 @@ minor bumps (pre-1.0 freedom per SemVer).
 - `docs/charter.md`, `docs/strategy.md`, `docs/ROADMAP.md` — the authority
   model, the private-dep + release posture, and the build arc.
 
-### Not yet implemented
+### Added — RA1 (2026-08-09) envelope signing
 
-- The signing API (grant/proof envelope assembly via BAP's
-  `grant_signing_input` / `proof_signing_input` / `assemble_compact`). Lands in
-  the first build slice (B2-RA-01).
-- The conformance round-trip against BAP's published vectors.
-- The dependency-direction proof test.
+- `sign_report/3` — binds an issuer-signed grant to a application report by producing a
+  holder proof, returning `{grant, proof}`. The adapter signs ONLY the proof via
+  BAP's `proof_signing_input` + `assemble_compact`; the grant arrives
+  issuer-signed and passes through untouched.
+- Holder key never enters the adapter: callers supply a `{module(), term()}`
+  key-handle callback (`sign/2`, `public_key/1`, `thumbprint/1`).
+- Wrong-key verify (`:crypto.verify` against the resolved holder public key
+  before assemble) and exit/throw containment on the key-handle callback, so a
+  misconfigured signer fails as `:signing_failed` — not a silent false-success
+  or a crash.
+- `test/bounded_authority_report_adapter/sign_report_test.exs` — 13 round-trip
+  + tripwire tests.
+
+### Added — RA2 (2026-08-09) conformance round-trip
+
+- `test/bounded_authority_report_adapter/conformance_roundtrip_test.exs` +
+  `test/support/bounded_authority_report_adapter/conformance/vector_case.ex` —
+  makes BAP's published `grant-holder-proof.json` vector the oracle: every
+  published ENVELOPE case verifies via `check_envelope/2` and every GRANT-TIME
+  case via `verify_grant/3`, matching each declared `expected_verdict`. An
+  adapter-coherent round-trip (`sign_report/3` → `check_envelope/2`) verifies
+  green against a freshly issuer-signed grant.
+- Defect-injection RED proofs (signature flip, `ba_req` tamper, seven published
+  `tamper_verdicts`), data-driven per declared `expected_verdict`,
+  exhaustive-coverage guard.
+
+### Added — RA3 (2026-08-10) dependency-direction wall
+
+- `test/bounded_authority_report_adapter/dependency_direction_test.exs` — a
+  two-clause structural proof that the adapter depends only on
+  `bounded_authority_protocol` (declared + pinned + locked; no forbidden dep;
+  no runtime-internal namespace), scanning both `lib/` and `test/support/`.
+- Mutation-proven in every scanned dir + the real adapter module; dep-removal
+  and form-precise regex RED proofs.

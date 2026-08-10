@@ -25,19 +25,35 @@ a captured transport cannot re-purpose one.
 
 ## 2. What this adapter does
 
-**It signs.** Concretely, the edge agent calls this adapter to turn a application report
-into a BA envelope:
+**It signs the holder proof — and only the holder proof.** Concretely, the edge
+agent calls this adapter with an issuer-signed grant + a application report, and the
+adapter returns the grant + proof envelope:
 
-1. Build the grant's signing input via `BoundedAuthorityProtocol.V1.grant_signing_input/2`.
-2. Build the holder-proof's signing input via `proof_signing_input/2`.
-3. Sign each with the reporter's private Ed25519 key (held locally on the edge —
-   never in the verifier).
-4. Assemble the compact envelope via `assemble_compact/2`.
+1. Receive the issuer-signed `grant_compact` as an INPUT. The grant was signed
+   out of band by the `bounded_authority` runtime (the issuer) — this adapter
+   never signs the grant.
+2. Build the holder proof struct binding that grant to the report's request
+   fields (`method`, `target_uri`, `invocation_id`, `operation`,
+   `cast_arguments`).
+3. Produce the deterministic proof signing input via
+   `BoundedAuthorityProtocol.V1.proof_signing_input/2`.
+4. Sign the input's message with the holder's private Ed25519 key (held locally
+   on the edge — never in the verifier; the adapter holds a
+   `{module(), term()}` key-handle callback, never the key bytes).
+5. Assemble the compact proof via
+   `BoundedAuthorityProtocol.V1.assemble_compact/2`.
+6. Return `{grant: grant_compact, proof: proof_compact}` — the grant passes
+   through untouched.
 
 The verifier then verifies the envelope with
-`BoundedAuthorityProtocol.V1.check_envelope/2` (which verifier application already calls at
-`deny_stack.ex:178` for the layer-1 verify). The adapter produces what the
-verifier checks.
+`BoundedAuthorityProtocol.V1.check_envelope/2`, which checks the grant signature
+against the issuer's public key and the proof signature against the holder's
+public key (verifier application already calls it at `deny_stack.ex:178` for the layer-1
+verify). The adapter produces what the verifier checks.
+
+Signing the grant with the holder key would produce an envelope no
+correctly-configured verifier accepts — the adapter's one signing artifact is
+the proof (see §4 for the three-role split).
 
 ## 3. What this adapter does NOT do
 
