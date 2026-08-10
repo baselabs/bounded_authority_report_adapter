@@ -494,18 +494,51 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
 
   # Flip a byte in segment `segment_index` (0=protected, 1=payload, 2=signature)
   # of a compact JWS. Used by the published-tamper test to exercise every one of
-  # the vector's 6 byte-flip tamper classes through check_envelope. Flips the
-  # LAST byte of the decoded segment (a meaningful byte in every segment: a
-  # header/payload content byte or the signature's high byte).
+  # the vector's 6 byte-flip tamper classes through check_envelope. For JSON
+  # segments (protected=0, payload=1), flips an interior NON-STRUCTURAL byte
+  # (walking backward from the end past `}`/structural bytes) so the re-encoded
+  # segment stays VALID JSON with a CHANGED value — forcing the red through a
+  # signed-field binding or signature check, NOT a malformed-JSON parse reject
+  # (a cross-vendor finding: flipping the last byte hit `}` -> `|`, reding at
+  # parse). For the signature segment (2), flips the last byte (a signature
+  # byte, not JSON).
   defp flip_segment_byte(compact, segment_index) do
     segments = String.split(compact, ".")
     {seg_b64, rest} = List.pop_at(segments, segment_index)
     decoded = Base.url_decode64!(seg_b64, padding: false)
-    {pre, <<last>> = _rest} = split_last(decoded)
-    flipped = <<pre::binary, Bitwise.bxor(last, 0x01)>>
+    flipped = flip_segment_value_byte(decoded, segment_index)
 
     List.insert_at(rest, segment_index, Base.url_encode64(flipped, padding: false))
     |> Enum.join(".")
+  end
+
+  defp flip_segment_value_byte(decoded, 2 = _signature_segment) do
+    {pre, <<last>> = _rest} = split_last(decoded)
+    <<pre::binary, Bitwise.bxor(last, 0x01)>>
+  end
+
+  defp flip_segment_value_byte(decoded, _json_segment) do
+    # Walk backward from the end to the first byte whose value AND its flip are
+    # both non-structural (so the flipped JSON stays valid). Structural bytes:
+    # " : , { } [ ] and whitespace.
+    bytes = :binary.bin_to_list(decoded)
+    structural = MapSet.new([?", ?:, ?,, ?{, ?}, ?[, ?], ?\s, ?\t, ?\n, ?\r])
+
+    idx =
+      bytes
+      |> Enum.reverse()
+      |> Enum.with_index()
+      |> Enum.find_value(fn {byte, rev_idx} ->
+        abs_idx = length(bytes) - 1 - rev_idx
+        flipped = Bitwise.bxor(byte, 0x01)
+
+        if not MapSet.member?(structural, byte) and
+             not MapSet.member?(structural, flipped),
+           do: abs_idx
+      end) || raise "no non-structural byte found in segment"
+
+    {pre, [target | tail]} = Enum.split(bytes, idx)
+    IO.iodata_to_binary(pre ++ [Bitwise.bxor(target, 0x01)] ++ tail)
   end
 
   # Flip the first byte inside the ba_req string VALUE of the proof payload.

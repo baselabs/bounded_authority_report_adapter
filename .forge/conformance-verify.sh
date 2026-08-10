@@ -64,6 +64,17 @@ ROW_COUNT=0
 MALFORMED=0
 EVIDENCE_PHRASES=()
 
+# Valid classes (BAP's 16-class corpus taxonomy) and surfaces this slice
+# exercises. A fabricated class/surface (e.g. made_up_class) is rejected — a
+# cross-vendor finding: the prior validator accepted any non-empty field value.
+VALID_CLASSES=" valid boundary_near exact_bound maximum_plus_one invalid_duplicate invalid_encoding invalid_algorithm invalid_key invalid_claim invalid_time invalid_nonce invalid_uri invalid_request invalid_selector invalid_limit tamper_meaningful_byte "
+VALID_SURFACES=" check_envelope verify_grant "
+
+valid_field() {
+  # $1 = the space-padded whitelist, $2 = the value
+  [[ "$1" == *" $2 "* ]]
+}
+
 while IFS= read -r line; do
   # Skip comments and blank lines.
   [[ "$line" =~ ^[[:space:]]*# ]] && continue
@@ -74,6 +85,12 @@ while IFS= read -r line; do
   if [[ -z "$f1" || -z "$f2" || -z "$f3" || -n "$rest" ]]; then
     MALFORMED=1
     echo "conformance-verify: FAIL — matrix row is not exactly 3 TAB-separated non-empty fields: '$line'" >&2
+  elif ! valid_field "$VALID_CLASSES" "$f1"; then
+    MALFORMED=1
+    echo "conformance-verify: FAIL — matrix row has an unknown class '$f1' (not in BAP's corpus taxonomy): '$line'" >&2
+  elif ! valid_field "$VALID_SURFACES" "$f2"; then
+    MALFORMED=1
+    echo "conformance-verify: FAIL — matrix row has an unknown surface '$f2' (expected check_envelope or verify_grant): '$line'" >&2
   else
     EVIDENCE_PHRASES+=("$f3")
   fi
@@ -103,19 +120,37 @@ if ! mix test "$TEST_FILE" >"$WORK_DIR/suite.log" 2>&1; then
   exit 1
 fi
 
-# Extract the set of EXECUTED test names: the strings inside `test "..."` on
-# non-comment lines, excluding tests tagged `:skip` (which ExUnit does not run).
-# A cross-vendor finding: a plain grep matched commented-out `# test "..."` lines
-# and `@tag :skip`ped tests, certifying cells whose assertions never executed.
-# The executed-test COUNT is also asserted below against the suite log so a
-# vacated (skipped) test surfaces.
+# Extract the set of test names (the strings inside `test "..."` on non-comment
+# lines) so each evidence phrase is tied to a real test. A cross-vendor finding:
+# a plain grep matched commented-out `# test "..."` lines.
 mapfile -t TEST_NAMES < <(
   grep -oE '^[[:space:]]*test "[^"]*"' "$TEST_FILE" | sed 's/^[[:space:]]*test "//;s/"$//'
 )
 
-# Confirm no test in the file is tagged :skip (a skipped test vacates its cell).
-if grep -qE '^[[:space:]]*(@tag|@moduletag)[[:space:]]*:skip' "$TEST_FILE"; then
-  echo "conformance-verify: FAIL — $TEST_FILE contains a :skip tag; a skipped test vacates its matrix cell (the suite exits 0 but the assertion never ran)" >&2
+# Confirm no test in the file is skipped — in ANY form ExUnit honors: the atom
+# `:skip`, the keyword `skip: true`, or `skip: "<reason>"`. A skipped test
+# vacates its cell (the suite exits 0 but the assertion never ran). Also reject
+# a test_helper that excludes the :conformance tag (every test carries it) —
+# that would run zero tests while exit 0.
+if grep -qE '^[[:space:]]*(@tag|@moduletag)[[:space:]]+(:skip|skip:)' "$TEST_FILE"; then
+  echo "conformance-verify: FAIL — $TEST_FILE contains a skip tag; a skipped test vacates its matrix cell" >&2
+  exit 1
+fi
+
+if [ -f test/test_helper.exs ] && grep -qE 'ExUnit\.configure.*exclude.*:conformance' test/test_helper.exs; then
+  echo "conformance-verify: FAIL — test/test_helper.exs excludes :conformance; zero tests would run" >&2
+  exit 1
+fi
+
+# Executed-test COUNT assertion: the suite log's "N passed" must equal the number
+# of `test "..."` definitions (a cross-vendor finding: the prior comment promised
+# this check but it was absent). A divergence means a test was skipped/filtered
+# while the suite still exited 0.
+SUITE_PASSED=$(grep -oE '[0-9]+ passed' "$WORK_DIR/suite.log" | grep -oE '^[0-9]+' || echo 0)
+TEST_DEF_COUNT="${#TEST_NAMES[@]}"
+
+if [ "$SUITE_PASSED" != "$TEST_DEF_COUNT" ]; then
+  echo "conformance-verify: FAIL — suite ran $SUITE_PASSED test(s) but the file defines $TEST_DEF_COUNT; a test was skipped/filtered while the suite exited 0 (a vacated cell)" >&2
   exit 1
 fi
 
