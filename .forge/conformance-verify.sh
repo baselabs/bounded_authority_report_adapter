@@ -183,19 +183,29 @@ for row in "${ROWS[@]}"; do
   # Cross-check the class's verdict direction against the matched test's verdict
   # direction (a cross-vendor finding: the prior validator checked class and
   # evidence independently, so an invalid class pointing to a valid/green test
-  # passed). A 'valid' class must match a test whose name carries a green/valid
-  # signal; an 'invalid_*'/'tamper_*'/'maximum_plus_one' class must match a test
-  # whose name carries a red/invalid signal.
+  # passed). The signals are SYMMETRIC: a 'valid' class rejects any red signal;
+  # an 'invalid_*'/'tamper_*'/'maximum_plus_one' class rejects any green signal.
+  # Red signals: "goes red", "(invalid)", ": red". Green signals: "verify green",
+  # "verifies green", "(valid)".
   lname=$(echo "$matched_name" | tr '[:upper:]' '[:lower:]')
+
+  is_red_name() {
+    [[ "$1" == *"goes red"* || "$1" == *"(invalid)"* || "$1" == *": red"* ]]
+  }
+
+  is_green_name() {
+    [[ "$1" == *"verify green"* || "$1" == *"verifies green"* || "$1" == *"(valid)"* ]]
+  }
+
   case "$class" in
     valid|boundary_near|exact_bound)
-      if [[ "$lname" == *"goes red"* || "$lname" == *": red"* ]]; then
+      if is_red_name "$lname"; then
         echo "conformance-verify: FAIL — class '$class' (expects green) maps to a red-asserting test '$matched_name'" >&2
         exit 1
       fi
       ;;
     invalid_*|tamper_*|maximum_plus_one)
-      if [[ "$lname" == *"verify green"* || "$lname" == *"verifies green"* || "$lname" == *"(valid)"* || "$lname" == *"verify per the declared verdict (valid)"* ]]; then
+      if is_green_name "$lname"; then
         echo "conformance-verify: FAIL — class '$class' (expects red) maps to a green-asserting test '$matched_name'" >&2
         exit 1
       fi
