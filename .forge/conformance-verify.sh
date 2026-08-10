@@ -62,11 +62,15 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 # with non-empty lines — as 8 "cells"). The evidence column (field 3) names the test.
 ROW_COUNT=0
 MALFORMED=0
-EVIDENCE_PHRASES=()
+# Each entry: "class<TAB>evidence" — the class is carried alongside the evidence
+# so stage 2 can cross-check the class's verdict direction against the matched
+# test's verdict direction (a cross-vendor finding: the prior validator checked
+# class, surface, and evidence INDEPENDENTLY, so an invalid_nonce row pointing to
+# the valid top-level test passed).
+ROWS=()
 
 # Valid classes (BAP's 16-class corpus taxonomy) and surfaces this slice
-# exercises. A fabricated class/surface (e.g. made_up_class) is rejected — a
-# cross-vendor finding: the prior validator accepted any non-empty field value.
+# exercises. A fabricated class/surface (e.g. made_up_class) is rejected.
 VALID_CLASSES=" valid boundary_near exact_bound maximum_plus_one invalid_duplicate invalid_encoding invalid_algorithm invalid_key invalid_claim invalid_time invalid_nonce invalid_uri invalid_request invalid_selector invalid_limit tamper_meaningful_byte "
 VALID_SURFACES=" check_envelope verify_grant "
 
@@ -92,7 +96,7 @@ while IFS= read -r line; do
     MALFORMED=1
     echo "conformance-verify: FAIL — matrix row has an unknown surface '$f2' (expected check_envelope or verify_grant): '$line'" >&2
   else
-    EVIDENCE_PHRASES+=("$f3")
+    ROWS+=("$f1"$'\t'"$f3")
   fi
 done < "$MATRIX"
 
@@ -105,12 +109,12 @@ if [ "$ROW_COUNT" -eq 0 ]; then
   exit 1
 fi
 
-if [ "${#EVIDENCE_PHRASES[@]}" -eq 0 ]; then
+if [ "${#ROWS[@]}" -eq 0 ]; then
   echo "conformance-verify: FAIL — matrix $MATRIX has no valid rows after validation" >&2
   exit 1
 fi
 
-echo "conformance-verify: matrix parsed — ${#EVIDENCE_PHRASES[@]} named cell(s) across $ROW_COUNT row(s)"
+echo "conformance-verify: matrix parsed — ${#ROWS[@]} named cell(s) across $ROW_COUNT row(s)"
 
 # --- stage 2: re-execute the suite + confirm every named phrase is a real TEST NAME ---
 echo "conformance-verify: running the conformance suite (every named cell's red-assertion must hold)"
@@ -163,20 +167,42 @@ if [ "$SUITE_PASSED" != "$TEST_DEF_COUNT" ]; then
   exit 1
 fi
 
-for phrase in "${EVIDENCE_PHRASES[@]}"; do
-  found=0
+for row in "${ROWS[@]}"; do
+  IFS=$'\t' read -r class phrase <<< "$row"
+  matched_name=""
   for name in "${TEST_NAMES[@]}"; do
     if [[ "$name" == *"$phrase"* ]]; then
-      found=1
+      matched_name="$name"
       break
     fi
   done
-  if [ "$found" -eq 0 ]; then
+  if [ -z "$matched_name" ]; then
     echo "conformance-verify: FAIL — matrix names a cell ('$phrase') that matches no test name in $TEST_FILE" >&2
     exit 1
   fi
+  # Cross-check the class's verdict direction against the matched test's verdict
+  # direction (a cross-vendor finding: the prior validator checked class and
+  # evidence independently, so an invalid class pointing to a valid/green test
+  # passed). A 'valid' class must match a test whose name carries a green/valid
+  # signal; an 'invalid_*'/'tamper_*'/'maximum_plus_one' class must match a test
+  # whose name carries a red/invalid signal.
+  lname=$(echo "$matched_name" | tr '[:upper:]' '[:lower:]')
+  case "$class" in
+    valid|boundary_near|exact_bound)
+      if [[ "$lname" == *"goes red"* || "$lname" == *"goes red"* || "$lname" == *": red"* ]]; then
+        echo "conformance-verify: FAIL — class '$class' (expects green) maps to a red-asserting test '$matched_name'" >&2
+        exit 1
+      fi
+      ;;
+    invalid_*|tamper_*|maximum_plus_one)
+      if [[ "$lname" == *"verify green"* || "$lname" == *"verifies green"* || "$lname" == *"(valid)"* || "$lname" == *"verify per the declared verdict (valid)"* ]]; then
+        echo "conformance-verify: FAIL — class '$class' (expects red) maps to a green-asserting test '$matched_name'" >&2
+        exit 1
+      fi
+      ;;
+  esac
 done
-echo "conformance-verify: every named cell's test is present and its red-assertion held"
+echo "conformance-verify: every named cell's test is present, its red-assertion held, and its class matches the test's verdict direction"
 
 # --- stage 3: negative control — confirm the tamper is REAL and re-encoding alone doesn't red ---
 # Two independent controls (a cross-vendor finding: a prior version defined
@@ -317,5 +343,5 @@ if ! mix test "$WORK_DIR/negative_control_test.exs" >"$WORK_DIR/negative.log" 2>
   exit 1
 fi
 
-echo "conformance-verify: OK — matrix well-formed (${#EVIDENCE_PHRASES[@]} cells), every named cell's red-assertion holds, the flip is real, and re-encoding alone stays green"
+echo "conformance-verify: OK — matrix well-formed (${#ROWS[@]} cells), every named cell's red-assertion holds, the flip is real, and re-encoding alone stays green"
 exit 0
