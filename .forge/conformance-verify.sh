@@ -189,7 +189,7 @@ for row in "${ROWS[@]}"; do
   lname=$(echo "$matched_name" | tr '[:upper:]' '[:lower:]')
   case "$class" in
     valid|boundary_near|exact_bound)
-      if [[ "$lname" == *"goes red"* || "$lname" == *"goes red"* || "$lname" == *": red"* ]]; then
+      if [[ "$lname" == *"goes red"* || "$lname" == *": red"* ]]; then
         echo "conformance-verify: FAIL — class '$class' (expects green) maps to a red-asserting test '$matched_name'" >&2
         exit 1
       fi
