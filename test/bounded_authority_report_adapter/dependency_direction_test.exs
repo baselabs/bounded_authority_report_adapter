@@ -90,7 +90,8 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   #     catches `alias BoundedAuthority` + `import BoundedAuthority`, rejects
   #     `BoundedAuthorityProtocol.V1` + `BoundedAuthorityReportAdapter`.
   @runtime_internal_regexes [
-    {"BoundedAuthority./BoundedAuthorityWeb. dotted namespace", ~r/\bBoundedAuthority(Web)?\.[A-Z]/},
+    {"BoundedAuthority./BoundedAuthorityWeb. dotted namespace",
+     ~r/\bBoundedAuthority(Web)?\.[A-Z]/},
     {"BoundedAuthorityWeb (dotless web namespace)", ~r/\bBoundedAuthorityWeb\b/},
     {"BoundedAuthority (dotless runtime root)", ~r/\bBoundedAuthority\b/}
   ]
