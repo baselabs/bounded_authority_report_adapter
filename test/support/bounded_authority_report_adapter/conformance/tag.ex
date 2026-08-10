@@ -42,7 +42,12 @@ defmodule BoundedAuthorityReportAdapter.Conformance.Tag do
       "string" -> {:string, value}
       "integer" -> {:integer, value}
       "boolean" -> {:boolean, value}
-      "float" -> {:float, value}
+      # BAP's JCS canonicalization encodes an integer-valued float (e.g. 1.0) as
+      # `1` (no fractional part), so :json.decode yields an integer for a
+      # `["float", 1]` tag. RequestDigest.typed/1 requires is_float/1 on the
+      # {:float, _} arm, so coerce the value to a float here (a cross-vendor
+      # finding: the prior arm preserved the integer, rejecting the round-trip).
+      "float" -> {:float, value * 1.0}
       "array" -> {:array, Enum.map(value, &from_json/1)}
     end
   end

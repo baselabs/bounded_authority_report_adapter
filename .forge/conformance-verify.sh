@@ -20,13 +20,12 @@
 #      version only checked the file EXISTED, so an empty matrix passed).
 #   2. RE-EXECUTE the conformance suite — every named red-capable cell's
 #      red-assertion must hold under its injected defect. Confirm every named
-#      phrase appears in the test file (a dropped test = a vacated cell).
-#   3. NEGATIVE CONTROL — redefine the tamper helpers as NO-OPs (return the
-#      original compact) in a throwaway test, and confirm check_envelope stays
-#      GREEN. This proves the tamper tests' reds depend on the flip producing a
-#      DIFFERENT byte, not on some unrelated artifact (a cross-vendor finding: a
-#      prior version built a separate untouched proof, which didn't neuter the
-#      actual tamper helper).
+#      phrase matches an EXECUTED test name (non-comment, non-:skip), so a
+#      vacated cell (dropped or skipped test) surfaces.
+#   3. NEGATIVE CONTROL — replicate the signature-flip logic and assert (a) the
+#      output DIFFERS from the input (the flip is real, not identity) and (b) an
+#      identity re-encode (decode + re-encode without flipping) stays GREEN,
+#      proving re-encoding alone is not the cause of the tamper test's red.
 #
 # Usage: .forge/conformance-verify.sh <matrix-path>
 # Exit: 0 if the matrix is well-formed, every named cell's red-assertion holds,
@@ -61,10 +60,6 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 # file carries at least one valid row. Reject any file that isn't a real conformance
 # matrix (a cross-vendor finding: a prior version accepted /etc/shells — any text file
 # with non-empty lines — as 8 "cells"). The evidence column (field 3) names the test.
-#
-# Note on the awk_status capture: bash does NOT propagate a process-substitution's
-# exit status to $? (it needs `wait $!`). So the validation is done by re-checking
-# the row count and field structure in the loop below, not by relying on awk's exit.
 ROW_COUNT=0
 MALFORMED=0
 EVIDENCE_PHRASES=()
@@ -108,10 +103,21 @@ if ! mix test "$TEST_FILE" >"$WORK_DIR/suite.log" 2>&1; then
   exit 1
 fi
 
-# Extract the set of actual test names (the strings inside `test "..."`) so each
-# evidence phrase is tied to an EXECUTED test, not a comment or a skipped test
-# (a cross-vendor finding: grep-anywhere matched comments).
-mapfile -t TEST_NAMES < <(grep -oE 'test "[^"]*"' "$TEST_FILE" | sed 's/^test "//;s/"$//')
+# Extract the set of EXECUTED test names: the strings inside `test "..."` on
+# non-comment lines, excluding tests tagged `:skip` (which ExUnit does not run).
+# A cross-vendor finding: a plain grep matched commented-out `# test "..."` lines
+# and `@tag :skip`ped tests, certifying cells whose assertions never executed.
+# The executed-test COUNT is also asserted below against the suite log so a
+# vacated (skipped) test surfaces.
+mapfile -t TEST_NAMES < <(
+  grep -oE '^[[:space:]]*test "[^"]*"' "$TEST_FILE" | sed 's/^[[:space:]]*test "//;s/"$//'
+)
+
+# Confirm no test in the file is tagged :skip (a skipped test vacates its cell).
+if grep -qE '^[[:space:]]*(@tag|@moduletag)[[:space:]]*:skip' "$TEST_FILE"; then
+  echo "conformance-verify: FAIL — $TEST_FILE contains a :skip tag; a skipped test vacates its matrix cell (the suite exits 0 but the assertion never ran)" >&2
+  exit 1
+fi
 
 for phrase in "${EVIDENCE_PHRASES[@]}"; do
   found=0

@@ -15,8 +15,12 @@ bounded_authority_report_adapter-*.tar
 /.env.*
 
 # Forge lifecycle artifacts are local; the surface declarations + the conformance
-# re-execution runner are tracked (they are the gates, not scratch).
+# re-execution runner + the conformance matrix are tracked (they are the gates,
+# not scratch — the runner's CI deployment needs the matrix on a fresh clone).
 /.forge/*
 !/.forge/critical-surfaces
 !/.forge/conformance-surfaces
 !/.forge/conformance-verify.sh
+!/.forge/conformance/
+/.forge/conformance/*/
+!.forge/conformance/b2-ra-conformance-roundtrip

@@ -1,0 +1,30 @@
+# .forge/conformance/b2-ra-conformance-roundtrip — the class x surface x test-id matrix.
+#
+# Forge-skill conformance doctrine: TAB-separated rows of class<TAB>surface<TAB>evidence.
+# evidence is either a red-capable test id/name (a unique substring of a test name in
+# test/bounded_authority_report_adapter/conformance_roundtrip_test.exs), OR `n/a: <falsifiable reason>`.
+# The conformance-verify.sh runner parses this matrix, confirms each evidence phrase
+# appears in the test file, and re-executes the suite.
+#
+# Surfaces (from .forge/conformance-surfaces): the conformance harness exercises BAP's
+# `check_envelope/2` (envelope verifier) and `verify_grant/3` (grant-only verifier, for the
+# grant_time_cases which carry no proof).
+#
+# Classes are a genuine SELECTION from BAP's 16-class corpus taxonomy
+# (deps/bounded_authority_protocol/test/conformance/corpus_test.exs:191-210), not a
+# spec-named obligation on this adapter.
+#
+# TAB-separated: class	surface	evidence
+valid	check_envelope	top-level grant+proof verify green
+valid	check_envelope	received_member_order_variant grant+proof verify green
+valid	check_envelope	nonce_absent verifies green
+valid	check_envelope	an envelope signed through the adapter verifies green
+invalid_key	check_envelope	wrong_holder goes red
+invalid_duplicate	check_envelope	duplicate_member goes red
+invalid_selector	check_envelope	selector_denied.equals goes red
+invalid_selector	check_envelope	selector_denied.one_of goes red
+tamper_meaningful_byte	check_envelope	flipped proof-signature byte goes RED
+tamper_meaningful_byte	check_envelope	tampered ba_req payload byte goes RED at the request-hash field binding
+tamper_meaningful_byte	check_envelope	tamper_verdicts all go RED through check_envelope
+valid	verify_grant	every grant_time_case matches its declared expected_verdict
+invalid_time	verify_grant	every grant_time_case matches its declared expected_verdict
