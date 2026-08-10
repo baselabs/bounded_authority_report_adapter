@@ -205,6 +205,35 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
                "a published nonce-carrying proof's nonce drifted from expected_context.nonce: #{inspect(payload_nonce)} != #{inspect(authoritative)}"
       end
     end
+
+    @tag :conformance
+    test "the harness covers EVERY published positive/negative case (no silent gap)" do
+      # Exhaustive-coverage guard (a cross-vendor finding): the bar (i) tests
+      # access cases through fixed literal keys, so a case ADDED to the vector's
+      # positive_cases/negative_cases would reach no test and the suite stays
+      # green. This test asserts the published case-set keys EXACTLY match the
+      # set the per-case tests cover — so a new case reds here until a covering
+      # test is added, and a dropped case reds if a test references a removed key.
+      v = VectorCase.vector()
+
+      positive = Map.keys(v["positive_cases"]) |> MapSet.new()
+      negative = Map.keys(v["negative_cases"]) |> MapSet.new()
+      published = MapSet.union(positive, negative)
+
+      # The case keys the per-case bar (i) tests cover (each test references its
+      # case key by literal). Update this set when a per-case test is added/
+      # removed — the assert below pins it to the published set.
+      covered =
+        MapSet.new([
+          "nonce_absent",
+          "wrong_holder",
+          "duplicate_member",
+          "selector_denied"
+        ])
+
+      assert published == covered,
+             "published case set (#{inspect(MapSet.to_list(published))}) != covered set (#{inspect(MapSet.to_list(covered))}) — a case was added/removed without a matching test"
+    end
   end
 
   describe "bar (i-grant): published GRANT-TIME cases verify via verify_grant/3" do
