@@ -41,68 +41,79 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
   @operation "report_external_materialization"
 
   describe "bar (i): published ENVELOPE cases verify via check_envelope/2" do
-    @tag :conformance
-    test "top-level grant+proof verify green (valid)" do
-      v = VectorCase.vector()
+    # Each envelope test reads its case's declared `expected_verdict` and asserts
+    # check_envelope matches it, so a verdict drift in the vector reds the test
+    # (a cross-vendor finding: the prior hardcoded {:ok}/{:error} assertions
+    # ignored the declared verdict, so a metadata-only change passed uncovered).
+    defp assert_envelope_verdict(grant, proof, expected_request, declared_verdict) do
+      result = V1.check_envelope(%Credentials{grant: grant, proof: proof}, expected_request)
 
-      assert {:ok, _facts} =
-               V1.check_envelope(
-                 %Credentials{
-                   grant: v["grant"]["compact"],
-                   proof: v["proof"]["compact"]
-                 },
-                 VectorCase.expected_request(:top_level)
-               )
+      case declared_verdict do
+        "valid" ->
+          assert {:ok, _facts} = result,
+                 "case declared valid but check_envelope returned #{inspect(result)}"
+
+        "invalid" ->
+          assert {:error, :invalid} = result,
+                 "case declared invalid but check_envelope returned #{inspect(result)}"
+      end
     end
 
     @tag :conformance
-    test "received_member_order_variant grant+proof verify green (valid)" do
+    test "top-level grant+proof verify per the declared verdict (valid)" do
+      v = VectorCase.vector()
+      verdict = v["expected"]["verdict"]
+
+      assert_envelope_verdict(
+        v["grant"]["compact"],
+        v["proof"]["compact"],
+        VectorCase.expected_request(:top_level),
+        verdict
+      )
+    end
+
+    @tag :conformance
+    test "received_member_order_variant grant+proof verify per the declared verdict (valid)" do
       # A SEPARATE issuer-signed grant+proof pair (its ath is distinct from the
       # top-level). It is verified with its own grant + its own
       # expected_request (derived from the shared expected_context).
       rmo = VectorCase.vector()["received_member_order_variant"]
 
-      assert {:ok, _facts} =
-               V1.check_envelope(
-                 %Credentials{
-                   grant: rmo["grant"]["compact"],
-                   proof: rmo["proof"]["compact"]
-                 },
-                 VectorCase.expected_request(rmo)
-               )
+      assert_envelope_verdict(
+        rmo["grant"]["compact"],
+        rmo["proof"]["compact"],
+        VectorCase.expected_request(rmo),
+        rmo["expected_verdict"]
+      )
     end
 
     @tag :conformance
-    test "positive_cases.nonce_absent verifies green (valid) — per-case :not_required nonce" do
+    test "positive_cases.nonce_absent verifies per the declared verdict (valid) — per-case :not_required nonce" do
       # The proof payload carries NO nonce. The shared expected_context.nonce
       # would red this declared-valid case; the per-case derivation in
       # VectorCase sets nonce: :not_required (design §1.6 C).
       v = VectorCase.vector()
       na = v["positive_cases"]["nonce_absent"]
 
-      assert {:ok, _facts} =
-               V1.check_envelope(
-                 %Credentials{
-                   grant: v["grant"]["compact"],
-                   proof: na["proof"]["compact"]
-                 },
-                 VectorCase.expected_request(na)
-               )
+      assert_envelope_verdict(
+        v["grant"]["compact"],
+        na["proof"]["compact"],
+        VectorCase.expected_request(na),
+        na["expected_verdict"]
+      )
     end
 
     @tag :conformance
-    test "negative_cases.wrong_holder goes red (invalid)" do
+    test "negative_cases.wrong_holder verifies per the declared verdict (invalid)" do
       v = VectorCase.vector()
       wh = v["negative_cases"]["wrong_holder"]
 
-      assert {:error, :invalid} =
-               V1.check_envelope(
-                 %Credentials{
-                   grant: v["grant"]["compact"],
-                   proof: wh["proof"]["compact"]
-                 },
-                 VectorCase.expected_request(wh)
-               )
+      assert_envelope_verdict(
+        v["grant"]["compact"],
+        wh["proof"]["compact"],
+        VectorCase.expected_request(wh),
+        wh["expected_verdict"]
+      )
     end
 
     @tag :conformance
@@ -127,14 +138,12 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       v = VectorCase.vector()
       dm = v["negative_cases"]["duplicate_member"]
 
-      assert {:error, :invalid} =
-               V1.check_envelope(
-                 %Credentials{
-                   grant: v["grant"]["compact"],
-                   proof: dm["compact"]
-                 },
-                 VectorCase.expected_request(:top_level)
-               )
+      assert_envelope_verdict(
+        v["grant"]["compact"],
+        dm["compact"],
+        VectorCase.expected_request(:top_level),
+        dm["expected_verdict"]
+      )
 
       # BAP's normative Json.decode rejects an object with a duplicated member
       # key — an independent decoder property, verified on the case's header.
@@ -148,33 +157,29 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     end
 
     @tag :conformance
-    test "negative_cases.selector_denied.equals goes red (invalid selector)" do
+    test "negative_cases.selector_denied.equals verifies per the declared verdict (invalid selector)" do
       v = VectorCase.vector()
       sd = v["negative_cases"]["selector_denied"]["equals"]
 
-      assert {:error, :invalid} =
-               V1.check_envelope(
-                 %Credentials{
-                   grant: v["grant"]["compact"],
-                   proof: sd["proof"]["compact"]
-                 },
-                 VectorCase.expected_request(sd)
-               )
+      assert_envelope_verdict(
+        v["grant"]["compact"],
+        sd["proof"]["compact"],
+        VectorCase.expected_request(sd),
+        sd["expected_verdict"]
+      )
     end
 
     @tag :conformance
-    test "negative_cases.selector_denied.one_of goes red (invalid selector)" do
+    test "negative_cases.selector_denied.one_of verifies per the declared verdict (invalid selector)" do
       v = VectorCase.vector()
       sd = v["negative_cases"]["selector_denied"]["one_of"]
 
-      assert {:error, :invalid} =
-               V1.check_envelope(
-                 %Credentials{
-                   grant: v["grant"]["compact"],
-                   proof: sd["proof"]["compact"]
-                 },
-                 VectorCase.expected_request(sd)
-               )
+      assert_envelope_verdict(
+        v["grant"]["compact"],
+        sd["proof"]["compact"],
+        VectorCase.expected_request(sd),
+        sd["expected_verdict"]
+      )
     end
 
     @tag :conformance
