@@ -45,4 +45,12 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
   end
 
   def thumbprint(_handle), do: {:error, :invalid_handle}
+
+  @impl true
+  # The anchor's signed header `kid`. A test-only reference handle returns a
+  # fixed id (a production handle returns its real registry key_id). Pinned so
+  # the anchor round-trip test can build the matching HistoricalPublicKey.
+  def key_id({_public_key, _private_key}), do: {:ok, "test-anchor-key-001"}
+
+  def key_id(_handle), do: {:error, :invalid_handle}
 end

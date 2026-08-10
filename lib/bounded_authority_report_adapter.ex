@@ -1,48 +1,55 @@
 defmodule BoundedAuthorityReportAdapter do
   @moduledoc """
-  holder-side signing adapter for application reports (ROADMAP B2 / RA1).
+  Universal companion signer to `BoundedAuthorityProtocol` (ROADMAP B2).
 
-  Binds an **issuer-signed grant** to a application report by producing a **holder
-  proof**, returning the grant + proof envelope the verifier verifies via
-  `BoundedAuthorityProtocol.V1.check_envelope/2`.
+  BAP produces the deterministic signing input for each protocol object (proof,
+  grant, boundary anchor, key transition) but refuses to sign — it is a pure
+  verifier + signing-input producer. THIS library is the signing glue: it takes a
+  key-handle + a BAP signing input, signs the input's `message` via the handle's
+  local key, and assembles the compact via BAP. The signing tail — resolve the
+  key, sign via the handle, verify the signature against the resolved key, assemble
+  — is shared across every object the library signs.
 
-  ## The authority model (charter §4 — load-bearing)
+  ## What has landed
 
-  This adapter is the **HOLDER**. It signs ONLY the proof.
+    * **Proof signing** (`sign_report/3`, RA1) — binds an issuer-signed grant to a
+      application report by producing a holder proof, returning the `{grant, proof}`
+      envelope the verifier verifies via `check_envelope/2`.
+    * **Boundary-anchor signing** (`sign_anchor/3`, RA4) — signs a boundary anchor
+      (a durable chain checkpoint), returning the compact a verifier checks via
+      `verify_historical_anchor/3`.
 
-    * The **grant** is issued + signed by the **issuer** (the
-      `bounded_authority` runtime service), out of band. The adapter receives
-      the issuer-signed grant compact as an INPUT — it never signs the grant.
-      At verify, `check_envelope` checks the grant signature against the
-      issuer's public key (`trusted_issuer.public_key`).
-    * The **proof** is signed by the **holder** (this adapter), binding the
-      grant to a specific request. At verify, `check_envelope` checks the proof
-      signature against the holder's public key (embedded in the proof header).
-
-  Signing the grant with the holder key would produce an envelope no
-  correctly-configured verifier accepts — the adapter's one signing artifact is
-  the proof.
-
-  ## What this adapter does NOT do (charter §3)
-
-    * Not a verifier — verification lives in every party via the protocol
-      package (`BoundedAuthorityProtocol.V1.check_envelope/2`). The verifier verifies; this adapter signs the proof.
-    * Not the runtime — grant issuance, key custody/rotation, and revocation
-      are the `bounded_authority` runtime's job. This adapter holds a holder
-      key handle and signs on invocation; it does not mint capabilities.
-    * Not a transport — the application transport libraries stay protocol-free. This
-      adapter is a composable lib the edge agent calls to envelope a report.
-    * Not hex-published — private BaseLabs library (`docs/strategy.md`).
+  The pattern generalizes to any BAP protocol object; grant/key-transition signing
+  are named future slices (see ADR-0006).
 
   ## The key-handle contract (charter §6 invariant 1)
 
-  The holder key NEVER enters this adapter. Callers supply a `{module(), term()}`
-  handle whose module implements the `sign/2`, `public_key/1`, and `thumbprint/1`
-  callbacks below. The adapter calls the handle's callbacks; the private key
-  bytes live in the caller's module/process. A test-only reference
-  implementation (`BoundedAuthorityReportAdapter.Keys.RawKey`) ships under
-  `test/support/` for local development; production holders implement the
+  The private key NEVER enters this library. Callers supply a `{module(), term()}`
+  handle whose module implements the callbacks below. The library calls the handle's
+  callbacks; the private key bytes live in the caller's module/process.
+
+    * `sign/2`, `public_key/1` — required for every signing operation.
+    * `thumbprint/1` — required (exposed for caller-side self-checking).
+    * `key_id/1` — **optional** (declared via `@optional_callbacks`); required only
+      for `sign_anchor/3`, which puts the key's registry id in the signed anchor
+      header. A proof-only handle need not implement it.
+
+  A test-only reference implementation (`BoundedAuthorityReportAdapter.Keys.RawKey`)
+  ships under `test/support/` for local development; production holders implement the
   callbacks with proper key custody (HSM, etc.).
+
+  ## What this library does NOT do
+
+    * Not a verifier — verification lives in every party via the protocol package
+      (`check_envelope/2`, `verify_historical_anchor/3`). Consumers verify; this
+      library signs.
+    * Not the runtime — grant issuance, key custody/rotation, and revocation are
+      the `bounded_authority` runtime's job. This library holds a key handle and
+      signs on invocation; it does not mint capabilities.
+    * Not a transport — the application transport libraries stay protocol-free. This
+      library is a composable lib an edge agent (or any signing party) calls.
+    * Not hex-published — private BaseLabs library until consumed + exercised +
+      tuned across the projects that use it (see `docs/strategy.md`).
   """
 
   alias BoundedAuthorityProtocol.V1.Json
@@ -61,14 +68,34 @@ defmodule BoundedAuthorityReportAdapter do
 
   @type envelope :: %{grant: binary(), proof: binary()}
 
+  @type anchor_input :: %{
+          anchor_id: binary(),
+          chain_id: binary(),
+          sequence: non_neg_integer(),
+          chain_hash: binary()
+        }
+
+  @type anchor_compact :: %{anchor: binary()}
+
   @type opts :: %{
           optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map(),
           optional(:issued_at) => integer(),
           optional(:proof_id) => binary()
         }
 
+  @type anchor_opts :: %{
+          optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map(),
+          optional(:anchored_at) => integer()
+        }
+
   @type sign_error ::
           :invalid_report
+          | :invalid_key_handle
+          | :signing_failed
+          | {:producer_error, :invalid}
+
+  @type anchor_sign_error ::
+          :invalid_anchor
           | :invalid_key_handle
           | :signing_failed
           | {:producer_error, :invalid}
@@ -88,10 +115,9 @@ defmodule BoundedAuthorityReportAdapter do
        `grant_compact` (BAP's `proof_signing_input` derives `ath` = grant hash
        from it, and `ba_req` = request digest from `cast_arguments`).
     3. Produce the deterministic proof signing input via BAP.
-    4. Sign the input's `message` via the holder key callback (the one signing
-       call — the adapter signs ONLY the proof; the grant is never signed here).
-    5. Assemble the compact proof via BAP.
-    6. Return `%{grant: report.grant_compact, proof: proof_compact}`.
+    4. Sign + assemble via the shared signing tail (`sign_and_assemble/3`) — the
+       adapter signs ONLY the proof; the grant is never signed here.
+    5. Return `%{grant: report.grant_compact, proof: proof_compact}`.
 
   ## Options
 
@@ -110,7 +136,8 @@ defmodule BoundedAuthorityReportAdapter do
     * `:invalid_key_handle` — the handle is malformed, or the handle's
       `public_key/1` rejected / returned a non-32-byte key.
     * `:signing_failed` — the holder's `sign/2` callback rejected, returned a
-      non-64-byte signature, or violated the `{:ok, _} | {:error, _}` contract.
+      non-64-byte signature, violated the `{:ok, _} | {:error, _}` contract, or
+      the signature did not verify against the resolved holder public key.
     * `{:producer_error, :invalid}` — BAP's producer or assembler rejected the
       proof (the input violated a bound or field constraint).
   """
@@ -125,10 +152,76 @@ defmodule BoundedAuthorityReportAdapter do
          {:ok, holder_public_key} <- resolve_public_key(key_handle),
          proof = build_proof(report, holder_public_key, proof_id, issued_at),
          {:ok, signing_input} <- produce_proof_signing_input(proof, bounds),
-         {:ok, signature} <- sign_via_handle(key_handle, signing_input.message),
-         :ok <- verify_signature(signing_input.message, signature, holder_public_key),
-         {:ok, proof_compact} <- assemble_proof(signing_input, signature) do
+         {:ok, proof_compact} <- sign_and_assemble(key_handle, signing_input, holder_public_key) do
       {:ok, %{grant: report.grant_compact, proof: proof_compact}}
+    end
+  end
+
+  @doc """
+  Signs a boundary anchor — a durable chain checkpoint a verifier checks via
+  `BoundedAuthorityProtocol.V1.verify_historical_anchor/3`.
+
+  Returns `{:ok, %{anchor: anchor_compact}}`. The caller supplies the anchor's
+  *content* (`anchor_id`, `chain_id`, `sequence`, `chain_hash`); BOTH key
+  identifiers (`public_key`, `key_id`) are resolved from `key_handle` — never
+  trusted from the caller — so the signed header's `kid` + `key_fingerprint` are
+  consistent with the key `sign/2` actually used.
+
+  ## Why both key identifiers come from the handle
+
+  BAP puts `key_id` in the anchor's SIGNED header (`typ: ba+chain-anchor`) and, at
+  verify, binds it to the verifier's `HistoricalPublicKey.key_id`. Letting the
+  caller supply `key_id` would let an anchor assert "kid K" while being signed by a
+  different key. Deriving `key_id` from the same handle as `public_key` makes that
+  inconsistency impossible by construction (the one thing NOT sign-enforced — that
+  `key_id` *names* the key in any external registry — is verify-enforced by BAP).
+
+  ## Options
+
+    * `:anchored_at` — the anchor's timestamp (default:
+      `System.system_time(:second)`). Pin this when the verifier's evaluation time
+      is far from wall-clock so it falls inside the key's validity window.
+    * `:bounds` — resource ceilings forwarded to BAP's producer (default `%{}`).
+
+  ## Errors (closed-atom set — no key material or anchor content in errors)
+
+    * `:invalid_anchor` — a required content field is missing or malformed.
+    * `:invalid_key_handle` — the handle is malformed, lacks `key_id/1`, or its
+      `public_key/1` / `key_id/1` rejected / returned an invalid value.
+    * `:signing_failed` — the `sign/2` callback rejected, returned a non-64-byte
+      signature, violated the `{:ok, _} | {:error, _}` contract, or the signature
+      did not verify against the resolved public key.
+    * `{:producer_error, :invalid}` — BAP's producer or assembler rejected the
+      anchor (the input violated a bound or field constraint).
+  """
+  @spec sign_anchor(anchor_input(), key_handle(), anchor_opts()) ::
+          {:ok, anchor_compact()} | {:error, anchor_sign_error()}
+  def sign_anchor(anchor_input, key_handle, opts \\ %{}) do
+    bounds = Map.get(opts, :bounds, %{})
+    anchored_at = Map.get(opts, :anchored_at, System.system_time(:second))
+
+    with {:ok, key_id} <- resolve_key_id(key_handle),
+         {:ok, public_key} <- resolve_public_key(key_handle),
+         {:ok, anchor} <- build_anchor(anchor_input, public_key, key_id, anchored_at),
+         {:ok, signing_input} <- produce_anchor_signing_input(anchor, bounds),
+         {:ok, anchor_compact} <- sign_and_assemble(key_handle, signing_input, public_key) do
+      {:ok, %{anchor: anchor_compact}}
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # The shared signing tail (the universal-companion primitive).
+  #
+  # sign_via_handle → verify_signature → assemble_compact. Every object this
+  # library signs flows through here. verify_signature is the wrong-key guard
+  # (the RA1 cross-vendor CV-finding): a signature that does not verify against
+  # the resolved public key is :signing_failed, never a silent false-success.
+  # ---------------------------------------------------------------------------
+
+  defp sign_and_assemble(key_handle, signing_input, public_key) do
+    with {:ok, signature} <- sign_via_handle(key_handle, signing_input.message),
+         :ok <- verify_signature(signing_input.message, signature, public_key) do
+      assemble_compact(signing_input, signature)
     end
   end
 
@@ -208,6 +301,26 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp resolve_public_key(_handle), do: {:error, :invalid_key_handle}
 
+  # key_id is the anchor's signed header identifier (typ: ba+chain-anchor). It
+  # MUST come from the handle (not the caller) so it is consistent with the key
+  # sign/2 uses — see sign_anchor/3's doc. key_id/1 is an OPTIONAL callback
+  # (@optional_callbacks): a proof-only handle does not implement it, so
+  # sign_anchor on such a handle fails HERE as :invalid_key_handle (the
+  # UndefinedFunctionError from apply/3 is caught by safe_callback). BAP's
+  # producer validates the full ascii/length constraint; here we only assert a
+  # non-empty binary.
+  defp resolve_key_id({module, handle}) when is_atom(module) do
+    case safe_callback(module, :key_id, [handle]) do
+      {:ok, key_id} when is_binary(key_id) and byte_size(key_id) > 0 ->
+        {:ok, key_id}
+
+      _malformed_or_unimplemented ->
+        {:error, :invalid_key_handle}
+    end
+  end
+
+  defp resolve_key_id(_handle), do: {:error, :invalid_key_handle}
+
   defp safe_callback(module, function, args) do
     apply(module, function, args)
   rescue
@@ -244,6 +357,48 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
+  defp build_anchor(anchor_input, public_key, key_id, anchored_at) when is_map(anchor_input) do
+    with {:ok, anchor_id} <- required_anchor_binary(anchor_input, :anchor_id),
+         {:ok, chain_id} <- required_anchor_binary(anchor_input, :chain_id),
+         {:ok, sequence} <- required_sequence(anchor_input, :sequence),
+         {:ok, chain_hash} <- required_anchor_binary(anchor_input, :chain_hash) do
+      {:ok,
+       %BoundedAuthorityProtocol.V1.BoundaryAnchor{
+         anchor_id: anchor_id,
+         anchored_at: anchored_at,
+         chain_id: chain_id,
+         sequence: sequence,
+         chain_hash: chain_hash,
+         key_id: key_id,
+         public_key: public_key
+       }}
+    end
+  end
+
+  defp build_anchor(_anchor_input, _public_key, _key_id, _anchored_at),
+    do: {:error, :invalid_anchor}
+
+  defp required_anchor_binary(anchor_input, key) do
+    case Map.fetch(anchor_input, key) do
+      {:ok, value} when is_binary(value) -> {:ok, value}
+      _ -> {:error, :invalid_anchor}
+    end
+  end
+
+  defp required_sequence(anchor_input, key) do
+    case Map.fetch(anchor_input, key) do
+      {:ok, value} when is_integer(value) and value >= 0 -> {:ok, value}
+      _ -> {:error, :invalid_anchor}
+    end
+  end
+
+  defp produce_anchor_signing_input(anchor, bounds) do
+    case BoundedAuthorityProtocol.V1.boundary_anchor_signing_input(anchor, bounds) do
+      {:ok, signing_input} -> {:ok, signing_input}
+      {:error, :invalid} -> {:error, {:producer_error, :invalid}}
+    end
+  end
+
   defp sign_via_handle({module, handle}, message) do
     # `key_handle` shape is validated upstream by resolve_public_key/1 (the only
     # path here is through the `with` after a successful resolve), so the handle
@@ -262,7 +417,10 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  defp assemble_proof(signing_input, signature) do
+  defp assemble_compact(signing_input, signature) do
+    # Generic over the signing input's kind (:proof, :boundary_anchor, ...) —
+    # V1.assemble_compact/2 dispatches on kind and validates via the matching
+    # codec. Both sign_report/3 and sign_anchor/3 flow through here.
     case BoundedAuthorityProtocol.V1.assemble_compact(signing_input, signature) do
       {:ok, compact} -> {:ok, compact}
       {:error, :invalid} -> {:error, {:producer_error, :invalid}}
@@ -319,4 +477,13 @@ defmodule BoundedAuthorityReportAdapter do
   enforce thumbprint equality — that is the verifier's job (charter §3).
   """
   @callback thumbprint(handle :: term()) :: {:ok, binary()} | {:error, term()}
+
+  @doc """
+  Returns the registry key id (`kid`) for the key behind `handle`. Required only
+  by `sign_anchor/3`, which places it in the anchor's signed header. **Optional**
+  callback — a proof-only handle need not implement it.
+  """
+  @callback key_id(handle :: term()) :: {:ok, binary()} | {:error, term()}
+
+  @optional_callbacks [key_id: 1]
 end
