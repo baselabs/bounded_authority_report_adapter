@@ -88,11 +88,12 @@ re-architecture, not a refactor.
 - **Ed25519** for holder proofs + grants (matches BAP's `alg: EdDSA` closed
   header). The private key is held by the edge agent; only the public key +
   signatures cross the boundary.
-- **Deterministic signing inputs** from BAP (`grant_signing_input`,
-  `proof_signing_input`) — the adapter does NOT construct canonical bytes
-  itself; it calls BAP and signs what BAP returns. This keeps the wire format
-  owned by the protocol package (single source of truth) and makes the adapter
-  a thin glue layer.
+- **Deterministic signing inputs** from BAP (`proof_signing_input`) — the
+  adapter does NOT construct canonical bytes itself; it calls BAP and signs
+  what BAP returns. This keeps the wire format owned by the protocol package
+  (single source of truth) and makes the adapter a thin glue layer. The grant's
+  signing input (`grant_signing_input`) is the issuer's concern — the grant
+  arrives issuer-signed as input; this adapter signs only the proof (charter §2/§4).
 - **`assemble_compact`** frames the signed result. The adapter does not roll its
   own envelope format.
 - **Key custody** is the edge agent's responsibility (how it loads/secures the

@@ -30,14 +30,26 @@ dependency + release posture.
 
 ## Status
 
-`sign_report/3` shipped (RA1, 2026-08-09): binds an issuer-signed grant to a
-application report by producing a holder proof, returning the grant + proof envelope
-the verifier verifies via `BoundedAuthorityProtocol.V1.check_envelope/2`.
-The round-trip is green against the real BAP verifier. The holder key never
-enters the adapter (callers supply a `{module(), term()}` key-handle callback).
-The full conformance-corpus round-trip (RA2), the dependency-direction structural
-test (RA3), and the tracked topology ADR (RA6) land in later slices; see
-`docs/ROADMAP.md`.
+**RA1/RA2/RA3 shipped** (2026-08-09 → 2026-08-10):
+
+- **RA1 — envelope signing.** `sign_report/3` binds an issuer-signed grant to a
+  application report by producing a holder proof, returning the grant + proof envelope
+  the verifier verifies via `BoundedAuthorityProtocol.V1.check_envelope/2`.
+  The adapter signs ONLY the proof (the grant arrives issuer-signed and passes
+  through untouched). The holder key never enters the adapter (callers supply a
+  `{module(), term()}` key-handle callback). Wrong-key verify + exit/throw
+  containment make a misconfigured signer fail loudly, not silently.
+- **RA2 — conformance round-trip.** Every published-vector case verifies via
+  `check_envelope/2` (envelopes) / `verify_grant/3` (grant-time), and an
+  adapter-coherent round-trip (`sign_report/3` → `check_envelope/2`) is green
+  against a freshly issuer-signed grant. Defect-injection RED proofs guard
+  non-vacuity.
+- **RA3 — dependency-direction wall.** A two-clause structural test proves the
+  adapter depends only on `bounded_authority_protocol`, scanning `lib/` +
+  `test/support/`.
+
+Remaining: RA4 (checkpoint-ack probe), RA5 (verifier application consumer), RA6 (topology
+ADR + closeout). See `docs/ROADMAP.md`.
 
 ## Installation (private git dep)
 
@@ -58,7 +70,7 @@ git dep). Both repos must be reachable from the consumer's build environment.
 
 ```bash
 mix deps.get          # fetches bounded_authority_protocol
-mix test              # the scaffold's dependency-wiring assertions
+mix test              # 55 tests (sign_report + conformance + dep-direction)
 mix compile --warnings-as-errors
 mix credo
 ```
