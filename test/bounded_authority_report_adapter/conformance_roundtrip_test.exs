@@ -207,22 +207,23 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     end
 
     @tag :conformance
-    test "the harness covers EVERY published positive/negative case (no silent gap)" do
+    test "the harness covers EVERY published positive/negative case + nested sub-cases (no silent gap)" do
       # Exhaustive-coverage guard (a cross-vendor finding): the bar (i) tests
       # access cases through fixed literal keys, so a case ADDED to the vector's
       # positive_cases/negative_cases would reach no test and the suite stays
       # green. This test asserts the published case-set keys EXACTLY match the
       # set the per-case tests cover — so a new case reds here until a covering
       # test is added, and a dropped case reds if a test references a removed key.
+      # It ALSO enumerates nested sub-cases (e.g. selector_denied.equals/one_of)
+      # so a sub-case added under an existing container key can't slip through
+      # (a second cross-vendor finding: the top-level-keys-only check missed
+      # children of selector_denied).
       v = VectorCase.vector()
 
       positive = Map.keys(v["positive_cases"]) |> MapSet.new()
       negative = Map.keys(v["negative_cases"]) |> MapSet.new()
       published = MapSet.union(positive, negative)
 
-      # The case keys the per-case bar (i) tests cover (each test references its
-      # case key by literal). Update this set when a per-case test is added/
-      # removed — the assert below pins it to the published set.
       covered =
         MapSet.new([
           "nonce_absent",
@@ -233,6 +234,27 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
 
       assert published == covered,
              "published case set (#{inspect(MapSet.to_list(published))}) != covered set (#{inspect(MapSet.to_list(covered))}) — a case was added/removed without a matching test"
+
+      # Nested sub-cases under selector_denied (a container whose value is a map
+      # of sub-cases). Each sub-case must be covered by a per-case test that
+      # references its key.
+      selector_subcases =
+        case v["negative_cases"]["selector_denied"] do
+          sub when is_map(sub) ->
+            Enum.flat_map(sub, fn
+              {key, %{"proof" => _}} -> [key]
+              _ -> []
+            end)
+
+          _ ->
+            []
+        end
+        |> MapSet.new()
+
+      covered_subcases = MapSet.new(["equals", "one_of"])
+
+      assert selector_subcases == covered_subcases,
+             "selector_denied sub-cases (#{inspect(MapSet.to_list(selector_subcases))}) != covered (#{inspect(MapSet.to_list(covered_subcases))}) — a sub-case was added/removed without a matching test"
     end
   end
 

@@ -142,12 +142,21 @@ if [ -f test/test_helper.exs ] && grep -qE 'ExUnit\.configure.*exclude.*:conform
   exit 1
 fi
 
-# Executed-test COUNT assertion: the suite log's "N passed" must equal the number
-# of `test "..."` definitions (a cross-vendor finding: the prior comment promised
-# this check but it was absent). A divergence means a test was skipped/filtered
-# while the suite still exited 0.
-SUITE_PASSED=$(grep -oE '[0-9]+ passed' "$WORK_DIR/suite.log" | grep -oE '^[0-9]+' || echo 0)
+# Executed-test COUNT assertion: the suite log's passed-count must equal the
+# number of `test "..."` definitions (a cross-vendor finding: the prior comment
+# promised this check but it was absent). A divergence means a test was skipped/
+# filtered while the suite still exited 0. The parse matches ExUnit's summary
+# across versions: "N passed" (1.18+) and "N tests, N failures" (older) — both
+# carry the count as the first integer on the summary line. If the parse yields
+# 0 (unrecognized format), fail rather than silently passing.
+SUITE_PASSED=$(grep -oE '[0-9]+ (passed|tests?)' "$WORK_DIR/suite.log" | grep -oE '^[0-9]+' | head -1 || echo 0)
 TEST_DEF_COUNT="${#TEST_NAMES[@]}"
+
+if [ "$SUITE_PASSED" -eq 0 ]; then
+  echo "conformance-verify: FAIL — could not parse the executed-test count from the suite log (unrecognized ExUnit summary format); refusing to certify without a count" >&2
+  tail -5 "$WORK_DIR/suite.log" >&2
+  exit 1
+fi
 
 if [ "$SUITE_PASSED" != "$TEST_DEF_COUNT" ]; then
   echo "conformance-verify: FAIL — suite ran $SUITE_PASSED test(s) but the file defines $TEST_DEF_COUNT; a test was skipped/filtered while the suite exited 0 (a vacated cell)" >&2
