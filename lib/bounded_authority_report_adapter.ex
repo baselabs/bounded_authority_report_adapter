@@ -176,6 +176,21 @@ defmodule BoundedAuthorityReportAdapter do
   inconsistency impossible by construction (the one thing NOT sign-enforced — that
   `key_id` *names* the key in any external registry — is verify-enforced by BAP).
 
+  ## Handle contract — key identity must be consistent across callbacks
+
+  `sign_anchor/3` resolves `key_id/1`, `public_key/1`, and `sign/2` in separate
+  calls. The handle MUST return a consistent key identity across those calls within
+  one signing operation — i.e. no mid-call key rotation. A stateful handle whose
+  `key_id/1` and `public_key/1` report different keys (a rotation race) yields an
+  anchor whose header `kid` does not match its signing key. Such an anchor is
+  **rejected by `verify_historical_anchor/3`** for every consistent
+  `HistoricalPublicKey` (BAP binds `key_id` + `public_key` + `key_fingerprint`
+  together at verify), so the inconsistency is caught loudly downstream — it is not
+  silently accepted. The adapter cannot pre-validate `key_id`↔`public_key` at sign
+  time because `key_id` is opaque registry metadata with no cryptographic binding
+  to the key available to the adapter; a correct production handle is stateless per
+  handle-term (the caller mints a new handle for a rotated key).
+
   ## Options
 
     * `:anchored_at` — the anchor's timestamp (default:
