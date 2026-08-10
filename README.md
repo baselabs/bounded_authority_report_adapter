@@ -48,8 +48,8 @@ dependency + release posture.
   adapter depends only on `bounded_authority_protocol`, scanning `lib/` +
   `test/support/`.
 
-Remaining: RA4 (checkpoint-ack probe), RA5 (verifier application consumer), RA6 (topology
-ADR + closeout). See `docs/ROADMAP.md`.
+Remaining: RA4 (checkpoint-ack probe), RA5 (verifier application consumer), RA6 (closeout —
+ADRs `0001`–`0005` landed in `docs/adr/`). See `docs/ROADMAP.md`.
 
 ## Installation (private git dep)
 
