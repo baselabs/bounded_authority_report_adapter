@@ -6,6 +6,9 @@ Date: 2026-08-10
 
 Accepted. Records decisions in force since the scaffold (2026-08-09); authored
 retroactively when the ADR gap was flagged by the 2026-08-10 alignment audit.
+**Scope broadened 2026-08-10 by ADR-0006** — the library is BAP's universal
+companion signer; "the holder" (this section's framing) is one role/instantiation.
+The 3-role topology below remains correct for the grant+proof envelope flow.
 
 ## Context
 

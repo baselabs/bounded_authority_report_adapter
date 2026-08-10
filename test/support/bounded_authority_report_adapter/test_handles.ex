@@ -1,12 +1,17 @@
 defmodule BoundedAuthorityReportAdapter.TestHandles do
   @moduledoc """
-  Test-only key-handle modules for the RA1 sign_report suite.
+  Test-only key-handle modules for the sign_report (RA1) + sign_anchor (RA4) suites.
 
   These live in `test/support/` (compiled in `:test` via `mix.exs`
   `elixirc_paths`) so they are always loaded when the tests run — defining
   them at the bottom of the `_test.exs` file left them unloaded at test time
   in some `mix test` orderings (function_exported? returned false even though
   the module compiled), which made the WrongKeyHandle test flake.
+
+  The RA1 handles (CountingKeyHandle, CapturingKeyHandle, etc.) implement only
+  the proof-required callbacks. The RA4 anchor handles additionally implement
+  `key_id/1` (the optional callback `sign_anchor/3` resolves into the signed
+  anchor header).
   """
 end
 
@@ -158,4 +163,82 @@ defmodule WrongKeyHandle do
     {:ok, raw} = BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
     {:ok, raw}
   end
+end
+
+# ---------------------------------------------------------------------------
+# RA4 anchor handles — implement key_id/1 (the optional callback sign_anchor/3
+# places in the signed header). key_id is pinned to the same constant RawKey
+# uses so the anchor round-trip can build the matching HistoricalPublicKey.
+# ---------------------------------------------------------------------------
+
+defmodule AnchorCapturingKeyHandle do
+  @moduledoc """
+  Captures the message handed to sign/2 — the no-canonical-bytes-fork tripwire
+  for sign_anchor/3. Implements key_id/1 so sign_anchor reaches sign/2.
+  """
+  @key {__MODULE__, :message}
+
+  def sign(message, {_public_key, private_key}) do
+    Process.put(@key, message)
+    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+  end
+
+  def public_key({public_key, _private_key}), do: {:ok, public_key}
+
+  def thumbprint({public_key, _private_key}) do
+    {:ok, raw} = BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
+    {:ok, raw}
+  end
+
+  def key_id({_public_key, _private_key}), do: {:ok, "test-anchor-key-001"}
+
+  def captured_message, do: Process.get(@key)
+end
+
+defmodule AnchorWrongKeyHandle do
+  @moduledoc """
+  key_id/1 + public_key/1 return key A's material, but sign/2 signs with a
+  DIFFERENT key B (a rotation/misconfiguration race). The verify_signature
+  guard in the shared signing tail must reject this -> :signing_failed.
+  """
+  def public_key({public_key, _private_key}), do: {:ok, public_key}
+
+  def sign(message, _handle) do
+    {_other_pub, other_priv} = :crypto.generate_key(:eddsa, :ed25519, <<77::256>>)
+    {:ok, :crypto.sign(:eddsa, :ed25519, message, [other_priv, :ed25519])}
+  end
+
+  def thumbprint({public_key, _private_key}) do
+    {:ok, raw} = BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
+    {:ok, raw}
+  end
+
+  def key_id({_public_key, _private_key}), do: {:ok, "test-anchor-key-001"}
+end
+
+defmodule AnchorExitingKeyHandle do
+  @moduledoc """
+  key_id/1 calls exit/1 (a simulated HSM/key-server timeout). safe_callback's
+  catch clause must contain it -> :invalid_key_handle, not a crash.
+  """
+  def public_key({_public_key, _private_key}), do: exit(:simulated_hsm_timeout)
+  def sign(_message, _handle), do: exit(:simulated_hsm_timeout)
+  def thumbprint(_handle), do: {:ok, <<0::256>>}
+  def key_id(_handle), do: exit(:simulated_hsm_timeout)
+end
+
+defmodule AnchorFailingKeyHandle do
+  @moduledoc """
+  key_id/1 + public_key/1 succeed; sign/2 returns {:error, _} -> :signing_failed.
+  """
+  def public_key({public_key, _private_key}), do: {:ok, public_key}
+
+  def sign(_message, _handle), do: {:error, :always_fails}
+
+  def thumbprint({public_key, _private_key}) do
+    {:ok, raw} = BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
+    {:ok, raw}
+  end
+
+  def key_id({_public_key, _private_key}), do: {:ok, "test-anchor-key-001"}
 end

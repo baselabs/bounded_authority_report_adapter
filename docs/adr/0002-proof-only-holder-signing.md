@@ -8,6 +8,12 @@ Accepted. Records the RA1 design-adversarial correction (C1 finding); in force
 since `sign_report/3` shipped (2026-08-09). Authored retroactively when the ADR
 gap was flagged by the 2026-08-10 alignment audit.
 
+**Scope sharpened 2026-08-10 (ADR-0006):** "proof-only" is an *envelope-flow*
+property — in the grant+proof envelope, the holder signs the proof, not the grant.
+It is NOT a library-wide prohibition: the library also signs boundary anchors
+(`sign_anchor/3`, RA4). The C1 correction below is unchanged; it governs the
+envelope flow specifically.
+
 ## Context
 
 A naive "signing adapter" might sign both the grant and the proof. But the

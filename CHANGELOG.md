@@ -60,3 +60,19 @@ minor bumps (pre-1.0 freedom per SemVer).
   no runtime-internal namespace), scanning both `lib/` and `test/support/`.
 - Mutation-proven in every scanned dir + the real adapter module; dep-removal
   and form-precise regex RED proofs.
+
+### Added — RA4 (2026-08-10) boundary-anchor signing
+
+- `sign_anchor/3` — signs a `BoundaryAnchor` via the shared companion-signer tail
+  (`sign_via_handle` → `verify_signature` → `assemble_compact`), returning a compact
+  that round-trips through `verify_historical_anchor/3`. The second instantiation of
+  the library's universal companion-signer role (ADR-0006).
+- Both key identifiers (`public_key`, `key_id`) are resolved from the key-handle —
+  never trusted from the caller — so the signed anchor header's `kid` + key
+  fingerprint are consistent with the key `sign/2` used. `key_id/1` is an optional
+  `@callback` (`@optional_callbacks`); proof-only handles need not implement it.
+- `sign_report/3` refactored onto the same shared tail; the wrong-key verify guard
+  now covers both the proof and anchor paths.
+- `test/bounded_authority_report_adapter/sign_anchor_test.exs` — 12 tripwires
+  (round-trip, wrong-key, key_id-from-handle, exit containment, no-canonical-bytes
+  fork, defect injection, closed-atom errors).

@@ -30,7 +30,7 @@ dependency + release posture.
 
 ## Status
 
-**RA1/RA2/RA3 shipped** (2026-08-09 → 2026-08-10):
+**RA1/RA2/RA3/RA4 shipped** (2026-08-09 → 2026-08-10):
 
 - **RA1 — envelope signing.** `sign_report/3` binds an issuer-signed grant to a
   application report by producing a holder proof, returning the grant + proof envelope
@@ -47,9 +47,13 @@ dependency + release posture.
 - **RA3 — dependency-direction wall.** A two-clause structural test proves the
   adapter depends only on `bounded_authority_protocol`, scanning `lib/` +
   `test/support/`.
+- **RA4 — boundary-anchor signing.** `sign_anchor/3` signs a `BoundaryAnchor`
+  (a durable chain checkpoint) via the shared companion-signer tail, round-tripping
+  through `verify_historical_anchor/3`. Both key identifiers come from the
+  key-handle; wrong-key + defect-injection tripwires guard it.
 
-Remaining: RA4 (checkpoint-ack probe), RA5 (verifier application consumer), RA6 (closeout —
-ADRs `0001`–`0005` landed in `docs/adr/`). See `docs/ROADMAP.md`.
+Remaining: RA5 (verifier application consumer), RA6 (closeout — ADRs `0001`–`0006` landed in
+`docs/adr/`). See `docs/ROADMAP.md`.
 
 ## Installation (private git dep)
 

@@ -25,9 +25,14 @@ a captured transport cannot re-purpose one.
 
 ## 2. What this adapter does
 
-**It signs the holder proof — and only the holder proof.** Concretely, the edge
-agent calls this adapter with an issuer-signed grant + a application report, and the
-adapter returns the grant + proof envelope:
+This library is BAP's universal companion signer (ADR-0006): it signs BAP
+protocol objects via a local key-handle. Two instantiations have landed — proof
+signing (`sign_report/3`, this section) and boundary-anchor signing
+(`sign_anchor/3`, RA4). This section describes the proof/envelope flow.
+
+**In the envelope, the adapter signs the holder proof — and only the holder
+proof.** Concretely, the edge agent calls this adapter with an issuer-signed
+grant + a application report, and the adapter returns the grant + proof envelope:
 
 1. Receive the issuer-signed `grant_compact` as an INPUT. The grant was signed
    out of band by the `bounded_authority` runtime (the issuer) — this adapter
@@ -91,11 +96,13 @@ The verifier's durable-commit confirmation back to the edge (the
 checkpoint-after-persist ack) MAY be a signed **boundary anchor**
 (`BoundedAuthorityProtocol.V1.BoundaryAnchor`) the agent verifies before
 advancing its transport checkpoint — authenticating the effect-once loop
-end-to-end. This is named "probed" in the ROADMAP B2 acceptance, not "shipped":
-the design decides whether it lands in-slice or is a named deferral. If it
-hardens into a requirement the protocol package cannot express, the gap returns
-to BAP as a proposed protocol ADR — never as a consumer-side fork of protocol
-semantics (per BAP's consumer-seam note).
+end-to-end. The library provides the signing capability for this — `sign_anchor/3`
+(RA4) signs a boundary anchor any holder of the right key can use, including a
+platform-side ack producer. The protocol package already expresses the ack
+(`boundary_anchor_signing_input` + `verify_historical_anchor`); no consumer-side
+fork of protocol semantics is needed (per BAP's consumer-seam note). Whether a
+given deployment produces checkpoint-ack anchors is a consumer decision, not this
+library's scope.
 
 ## 6. Invariants this adapter must preserve
 
