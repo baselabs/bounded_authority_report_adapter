@@ -3,7 +3,7 @@
 **Status:** Draft (2026-08-09 scaffold) · **Roadmap row:** verifier application ROADMAP B2
 (`b2-report-path-adapter`) · **Authority:** `bounded_authority_protocol`
 `docs/design/consumer-seams-application-report-path.md` (first-hand, the application-report-path
-seam note) + `docs/adr/0002` (the runtime-topology decision) + verifier application
+seam note) + `bounded_authority_protocol`'s `docs/adr/0001` (the public-verifier / private-runtime topology) + verifier application
 ADR 0002/0007.
 
 ## 1. The problem
@@ -63,7 +63,7 @@ These negatives are load-bearing — each maps to a different repo's job:
   protocol package. The verifier verifies; this adapter signs. Conflating
   the two puts the signer in the verifier's trust boundary.
 - **It is not the runtime.** Grant *issuance*, key custody/rotation, and live
-  revocation are the `bounded_authority` runtime service's job (ADR 0002). This
+  revocation are the `bounded_authority` runtime service's job (ADR 0001). This
   adapter holds a holder key it was issued and signs on invocation; it does not
   mint capabilities.
 - **It is not a transport.** The application transport libraries (`replicant`,

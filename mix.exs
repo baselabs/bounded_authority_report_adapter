@@ -41,7 +41,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
 
   # The adapter depends ONLY on the public bounded_authority_protocol package on
   # the edge path — no private runtime dependency (the dependency-direction wall,
-  # ADR 0002). BAP is consumed as a PRIVATE git dep (not hex-published yet); the
+  # ADR 0003). BAP is consumed as a PRIVATE git dep (not hex-published yet); the
   # same posture this adapter carries. See docs/strategy.md § Dependencies.
   defp deps do
     [

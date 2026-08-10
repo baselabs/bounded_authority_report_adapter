@@ -205,7 +205,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
              "runtime-internal reference(s) found in compiled source: #{inspect(offenders)} — " <>
                "the adapter must consume ONLY the public BoundedAuthorityProtocol. surface, " <>
                "never the BoundedAuthority.* / BoundedAuthorityWeb.* runtime internals " <>
-               "(charter §3; ADR 0002)"
+               "(charter §3; ADR 0003)"
     end
   end
 
