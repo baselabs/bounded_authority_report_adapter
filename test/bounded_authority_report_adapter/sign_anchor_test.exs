@@ -17,7 +17,7 @@ defmodule BoundedAuthorityReportAdapter.SignAnchorTest do
   # A fixed anchor/evaluation time inside the HistoricalPublicKey validity window.
   @now 1_750_000_000
 
-  # The handle's key_id (RawKey.key_id/1 + the anchor handles all return this).
+  # The handle's key_id (RawKey.key_identity/1 + the anchor handles all return this).
   @key_id "test-anchor-key-001"
 
   # A 32-byte chain hash for a non-zero sequence (the codec requires the zero hash
@@ -103,12 +103,13 @@ defmodule BoundedAuthorityReportAdapter.SignAnchorTest do
     end
   end
 
-  describe "key_id from the handle (never trusted from the caller)" do
+  describe "key identity from the handle (atomic snapshot — never trusted from the caller)" do
     test "a caller-supplied :key_id / :public_key in the anchor map are ignored" do
       # Smuggle bogus key-identifiers through the anchor map. The adapter must
-      # ignore them: key_id + public_key come from the handle. The signed anchor
-      # therefore verifies under the HANDLE's HistoricalPublicKey (key_id
-      # "test-anchor-key-001"), not under any bogus caller value.
+      # ignore them: {key_id, public_key} come from the handle's key_identity/1.
+      # The signed anchor therefore verifies under the HANDLE's
+      # HistoricalPublicKey (key_id "test-anchor-key-001"), not under any bogus
+      # caller value.
       input =
         Map.merge(anchor_input(), %{
           key_id: "BOGUS-CALLER-KEY-ID",
@@ -132,9 +133,9 @@ defmodule BoundedAuthorityReportAdapter.SignAnchorTest do
                )
     end
 
-    test "a handle without key_id/1 (proof-only) yields {:error, :invalid_key_handle}" do
-      # key_id/1 is the optional callback; a proof-only handle does not implement
-      # it, so sign_anchor cannot resolve the signed header kid.
+    test "a handle without key_identity/1 (proof-only) yields {:error, :invalid_key_handle}" do
+      # key_identity/1 is the optional callback; a proof-only handle does not
+      # implement it, so sign_anchor cannot resolve the signed header kid.
       input = anchor_input()
       proof_only_handle = {CountingKeyHandle, TestKeys.holder_keypair()}
 
@@ -143,10 +144,42 @@ defmodule BoundedAuthorityReportAdapter.SignAnchorTest do
                  anchored_at: @now
                })
     end
+
+    test "a rotation race (atomic snapshot, then sign/2 with the rotated key) is caught at sign" do
+      # The cross-vendor (Codex) rotation-race probe, now defended at sign time:
+      # key_identity/1 returns a consistent {key_id, pub_a} snapshot in ONE call,
+      # so kid+public_key cannot drift; it then flips state so sign/2 signs with
+      # key-b. The verify_signature guard catches the sign/2-vs-snapshot mismatch
+      # -> :signing_failed, never a silent false-success.
+      {pub_a, priv_a} = :crypto.generate_key(:eddsa, :ed25519, <<201::256>>)
+      {_pub_b, priv_b} = :crypto.generate_key(:eddsa, :ed25519, <<202::256>>)
+
+      {:ok, pid} =
+        Agent.start_link(fn ->
+          %{
+            key_id: "test-anchor-key-001",
+            pub_a: pub_a,
+            priv_a: priv_a,
+            priv_b: priv_b,
+            rotated: false
+          }
+        end)
+
+      on_exit(fn -> if Process.alive?(pid), do: Agent.stop(pid) end)
+
+      assert {:error, :signing_failed} =
+               BoundedAuthorityReportAdapter.sign_anchor(
+                 anchor_input(),
+                 {RacingKeyIdentityHandle, pid},
+                 %{
+                   anchored_at: @now
+                 }
+               )
+    end
   end
 
   describe "exit/throw containment (safe_callback)" do
-    test "a key_id/1 that exit/1s yields {:error, :invalid_key_handle}, not a crash" do
+    test "a key_identity/1 that exit/1s yields {:error, :invalid_key_handle}, not a crash" do
       input = anchor_input()
       exiting_handle = {AnchorExitingKeyHandle, TestKeys.holder_keypair()}
 

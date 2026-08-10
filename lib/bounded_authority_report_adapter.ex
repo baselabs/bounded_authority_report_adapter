@@ -30,9 +30,11 @@ defmodule BoundedAuthorityReportAdapter do
 
     * `sign/2`, `public_key/1` — required for every signing operation.
     * `thumbprint/1` — required (exposed for caller-side self-checking).
-    * `key_id/1` — **optional** (declared via `@optional_callbacks`); required only
-      for `sign_anchor/3`, which puts the key's registry id in the signed anchor
-      header. A proof-only handle need not implement it.
+    * `key_identity/1` — **optional** (declared via `@optional_callbacks`); required
+      only by `sign_anchor/3`, which resolves the key's registry id (`kid`) AND its
+      public key as ONE atomic snapshot (defense-in-depth: prevents a stateful
+      handle from splitting them across a rotation race). A proof-only handle need
+      not implement it.
 
   A test-only reference implementation (`BoundedAuthorityReportAdapter.Keys.RawKey`)
   ships under `test/support/` for local development; production holders implement the
@@ -176,20 +178,18 @@ defmodule BoundedAuthorityReportAdapter do
   inconsistency impossible by construction (the one thing NOT sign-enforced — that
   `key_id` *names* the key in any external registry — is verify-enforced by BAP).
 
-  ## Handle contract — key identity must be consistent across callbacks
+  ## Defense-in-depth — the atomic `key_identity/1` snapshot
 
-  `sign_anchor/3` resolves `key_id/1`, `public_key/1`, and `sign/2` in separate
-  calls. The handle MUST return a consistent key identity across those calls within
-  one signing operation — i.e. no mid-call key rotation. A stateful handle whose
-  `key_id/1` and `public_key/1` report different keys (a rotation race) yields an
-  anchor whose header `kid` does not match its signing key. Such an anchor is
-  **rejected by `verify_historical_anchor/3`** for every consistent
-  `HistoricalPublicKey` (BAP binds `key_id` + `public_key` + `key_fingerprint`
-  together at verify), so the inconsistency is caught loudly downstream — it is not
-  silently accepted. The adapter cannot pre-validate `key_id`↔`public_key` at sign
-  time because `key_id` is opaque registry metadata with no cryptographic binding
-  to the key available to the adapter; a correct production handle is stateless per
-  handle-term (the caller mints a new handle for a rotated key).
+  `sign_anchor/3` resolves `key_id` AND `public_key` in a SINGLE `key_identity/1`
+  call, so a stateful handle cannot split them across a rotation race (the
+  separate-callback design a cross-vendor review probe once exploited). The
+  remaining surface — `sign/2` signing with a key different from the snapshot's
+  `public_key` — is caught by the `verify_signature` guard in the shared tail, so
+  a post-snapshot rotation fails loudly as `:signing_failed`, never a silent
+  false-success. The one thing still NOT sign-enforced — that `key_id` *names*
+  the key in any external registry — is verify-enforced by BAP
+  (`verify_historical_anchor/3` binds `key_id` + `public_key` + `key_fingerprint`
+  together via the verifier's `HistoricalPublicKey`).
 
   ## Options
 
@@ -201,8 +201,8 @@ defmodule BoundedAuthorityReportAdapter do
   ## Errors (closed-atom set — no key material or anchor content in errors)
 
     * `:invalid_anchor` — a required content field is missing or malformed.
-    * `:invalid_key_handle` — the handle is malformed, lacks `key_id/1`, or its
-      `public_key/1` / `key_id/1` rejected / returned an invalid value.
+    * `:invalid_key_handle` — the handle is malformed, lacks `key_identity/1`, or its
+      `public_key/1` / `key_identity/1` rejected / returned an invalid value.
     * `:signing_failed` — the `sign/2` callback rejected, returned a non-64-byte
       signature, violated the `{:ok, _} | {:error, _}` contract, or the signature
       did not verify against the resolved public key.
@@ -215,8 +215,7 @@ defmodule BoundedAuthorityReportAdapter do
     bounds = Map.get(opts, :bounds, %{})
     anchored_at = Map.get(opts, :anchored_at, System.system_time(:second))
 
-    with {:ok, key_id} <- resolve_key_id(key_handle),
-         {:ok, public_key} <- resolve_public_key(key_handle),
+    with {:ok, {key_id, public_key}} <- resolve_key_identity(key_handle),
          {:ok, anchor} <- build_anchor(anchor_input, public_key, key_id, anchored_at),
          {:ok, signing_input} <- produce_anchor_signing_input(anchor, bounds),
          {:ok, anchor_compact} <- sign_and_assemble(key_handle, signing_input, public_key) do
@@ -316,25 +315,30 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp resolve_public_key(_handle), do: {:error, :invalid_key_handle}
 
-  # key_id is the anchor's signed header identifier (typ: ba+chain-anchor). It
-  # MUST come from the handle (not the caller) so it is consistent with the key
-  # sign/2 uses — see sign_anchor/3's doc. key_id/1 is an OPTIONAL callback
-  # (@optional_callbacks): a proof-only handle does not implement it, so
-  # sign_anchor on such a handle fails HERE as :invalid_key_handle (the
-  # UndefinedFunctionError from apply/3 is caught by safe_callback). BAP's
-  # producer validates the full ascii/length constraint; here we only assert a
-  # non-empty binary.
-  defp resolve_key_id({module, handle}) when is_atom(module) do
-    case safe_callback(module, :key_id, [handle]) do
-      {:ok, key_id} when is_binary(key_id) and byte_size(key_id) > 0 ->
-        {:ok, key_id}
+  # The anchor's key identity — the signed-header `kid` AND the 32-byte public
+  # key — resolved as ONE atomic snapshot. This is defense-in-depth at sign time:
+  # a single key_identity/1 call cannot split key_id from public_key across a
+  # rotation race (the separate-callback design Codex's cross-vendor probe
+  # exploited). The remaining surface — sign/2 signing with a key different from
+  # the snapshot's public_key — is caught by verify_signature in the shared tail.
+  # key_identity/1 is an OPTIONAL callback (@optional_callbacks); a proof-only
+  # handle does not implement it, so sign_anchor on such a handle fails HERE as
+  # :invalid_key_handle (the UndefinedFunctionError from apply/3 is caught by
+  # safe_callback). BAP's producer validates the full ascii/length constraint on
+  # key_id; here we assert a non-empty key_id + a 32-byte public_key.
+  defp resolve_key_identity({module, handle}) when is_atom(module) do
+    case safe_callback(module, :key_identity, [handle]) do
+      {:ok, {key_id, public_key}}
+      when is_binary(key_id) and byte_size(key_id) > 0 and is_binary(public_key) and
+             byte_size(public_key) == 32 ->
+        {:ok, {key_id, public_key}}
 
       _malformed_or_unimplemented ->
         {:error, :invalid_key_handle}
     end
   end
 
-  defp resolve_key_id(_handle), do: {:error, :invalid_key_handle}
+  defp resolve_key_identity(_handle), do: {:error, :invalid_key_handle}
 
   defp safe_callback(module, function, args) do
     apply(module, function, args)
@@ -494,11 +498,16 @@ defmodule BoundedAuthorityReportAdapter do
   @callback thumbprint(handle :: term()) :: {:ok, binary()} | {:error, term()}
 
   @doc """
-  Returns the registry key id (`kid`) for the key behind `handle`. Required only
-  by `sign_anchor/3`, which places it in the anchor's signed header. **Optional**
-  callback — a proof-only handle need not implement it.
+  Returns the key's identity — its registry `kid` AND its 32-byte raw Ed25519
+  public key — as a single atomic `{key_id, public_key}` snapshot. Required only
+  by `sign_anchor/3`, which resolves both in ONE call so a stateful handle
+  cannot split `kid` from `public_key` across a rotation race (defense-in-depth
+  at sign time; any `sign/2`-vs-snapshot mismatch is then caught by the
+  `verify_signature` guard). **Optional** callback — a proof-only handle (used
+  only with `sign_report/3`) need not implement it.
   """
-  @callback key_id(handle :: term()) :: {:ok, binary()} | {:error, term()}
+  @callback key_identity(handle :: term()) ::
+              {:ok, {key_id :: binary(), public_key :: binary()}} | {:error, term()}
 
-  @optional_callbacks [key_id: 1]
+  @optional_callbacks [key_identity: 1]
 end

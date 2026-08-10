@@ -61,5 +61,8 @@ Grant signing is **design-gated** on this role reconciliation, not merely schedu
   role/instantiation"; the 3-role table remains correct for the envelope flow.
 - ADR-0002's "proof-only" is sharpened to an envelope-flow property ("in the envelope,
   the holder signs the proof, not the grant"), not a library-wide prohibition.
-- The key-handle contract gains an **optional** `key_id/1` callback
-  (`@optional_callbacks`), required only by `sign_anchor/3`.
+- The key-handle contract gains an **optional** `key_identity/1` callback
+  (`@optional_callbacks`), required only by `sign_anchor/3`, which resolves
+  `{key_id, public_key}` as ONE atomic snapshot (defense-in-depth: a rotation
+  race cannot split `kid` from `public_key`; any `sign/2`-vs-snapshot mismatch is
+  caught by the `verify_signature` guard).

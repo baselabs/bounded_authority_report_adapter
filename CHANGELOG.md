@@ -69,8 +69,10 @@ minor bumps (pre-1.0 freedom per SemVer).
   the library's universal companion-signer role (ADR-0006).
 - Both key identifiers (`public_key`, `key_id`) are resolved from the key-handle —
   never trusted from the caller — so the signed anchor header's `kid` + key
-  fingerprint are consistent with the key `sign/2` used. `key_id/1` is an optional
-  `@callback` (`@optional_callbacks`); proof-only handles need not implement it.
+  fingerprint are consistent with the key `sign/2` used. `key_identity/1` resolves both
+  as ONE atomic snapshot (defense-in-depth: prevents a rotation race from splitting
+  `kid` from `public_key`); it is an optional `@callback` (`@optional_callbacks`),
+  so proof-only handles need not implement it.
 - `sign_report/3` refactored onto the same shared tail; the wrong-key verify guard
   now covers both the proof and anchor paths.
 - `test/bounded_authority_report_adapter/sign_anchor_test.exs` — 12 tripwires

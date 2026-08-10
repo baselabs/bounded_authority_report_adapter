@@ -10,7 +10,7 @@ defmodule BoundedAuthorityReportAdapter.TestHandles do
 
   The RA1 handles (CountingKeyHandle, CapturingKeyHandle, etc.) implement only
   the proof-required callbacks. The RA4 anchor handles additionally implement
-  `key_id/1` (the optional callback `sign_anchor/3` resolves into the signed
+  `key_identity/1` (the optional callback `sign_anchor/3` resolves into the signed
   anchor header).
   """
 end
@@ -166,7 +166,7 @@ defmodule WrongKeyHandle do
 end
 
 # ---------------------------------------------------------------------------
-# RA4 anchor handles — implement key_id/1 (the optional callback sign_anchor/3
+# RA4 anchor handles — implement key_identity/1 (the optional callback sign_anchor/3
 # places in the signed header). key_id is pinned to the same constant RawKey
 # uses so the anchor round-trip can build the matching HistoricalPublicKey.
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ end
 defmodule AnchorCapturingKeyHandle do
   @moduledoc """
   Captures the message handed to sign/2 — the no-canonical-bytes-fork tripwire
-  for sign_anchor/3. Implements key_id/1 so sign_anchor reaches sign/2.
+  for sign_anchor/3. Implements key_identity/1 so sign_anchor reaches sign/2.
   """
   @key {__MODULE__, :message}
 
@@ -190,14 +190,14 @@ defmodule AnchorCapturingKeyHandle do
     {:ok, raw}
   end
 
-  def key_id({_public_key, _private_key}), do: {:ok, "test-anchor-key-001"}
+  def key_identity({public_key, _private_key}), do: {:ok, {"test-anchor-key-001", public_key}}
 
   def captured_message, do: Process.get(@key)
 end
 
 defmodule AnchorWrongKeyHandle do
   @moduledoc """
-  key_id/1 + public_key/1 return key A's material, but sign/2 signs with a
+  key_identity/1 + public_key/1 return key A's material, but sign/2 signs with a
   DIFFERENT key B (a rotation/misconfiguration race). The verify_signature
   guard in the shared signing tail must reject this -> :signing_failed.
   """
@@ -213,23 +213,23 @@ defmodule AnchorWrongKeyHandle do
     {:ok, raw}
   end
 
-  def key_id({_public_key, _private_key}), do: {:ok, "test-anchor-key-001"}
+  def key_identity({public_key, _private_key}), do: {:ok, {"test-anchor-key-001", public_key}}
 end
 
 defmodule AnchorExitingKeyHandle do
   @moduledoc """
-  key_id/1 calls exit/1 (a simulated HSM/key-server timeout). safe_callback's
+  key_identity/1 calls exit/1 (a simulated HSM/key-server timeout). safe_callback's
   catch clause must contain it -> :invalid_key_handle, not a crash.
   """
   def public_key({_public_key, _private_key}), do: exit(:simulated_hsm_timeout)
   def sign(_message, _handle), do: exit(:simulated_hsm_timeout)
   def thumbprint(_handle), do: {:ok, <<0::256>>}
-  def key_id(_handle), do: exit(:simulated_hsm_timeout)
+  def key_identity(_handle), do: exit(:simulated_hsm_timeout)
 end
 
 defmodule AnchorFailingKeyHandle do
   @moduledoc """
-  key_id/1 + public_key/1 succeed; sign/2 returns {:error, _} -> :signing_failed.
+  key_identity/1 + public_key/1 succeed; sign/2 returns {:error, _} -> :signing_failed.
   """
   def public_key({public_key, _private_key}), do: {:ok, public_key}
 
@@ -240,5 +240,31 @@ defmodule AnchorFailingKeyHandle do
     {:ok, raw}
   end
 
-  def key_id({_public_key, _private_key}), do: {:ok, "test-anchor-key-001"}
+  def key_identity({public_key, _private_key}), do: {:ok, {"test-anchor-key-001", public_key}}
+end
+
+defmodule RacingKeyIdentityHandle do
+  @moduledoc """
+  Defense-in-depth tripwire for the atomic `key_identity/1` snapshot.
+  `key_identity/1` returns a consistent `{key_id, pub_a}` snapshot, then flips
+  internal state so `sign/2` signs with key-b (a simulated post-snapshot
+  rotation). The atomic snapshot means `key_id`+`public_key` cannot drift apart;
+  the `verify_signature` guard catches the `sign/2`-vs-snapshot mismatch ->
+  `:signing_failed`. This is the rotation race a cross-vendor (Codex) probe
+  exploited under the separate-callback design, now caught at sign time.
+
+  The handle term is an `Agent` pid whose state is
+  `%{key_id:, pub_a:, priv_a:, priv_b:, rotated:}`.
+  """
+  def key_identity(pid) do
+    Agent.get_and_update(pid, fn s -> {{:ok, {s.key_id, s.pub_a}}, %{s | rotated: true}} end)
+  end
+
+  def sign(message, pid) do
+    priv = Agent.get(pid, fn s -> if s.rotated, do: s.priv_b, else: s.priv_a end)
+    {:ok, :crypto.sign(:eddsa, :ed25519, message, [priv, :ed25519])}
+  end
+
+  def public_key(_pid), do: {:ok, <<0::256>>}
+  def thumbprint(_pid), do: {:ok, <<0::256>>}
 end
