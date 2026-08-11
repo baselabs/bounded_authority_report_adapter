@@ -1,5 +1,7 @@
 # Bounded Authority Report Adapter — see it work, in one notebook
 
+## Section
+
 > **You don't need to know anything about signing authorities to follow this.** It runs the whole
 > thing in one notebook — no database, no Docker, no other project running — and each step prints
 > a plain `✅` / `❌` line. Run it cell-by-cell.
@@ -40,8 +42,8 @@ sequenceDiagram
 
 Why three separate roles? Two reasons that **are** the security property:
 
-- **The verifier never holds a signing key.** So a compromised verifier can't forge anything.
-- **The issuer never sees each report.** The holder proves possession of the grant offline — no
+* **The verifier never holds a signing key.** So a compromised verifier can't forge anything.
+* **The issuer never sees each report.** The holder proves possession of the grant offline — no
   call home on every report.
 
 This is the same shape as **DPoP** (RFC 9449), used for OAuth. This adapter is the **Holder**
@@ -214,11 +216,11 @@ end
 
 ## What just happened
 
-| Role | Who does it in production | What runs here |
-|---|---|---|
-| **Issuer** | the `bounded_authority` runtime | a demo cell (so there's a grant to sign over) |
-| **Holder** | the edge agent, using **this adapter** | `sign_report/3` ← the adapter's one job |
-| **Verifier** | the verifier / any third party | the public `check_envelope/2` |
+| Role         | Who does it in production              | What runs here                                |
+| ------------ | -------------------------------------- | --------------------------------------------- |
+| **Issuer**   | the `bounded_authority` runtime        | a demo cell (so there's a grant to sign over) |
+| **Holder**   | the edge agent, using **this adapter** | `sign_report/3` ← the adapter's one job     |
+| **Verifier** | the verifier / any third party    | the public `check_envelope/2`                 |
 
 So this library is a **self-contained signing helper**: it takes a grant + a report + a key-handle,
 and returns a capability envelope any public-package verifier accepts. It is **not** a verifier,
