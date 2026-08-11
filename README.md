@@ -1,11 +1,15 @@
 # Bounded Authority Report Adapter
 
-> holder-side signing adapter for application reports — wraps the public
+> Universal companion signer to the public
 > [`bounded_authority_protocol`](https://github.com/baselabs/bounded_authority_protocol)
-> package's grant/proof envelopes with local private-key signing.
+> package — BAP produces the signing input for each protocol object (proof, boundary anchor, …)
+> and refuses to sign; this library takes a local key-handle + a BAP signing input and signs it.
+> See [ADR-0006](docs/adr/0006-universal-companion-signer.md). **Consuming an envelope** (a
+> verifier's side of the contract, no adapter dependency) is documented in
+> [docs/consumer-integration.md](docs/consumer-integration.md).
 
 **Private BaseLabs library.** Not published to hex. Consumed by BaseLabs projects
-(verifier application's report path, and future edge agents) as a private git dep.
+(verifier application's report path, and future edge agents / any signing party) as a private git dep.
 
 ## What this is
 
