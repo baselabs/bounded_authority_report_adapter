@@ -45,7 +45,7 @@ holder/sign → verifier) in one notebook and proves a tampered or wrong-key pro
 
 ## Status
 
-**RA1/RA2/RA3/RA4 shipped** (2026-08-09 → 2026-08-10):
+**RA1–RA7 shipped** (2026-08-09 → 2026-08-11):
 
 - **RA1 — envelope signing.** `sign_report/3` binds an issuer-signed grant to a
   application report by producing a holder proof, returning the grant + proof envelope
@@ -66,9 +66,21 @@ holder/sign → verifier) in one notebook and proves a tampered or wrong-key pro
   (a durable chain checkpoint) via the shared companion-signer tail, round-tripping
   through `verify_historical_anchor/3`. Both key identifiers come from the
   key-handle; wrong-key + defect-injection tripwires guard it.
+- **RA5 — verifier application consumer + the universal contract.** The consumer-integration
+  guide (the verifier's side of the envelope, no adapter dependency), the
+  self-contained Livebook demo, and the CI workflow. (The verifier application-side report-plug
+  wiring lands in `verifier application`.)
+- **RA6 — closeout.** ADRs `0001`–`0006` landed; the full suite + conformance
+  round-trip green.
+- **RA7 — grant signing.** `sign_grant/3` signs a grant (the issuer-role
+  instantiation of the shared companion-signer tail), round-tripping through
+  `verify_grant/3` and the full `check_envelope/2` loop. The handle's
+  `signing_identity/1` must resolve to the `:issuer` role — the C1 gate
+  (ADR-0006's grant-signing pre-commitment; a `:holder` or roleless handle is
+  rejected before signing). Recorded in ADR-0007.
 
-Remaining: RA5 (verifier application consumer), RA6 (closeout — ADRs `0001`–`0006` landed in
-`docs/adr/`). See `docs/ROADMAP.md`.
+Remaining: RA8 (key-transition signing), RA9 (edge-agent reference), RA10
+(cross-language verifier). See `docs/ROADMAP.md`.
 
 ## Installation (private git dep)
 
@@ -89,7 +101,7 @@ git dep). Both repos must be reachable from the consumer's build environment.
 
 ```bash
 mix deps.get          # fetches bounded_authority_protocol
-mix test              # 55 tests (sign_report + conformance + dep-direction)
+mix test              # 83 tests (sign_report + sign_anchor + sign_grant + conformance + dep-direction)
 mix compile --warnings-as-errors
 mix credo
 ```
