@@ -712,7 +712,9 @@ defmodule BoundedAuthorityReportAdapter do
   (`:issuer` or `:holder`) AND its registry `kid` AND its 32-byte raw Ed25519 public
   key — as a single atomic `{:role, key_id, public_key}` snapshot. Required only by
   `sign_grant/3`, which both (a) gates on `role == :issuer` (the C1 pre-commitment —
-  a holder-role key cannot sign a grant through this API) and (b) uses the snapshot's
+  a handle that declares `:holder`, or omits this callback, is rejected before
+  `sign/2`; see `sign_grant/3`'s `@doc` for the precise property — this is
+  declaration-rejection, not cryptographic key-role separation) and (b) uses the snapshot's
   `key_id` + `public_key` — all from ONE call, so a stateful handle cannot return
   `:issuer` then rotate to a different key between role resolution and signing (the
   rotation-race defense; any `sign/2`-vs-snapshot mismatch is caught by the
