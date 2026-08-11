@@ -242,13 +242,13 @@ defmodule BoundedAuthorityReportAdapter.SignGrantTest do
   end
 
   describe "output + verifier non-vacuity" do
-    # Output non-vacuity: sign_grant's compact is the artifact verify_grant checks. A wiring
-    # break (sign_grant returning a constant/wrong compact) is caught by the round-trip test
-    # above (verify_grant's content checks, runtime.ex:464-469). The flipped-byte test below
-    # is verifier-non-vacuity (verify_grant checks the signature) — its non-vacuity is
-    # inherited from BAP/RA2; it confirms the end-to-end wiring (the slice cannot mutate BAP).
+    # Output non-vacuity (design §9): the flipped-byte test proves sign_grant's OWN output
+    # compact is the artifact verify_grant integrity-checks (a constant/wrong compact would
+    # also fail the round-trip's content checks at runtime.ex:464-469). Verifier non-vacuity:
+    # the tampered-expected test proves verify_grant checks the audience (BAP's property,
+    # exercised here because the suite consumes it).
 
-    test "a flipped signature byte in sign_grant's compact makes verify_grant/3 reject" do
+    test "a flipped signature byte in sign_grant's compact makes verify_grant/3 reject (output non-vacuity)" do
       input = grant_input()
 
       assert {:ok, %{grant: compact}} =
@@ -262,7 +262,7 @@ defmodule BoundedAuthorityReportAdapter.SignGrantTest do
                V1.verify_grant(tampered, trusted_issuer(), expected_grant())
     end
 
-    test "a tampered expected audience makes verify_grant/3 reject a correctly-signed grant" do
+    test "a tampered expected audience makes verify_grant/3 reject (verifier non-vacuity)" do
       input = grant_input()
 
       assert {:ok, %{grant: compact}} =
@@ -271,6 +271,19 @@ defmodule BoundedAuthorityReportAdapter.SignGrantTest do
       tampered_expected = %{expected_grant() | audience: "https://wrong-audience.example.test"}
 
       assert {:error, :invalid} = V1.verify_grant(compact, trusted_issuer(), tampered_expected)
+    end
+  end
+
+  describe "the producer-error path (closed-atom: {:producer_error, :invalid})" do
+    # The adapter validates presence + shape; BAP validates semantics. A structurally-valid-
+    # but-semantically-invalid grant (a 31-byte holder_thumbprint — binary, so it passes the
+    # adapter's guard; but not bounds.digest_bytes, so BAP's grant_json rejects) surfaces as
+    # {:producer_error, :invalid}, not :invalid_grant.
+    test "a wrong-size holder_thumbprint yields {:error, {:producer_error, :invalid}}" do
+      input = %{grant_input() | holder_thumbprint: <<0::248>>}
+
+      assert {:error, {:producer_error, :invalid}} =
+               BoundedAuthorityReportAdapter.sign_grant(input, issuer_handle(), %{})
     end
   end
 

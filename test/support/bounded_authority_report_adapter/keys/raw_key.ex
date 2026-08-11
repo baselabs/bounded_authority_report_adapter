@@ -1,9 +1,9 @@
 defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
+  alias BoundedAuthorityProtocol.V1.Jwk
+
   @moduledoc """
   TEST-ONLY reference implementation of the `BoundedAuthorityReportAdapter`
   key-handle behaviour.
-
-  alias BoundedAuthorityProtocol.V1.Jwk
 
   The handle term is a `{public_key, private_key}` tuple of raw 32-byte Ed25519
   keys. This compiles ONLY under `:test` (via `mix.exs` `elixirc_paths`) — it

@@ -305,7 +305,11 @@ defmodule BoundedAuthorityReportAdapter do
   @spec sign_grant(grant_input(), key_handle(), grant_opts()) ::
           {:ok, grant_compact()} | {:error, grant_sign_error()}
   def sign_grant(grant_input, key_handle, opts \\ %{}) do
-    bounds = Map.get(opts, :bounds, %{})
+    # Normalize opts: a non-map (a caller bug) coerces to defaults rather than crashing
+    # with a value-echoing BadMapError — the closed-atom error discipline. (sign_report/3
+    # + sign_anchor/3 share the same pre-existing Map.get pattern; left as-is here — not
+    # coupled to this slice's contract.)
+    bounds = if is_map(opts), do: Map.get(opts, :bounds, %{}), else: %{}
 
     with {:ok, {key_id, public_key}} <- resolve_signing_identity(key_handle),
          {:ok, grant} <- build_grant(grant_input, key_id),
