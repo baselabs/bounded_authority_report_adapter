@@ -13,6 +13,8 @@
 > [`bounded_authority` → overview](https://github.com/baselabs/bounded_authority/blob/master/docs/strategy/overview.html)
 > (HTML) or [overview.md](https://github.com/baselabs/bounded_authority/blob/master/docs/strategy/overview.md).
 
+**Looking for a specific doc?** [`doc-map.md`](https://github.com/baselabs/bounded_authority/blob/master/docs/doc-map.md) — every doc across all four repos.
+
 **Private BaseLabs library.** Not published to hex. Consumed by BaseLabs projects
 (verifier application's report path, and future edge agents / any signing party) as a private git dep.
 
