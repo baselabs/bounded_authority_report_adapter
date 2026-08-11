@@ -179,6 +179,7 @@ defmodule BoundedAuthorityReportAdapter do
   @spec sign_report(report(), key_handle(), opts()) ::
           {:ok, envelope()} | {:error, sign_error()}
   def sign_report(report, key_handle, opts \\ %{}) do
+    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
     issued_at = Map.get(opts, :issued_at, System.system_time(:second))
     proof_id = Map.get(opts, :proof_id) || generate_uuid()
@@ -245,6 +246,7 @@ defmodule BoundedAuthorityReportAdapter do
   @spec sign_anchor(anchor_input(), key_handle(), anchor_opts()) ::
           {:ok, anchor_compact()} | {:error, anchor_sign_error()}
   def sign_anchor(anchor_input, key_handle, opts \\ %{}) do
+    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
     anchored_at = Map.get(opts, :anchored_at, System.system_time(:second))
 
@@ -305,11 +307,8 @@ defmodule BoundedAuthorityReportAdapter do
   @spec sign_grant(grant_input(), key_handle(), grant_opts()) ::
           {:ok, grant_compact()} | {:error, grant_sign_error()}
   def sign_grant(grant_input, key_handle, opts \\ %{}) do
-    # Normalize opts: a non-map (a caller bug) coerces to defaults rather than crashing
-    # with a value-echoing BadMapError — the closed-atom error discipline. (sign_report/3
-    # + sign_anchor/3 share the same pre-existing Map.get pattern; left as-is here — not
-    # coupled to this slice's contract.)
-    bounds = if is_map(opts), do: Map.get(opts, :bounds, %{}), else: %{}
+    opts = normalize_opts(opts)
+    bounds = Map.get(opts, :bounds, %{})
 
     with {:ok, {key_id, public_key}} <- resolve_signing_identity(key_handle),
          {:ok, grant} <- build_grant(grant_input, key_id),
@@ -643,6 +642,14 @@ defmodule BoundedAuthorityReportAdapter do
       {:error, :invalid} -> {:error, {:producer_error, :invalid}}
     end
   end
+
+  # Coerce a non-map opts (a caller bug) to the empty map rather than crashing with a
+  # value-echoing BadMapError inside Map.get/3 — the closed-atom error discipline. opts is
+  # caller-supplied config (bounds windows, timestamps); a non-map is a type violation per
+  # every *_opts() @spec, and the defaults are a safe fallback. Applied to all three sign_*
+  # entry points (sign_report/3, sign_anchor/3, sign_grant/3) — the same contract everywhere.
+  defp normalize_opts(opts) when is_map(opts), do: opts
+  defp normalize_opts(_opts), do: %{}
 
   defp generate_uuid do
     # UUID v4 per RFC 4122: 16 random bytes, then overwrite byte 6's high nibble
