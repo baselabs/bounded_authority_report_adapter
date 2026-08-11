@@ -275,6 +275,17 @@ defmodule BoundedAuthorityReportAdapter.SignReportTest do
     end
   end
 
+  describe "opts normalization (closed-atom: a non-map opts coerces, never crashes)" do
+    test "a non-map opts uses defaults instead of a value-echoing BadMapError" do
+      assert {:ok, _} =
+               BoundedAuthorityReportAdapter.sign_report(
+                 build_report(),
+                 holder_handle(),
+                 :not_a_map
+               )
+    end
+  end
+
   # --- helpers ---
 
   defp issuer_pub do
