@@ -1,4 +1,6 @@
 defmodule BoundedAuthorityReportAdapter.TestKeys do
+  alias BoundedAuthorityProtocol.V1.Jwk
+
   @moduledoc """
   TEST-ONLY keypair fixtures + an issuer-side grant-signing helper for RA1's
   round-trip test.
@@ -65,7 +67,7 @@ defmodule BoundedAuthorityReportAdapter.TestKeys do
   """
   def holder_thumbprint_raw(holder_public_key) do
     {:ok, thumbprint} =
-      BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(holder_public_key, %{})
+      Jwk.public_key_thumbprint_raw(holder_public_key, %{})
 
     thumbprint
   end
