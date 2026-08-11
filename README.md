@@ -32,6 +32,10 @@ it never depends on this adapter (the dependency-direction wall). See
 `docs/charter.md` for the authority model and `docs/strategy.md` for the
 dependency + release posture.
 
+**See it run, self-contained (no DB / no Docker / no other project):** the
+[Livebook demo](examples/report_envelope_roundtrip.livemd) plays all three roles (issuer →
+holder/sign → verifier) in one notebook and proves a tampered or wrong-key proof is rejected.
+
 ## Status
 
 **RA1/RA2/RA3/RA4 shipped** (2026-08-09 → 2026-08-10):
