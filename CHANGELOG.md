@@ -78,3 +78,26 @@ minor bumps (pre-1.0 freedom per SemVer).
 - `test/bounded_authority_report_adapter/sign_anchor_test.exs` — 12 tripwires
   (round-trip, wrong-key, key_id-from-handle, exit containment, no-canonical-bytes
   fork, defect injection, closed-atom errors).
+
+### Added — RA5 (2026-08-10) universal consumer-integration guide
+
+- `docs/consumer-integration.md` — the universal contract any verifier uses to consume a
+  `{grant, proof}` envelope from `sign_report/3` via the PUBLIC `check_envelope/2`, WITHOUT
+  depending on this adapter. Covers transport, the request-field contract (`cast_arguments =
+  V1.Json.decode(raw_body)` on both sides), the one-`with` fail-closed verify, the REQUIRED
+  identity binding (§8 — bind the verified envelope to the authenticated reporter so a captured
+  envelope can't replay cross-identity), and the nonce-dedup obligation (§9). verifier application's report
+  path is instance #1.
+- README reframe: corrected the stale "holder-side signing adapter" intro to the ADR-0006
+  "universal companion signer" framing + a pointer to the guide.
+
+### Added — example Livebook (2026-08-11) self-contained round-trip demo
+
+- `examples/report_envelope_roundtrip.livemd` — a Livebook that runs the full capability
+  round-trip in one notebook (issuer → holder/sign → verifier), with no database, no Docker, and
+  no other project running. Doubles as a plain-English explainer of the three-role model (with a
+  mermaid sequence diagram) for readers unfamiliar with signing authorities. Verified: ✅ verify,
+  tamper-reject, wrong-key-reject.
+- The same round-trip is CI-covered by RA1's `sign_report_test.exs`; the notebook is the human
+  view, not a CI gate.
+

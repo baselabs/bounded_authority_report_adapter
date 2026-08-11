@@ -16,14 +16,28 @@ what the adapter does and doesn't do:
 
 ### Run it
 
-```bash
-# from the repo root
-mix deps.get                       # fetch bounded_authority_protocol (private git; needs access)
-livebook server examples/report_envelope_roundtrip.livemd
+Open it in Livebook (the desktop app: *File → Open* → this file; or `livebook server` from the
+repo root and open the URL), then **Run All**. The setup cell pulls this repo + the
+`bounded_authority_protocol` dependency (first run fetches BAP from its private git remote — needs
+access), then each cell prints a plain `✅` / `❌` line.
+
+### What you'll see (verified output)
+
+```
+🎟️ issuer-signed grant minted (529 bytes). It authorizes holder-thumbprint TrI1g9he… to perform operation "report_demo".
+✍️ adapter signed the PROOF (678 bytes), binding the grant to this report. The grant passed through untouched.
+✅ VERIFIED — the grant is genuine, the proof matches this report, the holder is the one the grant was issued to.
+✅ tampered proof REJECTED — one flipped byte breaks the signature
+✅ stranger's proof REJECTED — the proof must come from the holder the grant was issued to
 ```
 
-(No Livebook? The notebook's setup cell uses `Mix.install` on this repo, so it also runs from
-[livebook.dev](https://livebook.dev) after a `git clone` — it pulls the adapter + BAP itself.)
+### CI
+
+The **notebook itself is not run in CI** — driving a Livebook headlessly is awkward (runtime +
+`Mix.install` re-fetch + the CLI runner isn't in every build), and a notebook is the wrong shape
+for a gate anyway. The same round-trip (sign → `check_envelope` → tamper/wrong-key reject) **is**
+CI-covered, by `test/bounded_authority_report_adapter/sign_report_test.exs` (RA1's contract tests).
+The notebook is the human-readable view of that contract; the test is the gate.
 
 ### What this is not
 
