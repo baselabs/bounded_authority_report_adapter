@@ -3,6 +3,8 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
   TEST-ONLY reference implementation of the `BoundedAuthorityReportAdapter`
   key-handle behaviour.
 
+  alias BoundedAuthorityProtocol.V1.Jwk
+
   The handle term is a `{public_key, private_key}` tuple of raw 32-byte Ed25519
   keys. This compiles ONLY under `:test` (via `mix.exs` `elixirc_paths`) — it
   does NOT ship in the artifact.
@@ -39,7 +41,7 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
   @impl true
   def thumbprint({public_key, _private_key}) do
     {:ok, raw_thumbprint} =
-      BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
+      Jwk.public_key_thumbprint_raw(public_key, %{})
 
     {:ok, raw_thumbprint}
   end
@@ -55,4 +57,15 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
   def key_identity({public_key, _private_key}), do: {:ok, {"test-anchor-key-001", public_key}}
 
   def key_identity(_handle), do: {:error, :invalid_handle}
+
+  @impl true
+  # The role-gated signing identity {role, key_id, public_key}. RawKey is the
+  # HOLDER/ANCHOR reference handle — it declares :holder, so sign_grant/3's C1 gate
+  # rejects it (a holder-role key cannot sign a grant). A production ISSUER handle
+  # implements signing_identity/1 to return :issuer instead (see GrantIssuerHandle in
+  # test_handles.ex for the test exemplar). The kid mirrors key_identity/1.
+  def signing_identity({public_key, _private_key}),
+    do: {:ok, {:holder, "test-anchor-key-001", public_key}}
+
+  def signing_identity(_handle), do: {:error, :invalid_handle}
 end

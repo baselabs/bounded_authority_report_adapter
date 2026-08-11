@@ -18,9 +18,13 @@ defmodule BoundedAuthorityReportAdapter do
     * **Boundary-anchor signing** (`sign_anchor/3`, RA4) — signs a boundary anchor
       (a durable chain checkpoint), returning the compact a verifier checks via
       `verify_historical_anchor/3`.
+    * **Grant signing** (`sign_grant/3`, RA7) — the issuer-role instantiation: signs
+      a grant (the issuer's authority assertion), returning the compact a verifier
+      checks via `verify_grant/3`. The handle's `signing_identity/1` must resolve to
+      the `:issuer` role (the C1 gate — ADR-0006's grant-signing pre-commitment).
 
-  The pattern generalizes to any BAP protocol object; grant/key-transition signing
-  are named future slices (see ADR-0006).
+  The pattern generalizes to any BAP protocol object; key-transition signing is the
+  one remaining named future slice (see ADR-0006 / ADR-0007).
 
   ## The key-handle contract (charter §6 invariant 1)
 
@@ -35,6 +39,12 @@ defmodule BoundedAuthorityReportAdapter do
       public key as ONE atomic snapshot (defense-in-depth: prevents a stateful
       handle from splitting them across a rotation race). A proof-only handle need
       not implement it.
+    * `signing_identity/1` — **optional**; required only by `sign_grant/3`, which
+      resolves the key's **role** (`:issuer` or `:holder`) AND its registry id AND
+      public key as ONE atomic snapshot. The role gate (C1) + the rotation-race
+      defense both ride this single call: a stateful handle cannot return `:issuer`
+      then rotate to a different key between role resolution and signing. An
+      issuer-role handle implements it; a proof/anchor-only handle need not.
 
   A test-only reference implementation (`BoundedAuthorityReportAdapter.Keys.RawKey`)
   ships under `test/support/` for local development; production holders implement the
@@ -98,6 +108,29 @@ defmodule BoundedAuthorityReportAdapter do
 
   @type anchor_sign_error ::
           :invalid_anchor
+          | :invalid_key_handle
+          | :signing_failed
+          | {:producer_error, :invalid}
+
+  @type grant_input :: %{
+          issuer: binary(),
+          grant_id: binary(),
+          audiences: [binary()],
+          issued_at: integer(),
+          not_before: integer(),
+          expires_at: integer(),
+          holder_thumbprint: binary(),
+          operations: [BoundedAuthorityProtocol.V1.Operation.t()]
+        }
+
+  @type grant_opts :: %{
+          optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map()
+        }
+
+  @type grant_compact :: %{grant: binary()}
+
+  @type grant_sign_error ::
+          :invalid_grant
           | :invalid_key_handle
           | :signing_failed
           | {:producer_error, :invalid}
@@ -223,6 +256,65 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
+  @doc """
+  Signs a grant — the issuer's authority assertion. The issuer-role instantiation of
+  the universal companion-signer tail (ADR-0006; this slice is recorded in ADR-0007).
+  Returns `%{grant: grant_compact}`, verifiable via `BoundedAuthorityProtocol.V1.verify_grant/3`
+  and envelope-compatible with `check_envelope/2` (it flows through the envelope when
+  paired with a holder proof from `sign_report/3`).
+
+  ## C1 gate (ADR-0006 pre-commitment) — what it does and does NOT guarantee
+
+  `sign_grant/3` resolves the handle's atomic signing identity `{:issuer | :holder,
+  key_id, public_key}` from ONE `signing_identity/1` call. If the resolved role is not
+  `:issuer` (or the callback is absent), it returns `{:error, :invalid_key_handle}`
+  BEFORE `sign/2` is called — so a handle that declares `:holder` (or implements no
+  `signing_identity/1`) cannot sign a grant through this API. That is the C1
+  pre-commitment realized structurally.
+
+  This is NOT cryptographic key-role separation. A handle that consistently
+  mis-declares its role — whose `signing_identity/1` returns
+  `{:issuer, holder_key_id, holder_public_key}` while `sign/2` holds the matching
+  holder private key — signs a grant successfully, because every value is internally
+  consistent. The adapter resolves only the handle's `public_key` and signs against
+  it; it cannot prove key identity. Key-role separation (an issuer key and a holder
+  key are cryptographically distinct custodied entities) is the key-custody
+  boundary's job — the runtime / HSM / key server behind the handle (charter §4).
+
+  ## Key-identifier sourcing (ADR-0006 decision 3)
+
+  The grant's signed-header `kid` (`key_id`) comes from the atomic `signing_identity/1`
+  snapshot, NEVER from caller input — a caller-supplied `:key_id` in the grant map is
+  ignored. `holder_thumbprint` IS caller-supplied (the grant's subject — the holder the
+  capability is issued to; the issuer knows it at minting).
+
+  ## Options
+
+    * `:bounds` — resource ceilings forwarded to the producer (default `%{}`).
+
+  ## Errors (closed-atom set — no key material or grant content in errors)
+
+    * `:invalid_grant` — a required grant field is missing or malformed.
+    * `:invalid_key_handle` — the handle is malformed, lacks `signing_identity/1`, the
+      resolved role is not `:issuer`, or the snapshot returned an invalid value.
+    * `:signing_failed` — `sign/2` rejected, returned a non-64-byte signature, violated
+      the `{:ok, _} | {:error, _}` contract, or the signature did not verify against the
+      snapshot's `public_key`.
+    * `{:producer_error, :invalid}` — BAP's producer or assembler rejected the grant.
+  """
+  @spec sign_grant(grant_input(), key_handle(), grant_opts()) ::
+          {:ok, grant_compact()} | {:error, grant_sign_error()}
+  def sign_grant(grant_input, key_handle, opts \\ %{}) do
+    bounds = Map.get(opts, :bounds, %{})
+
+    with {:ok, {key_id, public_key}} <- resolve_signing_identity(key_handle),
+         {:ok, grant} <- build_grant(grant_input, key_id),
+         {:ok, signing_input} <- produce_grant_signing_input(grant, bounds),
+         {:ok, grant_compact} <- sign_and_assemble(key_handle, signing_input, public_key) do
+      {:ok, %{grant: grant_compact}}
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # The shared signing tail (the universal-companion primitive).
   #
@@ -340,6 +432,34 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp resolve_key_identity(_handle), do: {:error, :invalid_key_handle}
 
+  # The grant's atomic signing identity — the role (:issuer | :holder) AND the key's
+  # registry id AND its 32-byte public key — resolved as ONE snapshot, with the role
+  # gate folded into the match. This is the C1 enforcement (ADR-0006's grant-signing
+  # pre-commitment): ONLY a snapshot whose role is :issuer passes; a :holder snapshot,
+  # a malformed snapshot, a callback failure, or a missing signing_identity/1 (the
+  # UndefinedFunctionError from apply/3 caught by safe_callback) all collapse to
+  # :invalid_key_handle BEFORE sign/2 is ever reached.
+  #
+  # Resolving role + key identity in a SINGLE call (vs. separate role/1 + key_identity/1
+  # callbacks) is load-bearing: a stateful handle cannot return :issuer then rotate to a
+  # holder key between role resolution and signing — the snapshot is one observation, and
+  # the verify_signature guard in the shared tail catches any sign/2-vs-snapshot drift.
+  # (design-adversarial Challenge 1 — the separate-callback design was rejected for the
+  # TOCTOU it opened.)
+  defp resolve_signing_identity({module, handle}) when is_atom(module) do
+    case safe_callback(module, :signing_identity, [handle]) do
+      {:ok, {:issuer, key_id, public_key}}
+      when is_binary(key_id) and byte_size(key_id) > 0 and is_binary(public_key) and
+             byte_size(public_key) == 32 ->
+        {:ok, {key_id, public_key}}
+
+      _holder_role_or_malformed_or_unimplemented ->
+        {:error, :invalid_key_handle}
+    end
+  end
+
+  defp resolve_signing_identity(_handle), do: {:error, :invalid_key_handle}
+
   defp safe_callback(module, function, args) do
     apply(module, function, args)
   rescue
@@ -413,6 +533,80 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp produce_anchor_signing_input(anchor, bounds) do
     case BoundedAuthorityProtocol.V1.boundary_anchor_signing_input(anchor, bounds) do
+      {:ok, signing_input} -> {:ok, signing_input}
+      {:error, :invalid} -> {:error, {:producer_error, :invalid}}
+    end
+  end
+
+  # The grant's content is validated for presence + shape HERE (clean :invalid_grant on a
+  # missing/malformed field); BAP's producer validates SEMANTICS (identifier grammar, time
+  # coherence, the 32-byte holder_thumbprint, operation shape) and a semantic violation
+  # surfaces as {:producer_error, :invalid}. key_id is NEVER read from grant_input — it
+  # comes from the handle's signing_identity/1 snapshot (the _key_id param), so a caller
+  # :key_id smuggled into the map is silently ignored (ADR-0006 decision 3).
+  defp build_grant(grant_input, key_id) when is_map(grant_input) do
+    with {:ok, issuer} <- required_grant_binary(grant_input, :issuer),
+         {:ok, grant_id} <- required_grant_binary(grant_input, :grant_id),
+         {:ok, audiences} <- required_grant_audiences(grant_input),
+         {:ok, issued_at} <- required_grant_integer(grant_input, :issued_at),
+         {:ok, not_before} <- required_grant_integer(grant_input, :not_before),
+         {:ok, expires_at} <- required_grant_integer(grant_input, :expires_at),
+         {:ok, holder_thumbprint} <- required_grant_binary(grant_input, :holder_thumbprint),
+         {:ok, operations} <- required_grant_operations(grant_input) do
+      {:ok,
+       %BoundedAuthorityProtocol.V1.Grant{
+         key_id: key_id,
+         issuer: issuer,
+         grant_id: grant_id,
+         audiences: audiences,
+         issued_at: issued_at,
+         not_before: not_before,
+         expires_at: expires_at,
+         holder_thumbprint: holder_thumbprint,
+         operations: operations
+       }}
+    end
+  end
+
+  defp build_grant(_grant_input, _key_id), do: {:error, :invalid_grant}
+
+  defp required_grant_binary(grant_input, key) do
+    case Map.fetch(grant_input, key) do
+      {:ok, value} when is_binary(value) -> {:ok, value}
+      _ -> {:error, :invalid_grant}
+    end
+  end
+
+  defp required_grant_integer(grant_input, key) do
+    case Map.fetch(grant_input, key) do
+      {:ok, value} when is_integer(value) -> {:ok, value}
+      _ -> {:error, :invalid_grant}
+    end
+  end
+
+  defp required_grant_audiences(grant_input) do
+    case Map.fetch(grant_input, :audiences) do
+      {:ok, audiences} when is_list(audiences) and audiences != [] ->
+        if Enum.all?(audiences, &is_binary/1),
+          do: {:ok, audiences},
+          else: {:error, :invalid_grant}
+
+      _ ->
+        {:error, :invalid_grant}
+    end
+  end
+
+  defp required_grant_operations(grant_input) do
+    # Operations are %V1.Operation{} structs; shape + the unique-name constraint are
+    # BAP's to enforce at produce-time. Here we assert a non-empty list is present.
+    case Map.fetch(grant_input, :operations) do
+      {:ok, operations} when is_list(operations) and operations != [] -> {:ok, operations}
+      _ -> {:error, :invalid_grant}
+    end
+  end
+
+  defp produce_grant_signing_input(grant, bounds) do
+    case BoundedAuthorityProtocol.V1.grant_signing_input(grant, bounds) do
       {:ok, signing_input} -> {:ok, signing_input}
       {:error, :invalid} -> {:error, {:producer_error, :invalid}}
     end
@@ -509,5 +703,21 @@ defmodule BoundedAuthorityReportAdapter do
   @callback key_identity(handle :: term()) ::
               {:ok, {key_id :: binary(), public_key :: binary()}} | {:error, term()}
 
-  @optional_callbacks [key_identity: 1]
+  @doc """
+  Returns the key's **signing identity** for a role-gated operation — its **role**
+  (`:issuer` or `:holder`) AND its registry `kid` AND its 32-byte raw Ed25519 public
+  key — as a single atomic `{:role, key_id, public_key}` snapshot. Required only by
+  `sign_grant/3`, which both (a) gates on `role == :issuer` (the C1 pre-commitment —
+  a holder-role key cannot sign a grant through this API) and (b) uses the snapshot's
+  `key_id` + `public_key` — all from ONE call, so a stateful handle cannot return
+  `:issuer` then rotate to a different key between role resolution and signing (the
+  rotation-race defense; any `sign/2`-vs-snapshot mismatch is caught by the
+  `verify_signature` guard). **Optional** callback — a proof-only or anchor-only handle
+  need not implement it (and is then rejected by `sign_grant/3` as `:invalid_key_handle`).
+  """
+  @callback signing_identity(handle :: term()) ::
+              {:ok, {:issuer | :holder, key_id :: binary(), public_key :: binary()}}
+              | {:error, term()}
+
+  @optional_callbacks [key_identity: 1, signing_identity: 1]
 end
