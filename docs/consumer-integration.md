@@ -54,38 +54,48 @@ Notes:
   issuance flow must mint it. A mismatch fails closed (401) — so the prod coordination between this
   constant and the issued grant is a contract the issuer must honor.
 
-## 4. Call the verifier — ONE `with`, fail closed
+## 4. Call the verifier — ONE `with`, fail closed (the COMPLETE safe path)
+
+This is the canonical example. It is **not** optional: it includes the identity binding (§8) — a
+consumer copy-pasting only the crypto-verify (without the binding) ships a verifier open to
+cross-identity replay. Bind the verified envelope to the authenticated identity in the SAME `with`.
 
 ```elixir
 # raw_body: the request's RAW bytes (retained via the endpoint body_reader). The whole verify is
 # ONE `with`: a BAP-strict decode failure (Jason-valid-but-BAP-invalid body — duplicate keys,
-# number bounds) AND a check_envelope failure BOTH collapse to {:error, :invalid}. Decode any
-# configured bytes (the issuer public key) NON-BANG inside the `with` (or boot-validate them) so a
-# malformed config also fails closed. Do NOT use a bare `{:ok, x} = Json.decode(...)` match — it
-# raises on a decode failure (500), breaking the uniform-reject posture.
+# number bounds), a check_envelope failure, AND an identity-binding mismatch ALL collapse to
+# {:error, _} -> :invalid. Decode any configured bytes (the issuer public key) NON-BANG inside
+# the `with` (or boot-validate them) so a malformed config also fails closed. Do NOT use a bare
+# `{:ok, x} = Json.decode(...)` match — it raises on a decode failure (500), breaking the
+# uniform-reject posture.
 with {:ok, cast_arguments} <- BoundedAuthorityProtocol.V1.Json.decode(raw_body),
-     {:ok, _facts} <- BoundedAuthorityProtocol.V1.check_envelope(
-       %BoundedAuthorityProtocol.V1.Credentials{grant: grant, proof: proof},
-       %BoundedAuthorityProtocol.V1.ExpectedRequest{
-         trusted_issuer: %BoundedAuthorityProtocol.V1.TrustedIssuer{
-           key_id: <configured issuer kid>,
-           public_key: <configured 32-byte issuer public key>
-         },
-         issuer: <configured issuer URI>,
-         audience: <configured audience>,
-         method: "POST",
-         target_uri: <configured canonical report URI>,
-         invocation_id: <from X-BA-Invocation-Id>,
-         operation: <the normative contract operation constant>,
-         cast_arguments: cast_arguments,
-         evaluation_time: System.system_time(:second),
-         clock_skew: <configured>,
-         proof_max_age: <configured>,
-         nonce: {:required, <from the report-nonce header>},
-         bounds: BoundedAuthorityProtocol.V1.Bounds.maximum()
-       }
-     ) do
-  :ok       # the envelope verifies — accept
+     {:ok, facts} <-
+       BoundedAuthorityProtocol.V1.check_envelope(
+         %BoundedAuthorityProtocol.V1.Credentials{grant: grant, proof: proof},
+         %BoundedAuthorityProtocol.V1.ExpectedRequest{
+           trusted_issuer: %BoundedAuthorityProtocol.V1.TrustedIssuer{
+             key_id: <configured issuer kid>,
+             public_key: <configured 32-byte issuer public key>
+           },
+           issuer: <configured issuer URI>,
+           audience: <configured audience>,
+           method: "POST",
+           target_uri: <configured canonical report URI>,
+           invocation_id: <from X-BA-Invocation-Id>,
+           operation: <the normative contract operation constant>,
+           cast_arguments: cast_arguments,
+           evaluation_time: System.system_time(:second),
+           clock_skew: <configured>,
+           proof_max_age: <configured>,
+           nonce: {:required, <from the report-nonce header>},
+           bounds: BoundedAuthorityProtocol.V1.Bounds.maximum()
+         }
+       ),
+     # REQUIRED (§8): bind the verified envelope to the AUTHENTICATED identity, not just "some
+     # holder." returns :ok | {:error, _} — NOT a boolean (a `?`-suffix boolean never matches
+     # :ok <- and rejects EVERY request). See §8 for the thumbprint helper.
+     :ok <- bind_holder_to_identity(facts.holder_thumbprint, authenticated_identity) do
+  :ok       # the envelope verifies AND is bound to this identity — accept
 else
   _ -> :invalid   # reject (your uniform auth-failure body; no discrimination between causes)
 end
@@ -145,16 +155,33 @@ rejected (different key ⇒ thumbprint mismatch ⇒ `:invalid` ⇒ the uniform r
 parity with a body-signature scheme (which is bound to the reporter's key by construction).
 
 ```elixir
-with {:ok, facts} <- V1.check_envelope(credentials, expected),
-     # the grant's bound holder must be THIS authenticated identity's key, not just "some holder"
-     :ok <- bind_to_authenticated_identity?(facts.holder_thumbprint, authenticated_identity) do
-  :ok
-else _ -> :invalid end
+# bind_holder_to_identity/2 returns :ok | {:error, _} (NOT a boolean — a `?`-suffix boolean
+# never matches :ok <- and rejects every request). The thumbprint helper is the PUBLIC
+# BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(raw_key, %{}) — do NOT roll your
+# own RFC-7638 thumbprint; use this one so the comparison is raw-32-byte to raw-32-byte.
+defp bind_holder_to_identity(bound_holder_thumbprint, identity) do
+  with {:ok, identity_raw_key} <- identity_ed25519_raw_key(identity),
+       {:ok, identity_thumbprint} <-
+         BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(identity_raw_key, %{}) do
+    if identity_thumbprint == bound_holder_thumbprint, do: :ok, else: {:error, :not_bound}
+  end
+end
 ```
 
 verifier application instance #1 implements this: the reporter's stored Ed25519 key (the same one the S1 body-
 signature verifies against) IS the BA holder key, and `ReportSignature` asserts
-`facts.holder_thumbprint == thumbprint(reporter.eddsa_public_key)` (a cross-identity-replay
-tripwire proves it red). A consumer that does NOT bind the envelope to the authenticated identity
-carries the cross-identity-replay gap — do not enable BA without this binding.
+`facts.holder_thumbprint == Jwk.public_key_thumbprint_raw(reporter_raw_key, %{})` (a cross-
+identity-replay tripwire proves it red). A consumer that does NOT bind the envelope to the
+authenticated identity carries the cross-identity-replay gap — do not enable BA without this binding.
+
+## 9. Dedupe nonces (a replay ledger is a consumer obligation)
+
+`check_envelope` checks the proof's nonce EQUALS the expected nonce (`nonce_matches?/2` →
+`secure_equal/2`) — it is **stateless and does NOT dedupe**. So a byte-identical captured request
+(same identity, valid signature, binding passes) is accepted AGAIN until `proof_max_age` expires —
+same-identity replay within the proof window. The consumer MUST keep a replay ledger (a unique
+constraint on `(identity, nonce)` — verifier application keys it `(org_id, nonce)`) and reject a seen nonce.
+Nonce uniqueness is NOT something the protocol package does for you; it is a consumer obligation,
+alongside the §8 identity binding.
+
 
