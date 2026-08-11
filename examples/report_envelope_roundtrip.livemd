@@ -1,38 +1,57 @@
-# Bounded Authority Report Adapter — the full round-trip, in one notebook
+# Bounded Authority Report Adapter — see it work, in one notebook
 
-This notebook proves the adapter works **end-to-end, self-contained, with no other project
-running**. It plays all three roles of the capability model in-process so you can see exactly
-what the adapter does, what it does **not** do, and how the pieces fit.
+> **You don't need to know anything about signing authorities to follow this.** It runs the whole
+> thing in one notebook — no database, no Docker, no other project running — and each step prints
+> a plain `✅` / `❌` line. Run it cell-by-cell.
 
-> The adapter has one job: it **signs a holder proof** binding an issuer-signed grant to a
-> report. It does not issue grants, does not verify them, does not transport anything. This
-> notebook mints a grant (playing the issuer) and verifies the result (playing a verifier) only
-> to show the adapter's output is correct — those two roles are **not** the adapter's job in
-> production.
+## The problem this solves (the one-minute version)
 
-## The model (three roles, three places)
+An **API key** answers *"who sent this?"* It does **not** answer *"were they allowed to do this?"*
+If an API key leaks, whoever has it can send anything until you rotate it.
 
+This library is part of a system that answers the second question. Instead of (or alongside) an
+API key, a report carries a **capability** — a digital *grant* that the authority issued ahead of
+time, plus a *proof* the sender signs at the moment of the report. Think of it like a VIP pass
+(the grant) plus a signature that matches the ID of the person holding it (the proof): possessing
+the pass alone isn't enough; the signature has to match *you*, and the pass has to be for *this
+event*. A leaked API key alone can't forge one.
+
+This library's **only** job is to produce that **proof**. Not the pass, not the check — just the
+proof.
+
+## The model — three roles, kept separate on purpose
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Issuer as Issuer<br/>(the authority runtime)
+    participant Holder as Holder<br/>(the edge — THIS adapter)
+    participant Verifier as Verifier<br/>(the verifier / anyone)
+    Note over Issuer: holds the issuer key
+    Note over Holder: holds the holder key
+    Note over Verifier: holds only PUBLIC keys
+    Issuer->>Holder: a signed grant<br/>(issued ahead of time, out of band)
+    Note over Holder: report arrives
+    Holder->>Holder: adapter.sign_report(grant, report, key)<br/>→ signs a PROOF binding them
+    Holder->>Verifier: send the report + {grant, proof}
+    Verifier->>Verifier: check_envelope(grant, proof)<br/>vs the published issuer + holder keys
+    Verifier-->>Holder: ✅ accept  /  ❌ reject (offline)
 ```
-ISSUER (the runtime)            HOLDER (the edge — THIS adapter)        VERIFIER (any party)
-─────────────────────           ─────────────────────────────────       ─────────────────────
-holds the issuer key            holds the holder key                    holds only PUBLIC keys
-mints grants ahead of time  →   receives a grant, signs a proof     →   check_envelope(grant, proof)
-                                over a specific report                  → :ok | {:error, :invalid}
-```
 
-This is DPoP (RFC 9449) applied to report authorization. The split is the security property:
-the verifier never carries signing code; the issuer never sees each report; the holder proves
-possession of a key bound to a grant, offline.
+Why three separate roles? Two reasons that **are** the security property:
 
-The **adapter is the HOLDER box** — that's all. The other two boxes are played here for the
-demo so you can see the round-trip, but they live elsewhere in production (the runtime issues;
-verifier application / any consumer verifies).
+- **The verifier never holds a signing key.** So a compromised verifier can't forge anything.
+- **The issuer never sees each report.** The holder proves possession of the grant offline — no
+  call home on every report.
+
+This is the same shape as **DPoP** (RFC 9449), used for OAuth. This adapter is the **Holder**
+box — nothing more. The other two boxes are played below only so you can see the full loop.
 
 ## Setup
 
 ```elixir
-# Pulls the adapter (this repo) + its one dependency, bounded_authority_protocol (the public
-# verifier/format package). First run fetches BAP from its private git remote (needs access).
+# Pulls this repo (the adapter) + its one dependency, bounded_authority_protocol (the public
+# format/verifier package). First run fetches BAP from its private git remote (needs access).
 adapter_path = __DIR__ |> Path.join("..") |> Path.expand()
 
 Mix.install([
@@ -42,38 +61,40 @@ Mix.install([
 alias BoundedAuthorityProtocol.V1
 ```
 
-## The key-handle contract (how the adapter touches a key without holding it)
+## The key-handle contract — how the adapter signs *without ever seeing the private key*
 
-The adapter never sees a private key. The caller supplies a `{module, term}` handle whose
-module implements `sign/2` + `public_key/1`; the private bytes live behind those callbacks
-(an HSM / KMS / key server in real life). Here it's a 4-line in-memory handle for the demo.
+The adapter never receives a private key. You hand it a `{module, term}` **handle**: a module with
+`sign/2` + `public_key/1` callbacks, and an opaque term (the key reference) that only the module
+understands. In production that module fronts an HSM / KMS / key server. Here it's four lines:
 
 ```elixir
 defmodule Demo.Handle do
   @moduledoc false
   def sign(message, {_pub, priv}),
     do: {:ok, :crypto.sign(:eddsa, :ed25519, message, [priv, :ed25519])}
+
   def public_key({pub, _priv}), do: {:ok, pub}
 end
 ```
 
-## Generate the two keypairs
+## Two keypairs (one per role that holds a key)
 
 ```elixir
-# ISSUER keypair — in production this lives in the bounded_authority runtime, NOT here.
+# ISSUER keypair — lives in the authority runtime in production, NOT in this adapter.
 {issuer_pub, issuer_priv} = :crypto.generate_key(:eddsa, :ed25519, <<1::256>>)
 
-# HOLDER keypair — in production this lives on the edge (the party that calls the adapter).
+# HOLDER keypair — lives on the edge (the party that calls this adapter).
 {holder_pub, holder_priv} = :crypto.generate_key(:eddsa, :ed25519, <<2::256>>)
 holder = {Demo.Handle, {holder_pub, holder_priv}}
 
 now = System.system_time(:second)
+"issuer + holder keypairs generated. (In production these live in separate places.)"
 ```
 
 ## Role 1 — ISSUER: mint a grant  ⚠️ NOT the adapter's job
 
-The runtime signs a grant that authorizes a holder (by the holder key's thumbprint) to perform
-an operation. We do it here ONLY so the demo has a real grant to sign over.
+The authority signs a *grant* authorizing a holder (identified by the holder key's thumbprint) to
+perform an operation. We do it here **only** so the demo has a real grant to sign a proof over.
 
 ```elixir
 {:ok, holder_thumbprint} = V1.Jwk.public_key_thumbprint_raw(holder_pub, %{})
@@ -94,15 +115,16 @@ grant = %V1.Grant{
 grant_sig = :crypto.sign(:eddsa, :ed25519, grant_input.message, [issuer_priv, :ed25519])
 {:ok, grant_compact} = V1.assemble_compact(grant_input, grant_sig)
 
-"issuer-signed grant (#{String.length(grant_compact)} bytes): " <> String.slice(grant_compact, 0, 32) <> "…"
+"🎟️ issuer-signed grant minted (#{byte_size(grant_compact)} bytes). " <>
+  "It authorizes holder-thumbprint #{String.slice(Base.url_encode64(holder_thumbprint, padding: false), 0, 8)}… " <>
+  "to perform operation \"report_demo\"."
 ```
 
-## Role 2 — HOLDER: the adapter signs the proof  ✅ THIS is the adapter's one job
+## Role 2 — HOLDER: **the adapter signs the proof**  ✅ THIS is the adapter's one job
 
-The edge agent calls `sign_report/3` with the grant + the report fields + the holder key-handle.
-The adapter builds the proof, signs it via the handle, verifies the signature against the
-resolved holder key, and returns the `{grant, proof}` envelope. **It signs ONLY the proof —
-never the grant.**
+The edge calls `sign_report/3` with the grant + the report fields + the holder key-handle. The
+adapter builds the proof, signs it through the handle, double-checks the signature against the
+holder's public key, and returns `{grant, proof}`. **It signs the proof only — never the grant.**
 
 ```elixir
 report = %{
@@ -111,8 +133,8 @@ report = %{
   method: "POST",
   target_uri: "https://demo-verifier.test/report",
   invocation_id: "00000000-0000-4000-8000-000000000001",
-  # cast_arguments is BAP's tagged Json.value() form — in production this is
-  # V1.Json.decode(raw_report_body_bytes) of the report body. A small value here for clarity.
+  # cast_arguments is the report body in BAP's tagged form. In production this is
+  # V1.Json.decode(raw_report_body_bytes). A small value here keeps the demo readable.
   cast_arguments: {:object, [{"signal", {:string, "ok"}}]},
   nonce: "demo-nonce-1"
 }
@@ -120,14 +142,15 @@ report = %{
 {:ok, %{grant: ^grant_compact, proof: proof}} =
   BoundedAuthorityReportAdapter.sign_report(report, holder, %{issued_at: now - 10})
 
-"adapter proof (#{String.length(proof)} bytes): " <> String.slice(proof, 0, 32) <> "…"
+"✍️ adapter signed the PROOF (#{byte_size(proof)} bytes), binding the grant to this report. " <>
+  "The grant passed through untouched."
 ```
 
 ## Role 3 — VERIFIER: check the envelope  (any party with the public protocol package)
 
-The verifier (or any third party) verifies grant + proof against published keys, fully
-offline. The verifier reconstructs what it expects the proof to bind, and `check_envelope`
-checks both signatures + every binding.
+The verifier (or any third party) verifies grant + proof against **published keys only**,
+fully offline. It reconstructs what it expects the proof to bind; `check_envelope` checks both
+signatures and every binding.
 
 ```elixir
 expected = %V1.ExpectedRequest{
@@ -147,12 +170,15 @@ expected = %V1.ExpectedRequest{
 }
 
 case V1.check_envelope(%V1.Credentials{grant: grant_compact, proof: proof}, expected) do
-  {:ok, facts} -> "✅ VERIFIED — operation=#{facts.operation}, grant=#{String.slice(facts.grant_id, 0, 16)}…"
-  {:error, :invalid} -> "❌ rejected"
+  {:ok, _facts} ->
+    "✅ VERIFIED — the grant is genuine, the proof matches this report, the holder is the one the grant was issued to."
+
+  {:error, :invalid} ->
+    "❌ rejected"
 end
 ```
 
-## Now break it — a tampered proof is rejected
+## Now prove the crypto is real — flip one byte of the proof
 
 ```elixir
 [protected, payload, sig_b64] = String.split(proof, ".")
@@ -161,14 +187,15 @@ flipped = Base.url_encode64(<<sig_bytes::binary, Bitwise.bxor(last, 1)>>, paddin
 tampered_proof = [protected, payload, flipped] |> Enum.join(".")
 
 case V1.check_envelope(%V1.Credentials{grant: grant_compact, proof: tampered_proof}, expected) do
-  {:ok, _} -> "❌ UNEXPECTED — a tampered proof verified (BUG)"
-  {:error, :invalid} -> "✅ tampered proof rejected"
+  {:ok, _} -> "❌ UNEXPECTED — a tampered proof verified (that would be a bug)"
+  {:error, :invalid} -> "✅ tampered proof REJECTED — one flipped byte breaks the signature"
 end
 ```
 
-## And break it — a proof the grant was NOT bound to is rejected
+## And prove the binding is real — a proof from a *different* holder key
 
-A different holder key (the grant was issued to the original holder's thumbprint, not this one).
+The grant was issued to the original holder's thumbprint. A proof signed by a completely different
+key must be rejected (otherwise anyone could forge a proof for someone else's grant).
 
 ```elixir
 {wrong_pub, wrong_priv} = :crypto.generate_key(:eddsa, :ed25519, <<9::256>>)
@@ -180,28 +207,25 @@ A different holder key (the grant was issued to the original holder's thumbprint
   )
 
 case V1.check_envelope(%V1.Credentials{grant: grant_compact, proof: wrong_proof}, expected) do
-  {:ok, _} -> "❌ UNEXPECTED — a wrong-key proof verified (BUG)"
-  {:error, :invalid} -> "✅ wrong-key proof rejected"
+  {:ok, _} -> "❌ UNEXPECTED — a stranger's proof verified (that would be a bug)"
+  {:error, :invalid} -> "✅ stranger's proof REJECTED — the proof must come from the holder the grant was issued to"
 end
 ```
 
-## What just happened / what the adapter is (and isn't)
+## What just happened
 
-- **The adapter signed a proof** (Role 2) — that is its entire job. One function, `sign_report/3`.
-- **The grant was minted by something else** (Role 1) — in production the `bounded_authority`
-  runtime. The adapter takes the grant as an **input** and never signs it.
-- **The verification was done by the public protocol package** (Role 3) — `check_envelope/2`,
-  which any party (verifier application, a third party, this notebook) can call without depending on this
-  adapter.
-- **Tamper + wrong-key both fail closed** — the crypto bindings are real and non-vacuous.
+| Role | Who does it in production | What runs here |
+|---|---|---|
+| **Issuer** | the `bounded_authority` runtime | a demo cell (so there's a grant to sign over) |
+| **Holder** | the edge agent, using **this adapter** | `sign_report/3` ← the adapter's one job |
+| **Verifier** | the verifier / any third party | the public `check_envelope/2` |
 
-So: a **self-contained signing library** that produces capability envelopes any public-package
-verifier accepts. It is **not** standalone (it sits on the protocol package's format, by design)
-and it is **not** a verifier or an issuer — it is the holder-side signer, reusable by whichever
-party holds the right key.
+So this library is a **self-contained signing helper**: it takes a grant + a report + a key-handle,
+and returns a capability envelope any public-package verifier accepts. It is **not** a verifier,
+**not** an issuer, **not** a transport, **not** a database.
 
-> A real consumer (verifier application's report path) does **two more things** this demo skips because they
-> are the *consumer's* job, not the adapter's: (a) bind the verified envelope to the authenticated
-> reporter so a captured envelope can't be replayed cross-identity (see `docs/consumer-integration.md`
-> §8); (b) dedupe nonces against a replay ledger (`§9`). The adapter produces the bytes; the
-> consumer binds + persists + dedupes.
+> **A real consumer does two more things this demo skips**, because they're the *consumer's* job,
+> not the adapter's: (a) bind the verified envelope to the authenticated reporter so a captured
+> envelope can't be replayed under a different identity (`docs/consumer-integration.md` §8); and
+> (b) dedupe nonces against a replay ledger (§9). The adapter produces the bytes; the consumer
+> binds + persists + dedupes. That's the only place a database enters — and it's not here.
