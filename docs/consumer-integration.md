@@ -123,3 +123,38 @@ minimizes the injection surface. Both cases fail closed.
 Record which scheme verified a durable row (a `signature_scheme` column carrying `ba_protocol_v1`
 vs the legacy value), set by the plug from a crypto-verified assign — never from a wire/body field
 (a reporter cannot self-label). A future verifier knows which envelope signed each row.
+
+## 8. Bind the envelope to the authenticated identity (REQUIRED — cross-identity replay)
+
+`check_envelope` verifies the grant + proof cryptographically — it proves *some* holder holds a
+valid grant bound to the report. It does NOT prove the holder is the identity your transport
+authenticated (the api_key / reporter / tenant). A captured envelope (the grant + proof ride every
+report as headers) is **replayable under a different authenticated identity**: the verifier accepts
+the valid envelope, and if your replay-protection is keyed to the transport identity (e.g. a per-org
+nonce ledger), it does not collide cross-identity → the captured envelope is accepted once per
+identity, writing the original body into the replaying identity's scope. This is a real
+cross-tenant/cross-identity authorization gap; the transport-authenticated identity must be bound
+to the verified capability.
+
+**The binding (DPoP-shaped):** the grant is issued to a holder key thumbprint (`cnf.jkt`); the
+identity you authenticate (the reporter) holds an Ed25519 key. Bind them: after `check_envelope`
+succeeds, assert the grant's bound holder thumbprint (`EnvelopeFacts.holder_thumbprint`) equals the
+thumbprint of the authenticated identity's own key. Then a captured envelope verifies ONLY for the
+identity whose key the grant was issued to — a replay under a different identity's api_key is
+rejected (different key ⇒ thumbprint mismatch ⇒ `:invalid` ⇒ the uniform reject). This restores
+parity with a body-signature scheme (which is bound to the reporter's key by construction).
+
+```elixir
+with {:ok, facts} <- V1.check_envelope(credentials, expected),
+     # the grant's bound holder must be THIS authenticated identity's key, not just "some holder"
+     :ok <- bind_to_authenticated_identity?(facts.holder_thumbprint, authenticated_identity) do
+  :ok
+else _ -> :invalid end
+```
+
+verifier application instance #1 implements this: the reporter's stored Ed25519 key (the same one the S1 body-
+signature verifies against) IS the BA holder key, and `ReportSignature` asserts
+`facts.holder_thumbprint == thumbprint(reporter.eddsa_public_key)` (a cross-identity-replay
+tripwire proves it red). A consumer that does NOT bind the envelope to the authenticated identity
+carries the cross-identity-replay gap — do not enable BA without this binding.
+
