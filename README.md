@@ -7,6 +7,11 @@
 > See [ADR-0006](docs/adr/0006-universal-companion-signer.md). **Consuming an envelope** (a
 > verifier's side of the contract, no adapter dependency) is documented in
 > [docs/consumer-integration.md](docs/consumer-integration.md).
+>
+> **Where this fits:** this is the holder-side signer SDK in BaseLabs's commercial agent-authority
+> platform. For the one-page product picture, see
+> [`bounded_authority` → overview](https://github.com/baselabs/bounded_authority/blob/master/docs/strategy/overview.html)
+> (HTML) or [overview.md](https://github.com/baselabs/bounded_authority/blob/master/docs/strategy/overview.md).
 
 **Private BaseLabs library.** Not published to hex. Consumed by BaseLabs projects
 (verifier application's report path, and future edge agents / any signing party) as a private git dep.
