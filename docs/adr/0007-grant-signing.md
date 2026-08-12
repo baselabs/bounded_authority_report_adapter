@@ -68,7 +68,11 @@ with `sign/2`, `public_key/1`, `thumbprint/1` required and `key_identity/1` opti
    distinct custodied entities) is the key-custody boundary's job — the runtime / HSM /
    key server behind the handle (charter §4). The library's C1 obligation is narrower:
    the library's own API does not provide a path for a handle that declares the holder
-   role to sign a grant.
+   role to sign a grant. The strengthening path — a BA-signed role-attestation that closes
+   this residual by binding the role to a BA authority key (not a handle self-declaration) —
+   is evaluated in [ADR-0008](0008-role-attestation-direction.md); note that residual is
+   defense-in-depth, not an open forge (BAP's verifier-side `TrustedIssuer` key check
+   already rejects a holder-key-signed grant).
 
 ## Consequences
 
