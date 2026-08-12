@@ -40,10 +40,10 @@ defmodule BoundedAuthorityReportAdapter do
     * `sign/2`, `public_key/1` — required for every signing operation.
     * `thumbprint/1` — required (exposed for caller-side self-checking).
     * `key_identity/1` — **optional** (declared via `@optional_callbacks`); required
-      only by `sign_anchor/3`, which resolves the key's registry id (`kid`) AND its
-      public key as ONE atomic snapshot (defense-in-depth: prevents a stateful
-      handle from splitting them across a rotation race). A proof-only handle need
-      not implement it.
+      by `sign_anchor/3` and `sign_key_transition/3`, which resolve the key's registry
+      id (`kid`) AND its public key as ONE atomic snapshot (defense-in-depth: prevents a
+      stateful handle from splitting them across a rotation race). A proof-only handle
+      need not implement it.
     * `signing_identity/1` — **optional**; required only by `sign_grant/3`, which
       resolves the key's **role** (`:issuer` or `:holder`) AND its registry id AND
       public key as ONE atomic snapshot. The role gate (C1) + the rotation-race
@@ -791,8 +791,9 @@ defmodule BoundedAuthorityReportAdapter do
   # Coerce a non-map opts (a caller bug) to the empty map rather than crashing with a
   # value-echoing BadMapError inside Map.get/3 — the closed-atom error discipline. opts is
   # caller-supplied config (bounds windows, timestamps); a non-map is a type violation per
-  # every *_opts() @spec, and the defaults are a safe fallback. Applied to all three sign_*
-  # entry points (sign_report/3, sign_anchor/3, sign_grant/3) — the same contract everywhere.
+  # every *_opts() @spec, and the defaults are a safe fallback. Applied to all four sign_*
+  # entry points (sign_report/3, sign_anchor/3, sign_grant/3, sign_key_transition/3) — the
+  # same contract everywhere.
   defp normalize_opts(opts) when is_map(opts), do: opts
   defp normalize_opts(_opts), do: %{}
 
