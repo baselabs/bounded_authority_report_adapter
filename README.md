@@ -80,7 +80,11 @@ holder/sign → verifier) in one notebook and proves a tampered or wrong-key pro
   rejected before signing). Recorded in ADR-0007.
 
 Remaining: RA8 (key-transition signing), RA9 (edge-agent reference), RA10
-(cross-language verifier). See `docs/ROADMAP.md`.
+(cross-language verifier), RA11 (role-attestation consumption — **cross-repo**:
+gated on BAP defining `RoleAttestation` + `verify_attestation/2` and BA issuing
+attestations; BARA's piece is the `sign_grant` input + the BAP verify-call. See
+[ADR-0008](docs/adr/0008-role-attestation-direction.md) for the direction + the
+three-repo split). See `docs/ROADMAP.md`.
 
 ## Installation (private git dep)
 
