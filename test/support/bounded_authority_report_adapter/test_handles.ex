@@ -283,6 +283,95 @@ defmodule RacingKeyIdentityHandle do
 end
 
 # ---------------------------------------------------------------------------
+# RA8 transition handles — like the anchor handles, they implement key_identity/1
+# (the optional callback sign_key_transition/3 resolves as the atomic {key_id,
+# public_key} snapshot). Role-agnostic: NO signing_identity/1 (the transition is a
+# historical-key operation, not a role-gated one — see ADR-0009). RawKey (the holder/
+# anchor reference) already implements key_identity/1 -> {"test-anchor-key-001", pub},
+# so it is the happy-path transition handle; the modules below exercise the failure /
+# tripwire paths (wrong-key, capturing, exit, atomic-snapshot drift).
+# ---------------------------------------------------------------------------
+
+defmodule TransitionCapturingKeyHandle do
+  alias BoundedAuthorityProtocol.V1.Jwk
+
+  @moduledoc """
+  Captures the message handed to sign/2 — the no-canonical-bytes-fork tripwire for
+  sign_key_transition/3. Implements key_identity/1 so sign_key_transition reaches sign/2.
+  """
+  @key {__MODULE__, :message}
+
+  def sign(message, {_public_key, private_key}) do
+    Process.put(@key, message)
+    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+  end
+
+  def public_key({public_key, _private_key}), do: {:ok, public_key}
+
+  def thumbprint({public_key, _private_key}) do
+    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    {:ok, raw}
+  end
+
+  def key_identity({public_key, _private_key}), do: {:ok, {"test-anchor-key-001", public_key}}
+
+  def captured_message, do: Process.get(@key)
+end
+
+defmodule TransitionWrongKeyHandle do
+  @moduledoc """
+  key_identity/1 returns the handle's pub A; sign/2 signs with a DIFFERENT key B (a
+  rotation/misconfiguration race). The verify_signature guard in the shared tail must
+  reject this -> :signing_failed (the mirror of AnchorWrongKeyHandle).
+  """
+
+  def public_key({public_key, _private_key}), do: {:ok, public_key}
+
+  def sign(message, _handle) do
+    {_other_pub, other_priv} = :crypto.generate_key(:eddsa, :ed25519, <<88::256>>)
+    {:ok, :crypto.sign(:eddsa, :ed25519, message, [other_priv, :ed25519])}
+  end
+
+  def key_identity({public_key, _private_key}), do: {:ok, {"test-anchor-key-001", public_key}}
+end
+
+defmodule TransitionExitingKeyHandle do
+  @moduledoc """
+  key_identity/1 calls exit/1 (a simulated HSM/key-server timeout). safe_callback's
+  catch clause must contain it -> :invalid_key_handle, not a crash (mirror of
+  AnchorExitingKeyHandle).
+  """
+  def public_key({_public_key, _private_key}), do: exit(:simulated_hsm_timeout)
+  def sign(_message, _handle), do: exit(:simulated_hsm_timeout)
+  def key_identity(_handle), do: exit(:simulated_hsm_timeout)
+end
+
+defmodule TransitionRacingKeyIdentityHandle do
+  @moduledoc """
+  Defense-in-depth tripwire for the atomic `key_identity/1` snapshot (the transition
+  analogue of RacingKeyIdentityHandle). `key_identity/1` returns a consistent
+  `{key_id, pub_a}` snapshot, then flips internal state so `sign/2` signs with priv_b
+  (a simulated post-snapshot rotation). The atomic snapshot means key_id+public_key
+  cannot drift apart; the `verify_signature` guard catches the sign/2-vs-snapshot
+  mismatch -> `:signing_failed`.
+
+  The handle term is an `Agent` pid whose state is
+  `%{key_id:, pub_a:, priv_a:, priv_b:, rotated:}`.
+  """
+  def key_identity(pid) do
+    Agent.get_and_update(pid, fn s -> {{:ok, {s.key_id, s.pub_a}}, %{s | rotated: true}} end)
+  end
+
+  def sign(message, pid) do
+    priv = Agent.get(pid, fn s -> if s.rotated, do: s.priv_b, else: s.priv_a end)
+    {:ok, :crypto.sign(:eddsa, :ed25519, message, [priv, :ed25519])}
+  end
+
+  def public_key(_pid), do: {:ok, <<0::256>>}
+  def thumbprint(_pid), do: {:ok, <<0::256>>}
+end
+
+# ---------------------------------------------------------------------------
 # RA7 grant handles — implement signing_identity/1 (the optional callback sign_grant/3
 # resolves as the atomic {role, key_id, public_key} snapshot + the C1 role gate).
 # GrantIssuerHandle is the issuer-role reference; the others exercise the failure /

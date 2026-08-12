@@ -47,7 +47,7 @@ app runs the full loop over **real HTTP** (agent signs + POSTs → receiver veri
 
 ## Status
 
-**RA1–RA7, RA9 shipped** (2026-08-09 → 2026-08-11):
+**RA1–RA9 shipped** (2026-08-09 → 2026-08-12):
 
 - **RA1 — envelope signing.** `sign_report/3` binds an issuer-signed grant to a
   application report by producing a holder proof, returning the grant + proof envelope
@@ -80,6 +80,13 @@ app runs the full loop over **real HTTP** (agent signs + POSTs → receiver veri
   `signing_identity/1` must resolve to the `:issuer` role — the C1 gate
   (ADR-0006's grant-signing pre-commitment; a `:holder` or roleless handle is
   rejected before signing). Recorded in ADR-0007.
+- **RA8 — key-transition signing.** `sign_key_transition/3` signs a key transition
+  (the current retiring key's assertion of its successor), round-tripping through
+  `verify_key_transition/4`. The 4th instantiation — **role-agnostic, mirroring
+  `sign_anchor/3`, NOT `sign_grant/3`**: the current key's identity is resolved
+  atomically via `key_identity/1` (no issuer-role gate; the verify path is
+  `HistoricalPublicKey`-shaped, like the anchor). The four named instantiations
+  (proof, anchor, grant, key-transition) are complete. Recorded in ADR-0009.
 - **RA9 — edge-agent reference.** A runnable mix app at
   [`examples/edge_agent/`](examples/edge_agent/) that signs a report via
   `sign_report/3` and POSTs it over HTTP to a receiver verifying via
@@ -87,13 +94,13 @@ app runs the full loop over **real HTTP** (agent signs + POSTs → receiver veri
   thing the Agent Studio provisions. The receiver implements the full consumer
   contract (identity binding §8 + nonce dedup §9) and depends only on BAP.
 
-Remaining: RA8 (key-transition signing), RA10 (cross-language verifier — **out of
-BARA's scope**: BARA is the Elixir holder-side signing adapter; a cross-language
-verifier validates BAP's portable format, not this adapter, and anchors to BAP's
-conformance corpus — see `docs/ROADMAP.md`), RA11 (role-attestation consumption —
-**cross-repo**: gated on BAP defining `RoleAttestation` + `verify_attestation/2`
-and BA issuing attestations; BARA's piece is the `sign_grant` input + the BAP
-verify-call. See [ADR-0008](docs/adr/0008-role-attestation-direction.md) for the
+Remaining: RA10 (cross-language verifier — **out of BARA's scope**: BARA is the
+Elixir holder-side signing adapter; a cross-language verifier validates BAP's
+portable format, not this adapter, and anchors to BAP's conformance corpus — see
+`docs/ROADMAP.md`), RA11 (role-attestation consumption — **cross-repo**: gated on
+BAP defining `RoleAttestation` + `verify_attestation/2` and BA issuing
+attestations; BARA's piece is the `sign_grant` input + the BAP verify-call. See
+[ADR-0008](docs/adr/0008-role-attestation-direction.md) for the
 direction + the three-repo split). See `docs/ROADMAP.md`.
 
 ## Installation (private git dep)
@@ -115,7 +122,7 @@ git dep). Both repos must be reachable from the consumer's build environment.
 
 ```bash
 mix deps.get          # fetches bounded_authority_protocol
-mix test              # 87 tests (sign_report + sign_anchor + sign_grant + conformance + dep-direction)
+mix test              # 97 tests (sign_report + sign_anchor + sign_grant + sign_key_transition + conformance + dep-direction)
 mix compile --warnings-as-errors
 mix credo
 ```
