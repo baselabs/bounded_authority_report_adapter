@@ -9,6 +9,22 @@ minor bumps (pre-1.0 freedom per SemVer).
 
 ## [Unreleased]
 
+### Changed — 2026-08-12 BAP pin bump (v0.1.0)
+
+- Bumped the `bounded_authority_protocol` pin from `4c64be3` to v0.1.0
+  (`c65d3bea` — BAP's "internal reference tag (release candidate)" cut for internal
+  consumer pinning). v0.1.0 is 73 commits ahead of the prior pin; the span is ADRs
+  0009–0014 + conformance-corpus growth + CI — **zero V1 `lib/` changes** (the V1
+  signing surface BARA compiles against is identical).
+- BARA's pin now leads BA's (BA still pins `4c64be3`). The RA3 dependency-direction
+  test's rationale is narrowed to permit this: BARA tracks BA's pin by default; a
+  BARA-only bump ahead of BA is allowed ONLY when BAP's advance is verifiably
+  docs/corpus-only with zero V1 `lib/` changes (`git diff --stat <ba-pin>..<bara-pin>
+  -- lib/` empty) — which this bump satisfies. BARA re-aligns to BA when BA bumps.
+- RA2's conformance round-trip passes against v0.1.0's larger published corpus (no new
+  vector case diverges); RA3 passes at the new ref. `examples/edge_agent/mix.lock`
+  tracks the new ref transitively. 98 library tests + 6 example tests green.
+
 ### Added — 2026-08-09 scaffold
 
 - Project scaffolded (`mix new --sup`, then trimmed to a library): mix.exs wired

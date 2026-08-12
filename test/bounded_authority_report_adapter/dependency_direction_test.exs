@@ -51,10 +51,25 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   use ExUnit.Case, async: false
 
   # The ALLOWED public protocol package the adapter MUST declare (the trust root for the
-  # wire profile). Pinned to the SAME ref BA pins — drifting ahead couples the adapter to a
-  # protocol surface the authority layer has not validated.
+  # wire profile). DEFAULT: pinned to the SAME ref BA pins — drifting ahead couples the
+  # adapter to a protocol surface the authority layer has not validated.
+  #
+  # NARROW EXCEPTION: BARA may bump its pin ahead of BA ONLY when BAP's advance is
+  # verifiably docs/corpus-only with ZERO V1 `lib/` changes (no surface the authority
+  # layer needs to validate) — proven by `git diff --stat <ba-pin>..<bara-pin> -- lib/`
+  # being empty. The current pin (v0.1.0, c65d3bea) is 73 commits ahead of BA's pin
+  # (4c64be3) and carries ZERO V1 lib/ changes — BAP's advance over that span is ADRs
+  # (0009-0014) + conformance corpus + CI only. When BA bumps to a newer ref, BARA
+  # re-aligns to it. (BA's pin is in ../bounded_authority/mix.exs — verify the
+  # git-diff-empty condition before any further BARA-ahead bump.)
+  #
+  # ENFORCEMENT NOTE: this exception is REVIEWER DISCIPLINE, not a mechanical check
+  # here — BA's pin lives in a sibling repo this test cannot reach, so the wall asserts
+  # ONLY that mix.exs/mix.lock carry @protocol_ref (below); it does NOT re-derive the
+  # empty-V1-lib-diff condition or compare against BA's live pin. A future bumper MUST
+  # run the git-diff check by hand and state it in the commit, or re-align to BA's pin.
   @protocol_app "bounded_authority_protocol"
-  @protocol_ref "4c64be36ada1c167214471847d4061ea5ff63c56"
+  @protocol_ref "c65d3bea37b08da631423bcfe2a12fa0f669933d"
 
   # Forbidden dep-app atoms — form-precise regex so prose does not false-positive (design
   # §1.4). A REAL dep is the tuple `{:bounded_authority, …}` / `{:replicant, …}` /
@@ -153,16 +168,16 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
                "trust root — charter §6 invariant 3; strategy §3)"
     end
 
-    test "mix.exs pins the SAME ref BA pins (no drift ahead of the authority layer)" do
+    test "mix.exs pins the protocol package at @protocol_ref" do
       mix_exs = File.read!("mix.exs")
 
       assert String.contains?(mix_exs, @protocol_ref),
              "mix.exs must pin the protocol package to ref #{@protocol_ref} " <>
-               "(the SAME ref the BA runtime pins — drifting ahead couples the adapter to a " <>
-               "protocol surface the authority layer has not validated)"
+               "(BARA's deliberate pin — tracks BA's by default; a BARA-ahead bump is " <>
+               "permitted only under the NARROW EXCEPTION in the @protocol_ref comment block)"
     end
 
-    test "mix.lock resolves the protocol package at BA's ref" do
+    test "mix.lock resolves the protocol package at @protocol_ref" do
       mix_lock = File.read!("mix.lock")
 
       assert String.contains?(mix_lock, @protocol_ref),
