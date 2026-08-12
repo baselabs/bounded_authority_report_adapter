@@ -47,7 +47,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
     [
       {:bounded_authority_protocol,
        git: "https://github.com/baselabs/bounded_authority_protocol.git",
-       ref: "4c64be36ada1c167214471847d4061ea5ff63c56"},
+       ref: "c65d3bea37b08da631423bcfe2a12fa0f669933d"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false}
     ]
