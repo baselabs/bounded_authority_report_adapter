@@ -101,6 +101,33 @@ minor bumps (pre-1.0 freedom per SemVer).
 - The same round-trip is CI-covered by RA1's `sign_report_test.exs`; the notebook is the human
   view, not a CI gate.
 
+### Added — RA8 (2026-08-12) key-transition signing
+
+- `sign_key_transition/3` — the 4th instantiation of the universal companion-signer tail
+  (ADR-0006; recorded in ADR-0009). Signs a `KeyTransition` (the current retiring key's
+  assertion of its successor), returning `%{key_transition: compact}`, verifiable via
+  `BoundedAuthorityProtocol.V1.verify_key_transition/4`.
+- **Role-agnostic, mirroring `sign_anchor/3` — NOT `sign_grant/3`.** The current key's
+  identity is resolved atomically via the existing `key_identity/1` callback; there is NO
+  issuer-role gate (a transition is a historical-key operation, verified via
+  `HistoricalPublicKey`). The C1 gate stays grant-only, exactly as ADR-0007 §Decision 4
+  scoped it. A fresh-context design-adversarial pass reversed the first draft (which had
+  gated on `:issuer`): the draft's "ADR-0006 §grant-signing pre-commitment generalized"
+  was a phantom citation, and the verify contract is anchor-shaped. The rejected alternative
+  is recorded in full in ADR-0009.
+- `current_{key_id, public_key}` come from the atomic `key_identity/1` snapshot;
+  `next_{key_id, public_key}` + content are caller-supplied. `next_public_key` is pre-checked
+  for 32 bytes (the adapter's public-key guard); a self-transition is rejected by BAP's
+  `distinct_fingerprints`.
+- `test/bounded_authority_report_adapter/sign_key_transition_test.exs` — 10 tests: the
+  round-trip through `verify_key_transition/4` + wrong-key, atomic-snapshot drift,
+  no-canonical-bytes-fork, defect-injection, self-transition, missing-field, non-32-byte
+  next key, exiting handle, and roleless-handle rejection. Wrong-key + racing tripwires
+  are mutation-proven (disabling `verify_signature` drives them RED). Four transition
+  handles in `test_handles.ex`.
+- The four named companion-signer instantiations are complete (proof, anchor, grant,
+  key-transition).
+
 ### Added — RA9 (2026-08-11) edge-agent reference app
 
 - `examples/edge_agent/` — a runnable mix app (its own project; the adapter is a

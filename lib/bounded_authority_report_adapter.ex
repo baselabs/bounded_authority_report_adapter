@@ -22,9 +22,14 @@ defmodule BoundedAuthorityReportAdapter do
       a grant (the issuer's authority assertion), returning the compact a verifier
       checks via `verify_grant/3`. The handle's `signing_identity/1` must resolve to
       the `:issuer` role (the C1 gate — ADR-0006's grant-signing pre-commitment).
+    * **Key-transition signing** (`sign_key_transition/3`, RA8) — the 4th instantiation:
+      signs a key transition (the current retiring key's assertion of its successor),
+      returning the compact a verifier checks via `verify_key_transition/4`. Role-agnostic
+      (mirrors `sign_anchor/3`, NOT `sign_grant/3`): the current key's identity is resolved
+      atomically via `key_identity/1` — see ADR-0009.
 
-  The pattern generalizes to any BAP protocol object; key-transition signing is the
-  one remaining named future slice (see ADR-0006 / ADR-0007).
+  The pattern generalizes to any BAP protocol object; the four named instantiations
+  (proof, boundary-anchor, grant, key-transition) are complete.
 
   ## The key-handle contract (charter §6 invariant 1)
 
@@ -131,6 +136,26 @@ defmodule BoundedAuthorityReportAdapter do
 
   @type grant_sign_error ::
           :invalid_grant
+          | :invalid_key_handle
+          | :signing_failed
+          | {:producer_error, :invalid}
+
+  @type transition_input :: %{
+          transition_id: binary(),
+          chain_id: binary(),
+          effective_at: integer(),
+          next_key_id: binary(),
+          next_public_key: binary()
+        }
+
+  @type transition_opts :: %{
+          optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map()
+        }
+
+  @type transition_compact :: %{key_transition: binary()}
+
+  @type transition_sign_error ::
+          :invalid_transition
           | :invalid_key_handle
           | :signing_failed
           | {:producer_error, :invalid}
@@ -315,6 +340,63 @@ defmodule BoundedAuthorityReportAdapter do
          {:ok, signing_input} <- produce_grant_signing_input(grant, bounds),
          {:ok, grant_compact} <- sign_and_assemble(key_handle, signing_input, public_key) do
       {:ok, %{grant: grant_compact}}
+    end
+  end
+
+  @doc """
+  Signs a key transition — the current (retiring) key's assertion of its successor.
+  The 4th instantiation of the universal companion-signer tail (ADR-0006; recorded in
+  ADR-0009), mirroring `sign_anchor/3`: role-agnostic, the current key's identity resolved
+  atomically via `key_identity/1`. Returns `%{key_transition: compact}`, verifiable via
+  `BoundedAuthorityProtocol.V1.verify_key_transition/4`.
+
+  ## Role posture (why this mirrors sign_anchor/3, not sign_grant/3)
+
+  A key transition is a historical-key operation (an artifact of the key chain), verified
+  via `HistoricalPublicKey` — the same role-neutral input `verify_historical_anchor/3`
+  takes. The transition's authenticity is guaranteed by the signature against
+  `current_key.public_key`, not by a role binding; "the right key" is the current key
+  (charter §5). The adapter signs for whichever party holds it, per ADR-0006's universal
+  posture. The deployment reality (the retired key is an issuer key) is a custody property,
+  not something a signing-side role gate adds to — the verifier-side `HistoricalPublicKey`
+  check is the authority binding. See ADR-0009 §Decision.
+
+  ## Key-identifier sourcing (ADR-0006 decision 3)
+
+  `current_{key_id, public_key}` come from ONE atomic `key_identity/1` snapshot (the
+  signing key IS the retiring current key; same as `sign_anchor/3`'s kid+pub). A
+  caller-supplied `:current_key_id` / `:current_public_key` is ignored.
+  `next_{key_id, public_key}` are caller-supplied (the successor).
+
+  ## Options
+
+    * `:bounds` — resource ceilings forwarded to the producer (default `%{}`).
+
+  ## Errors (closed-atom set — no key material or transition content in errors)
+
+    * `:invalid_transition` — a required content field is missing, or `next_public_key` is
+      not a 32-byte Ed25519 key.
+    * `:invalid_key_handle` — the handle is malformed, lacks `key_identity/1`, or its
+      `key_identity/1` rejected / returned an invalid value.
+    * `:signing_failed` — `sign/2` rejected, returned a non-64-byte signature, violated the
+      `{:ok, _} | {:error, _}` contract, or the signature did not verify against the
+      snapshot's `public_key`.
+    * `{:producer_error, :invalid}` — BAP's producer or assembler rejected the transition
+      (e.g. a self-transition where `next_public_key == current_public_key`, which BAP's
+      `distinct_fingerprints` check rejects).
+  """
+  @spec sign_key_transition(transition_input(), key_handle(), transition_opts()) ::
+          {:ok, transition_compact()} | {:error, transition_sign_error()}
+  def sign_key_transition(transition_input, key_handle, opts \\ %{}) do
+    opts = normalize_opts(opts)
+    bounds = Map.get(opts, :bounds, %{})
+
+    with {:ok, {current_key_id, current_public_key}} <- resolve_key_identity(key_handle),
+         {:ok, transition} <-
+           build_key_transition(transition_input, current_key_id, current_public_key),
+         {:ok, signing_input} <- produce_key_transition_signing_input(transition, bounds),
+         {:ok, compact} <- sign_and_assemble(key_handle, signing_input, current_public_key) do
+      {:ok, %{key_transition: compact}}
     end
   end
 
@@ -615,6 +697,69 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
+  # The transition's content is validated for presence + shape HERE (clean :invalid_transition
+  # on a missing/malformed field; next_public_key is pre-checked for 32 bytes — design Q7: the
+  # adapter pre-checks PUBLIC KEYS for 32 bytes, the way resolve_public_key/1 +
+  # resolve_key_identity/1 do; digests like grant's holder_thumbprint defer to BAP). BAP's
+  # producer validates SEMANTICS — identifier grammar, time bounds, and distinct_fingerprints
+  # (a self-transition where next_public_key == current_public_key surfaces here as
+  # {:producer_error, :invalid}). current_{key_id, public_key} come from the handle's atomic
+  # key_identity/1 snapshot (the _current_* params), so a caller :current_key_id /
+  # :current_public_key smuggled into the map is silently ignored (ADR-0006 decision 3).
+  defp build_key_transition(transition_input, current_key_id, current_public_key)
+       when is_map(transition_input) do
+    with {:ok, transition_id} <- required_transition_binary(transition_input, :transition_id),
+         {:ok, chain_id} <- required_transition_binary(transition_input, :chain_id),
+         {:ok, effective_at} <- required_transition_integer(transition_input, :effective_at),
+         {:ok, next_key_id} <- required_transition_binary(transition_input, :next_key_id),
+         {:ok, next_public_key} <- required_transition_public_key(transition_input) do
+      {:ok,
+       %BoundedAuthorityProtocol.V1.KeyTransition{
+         transition_id: transition_id,
+         chain_id: chain_id,
+         effective_at: effective_at,
+         current_key_id: current_key_id,
+         current_public_key: current_public_key,
+         next_key_id: next_key_id,
+         next_public_key: next_public_key
+       }}
+    end
+  end
+
+  defp build_key_transition(_transition_input, _current_key_id, _current_public_key),
+    do: {:error, :invalid_transition}
+
+  defp required_transition_binary(transition_input, key) do
+    case Map.fetch(transition_input, key) do
+      {:ok, value} when is_binary(value) -> {:ok, value}
+      _ -> {:error, :invalid_transition}
+    end
+  end
+
+  defp required_transition_integer(transition_input, key) do
+    case Map.fetch(transition_input, key) do
+      {:ok, value} when is_integer(value) -> {:ok, value}
+      _ -> {:error, :invalid_transition}
+    end
+  end
+
+  # next_public_key is a raw 32-byte Ed25519 public key (the successor). Pre-checked HERE
+  # (fail-fast :invalid_transition) rather than deferred to BAP's producer — public keys get
+  # the adapter's 32-byte guard (design Q7 principle).
+  defp required_transition_public_key(transition_input) do
+    case Map.fetch(transition_input, :next_public_key) do
+      {:ok, value} when is_binary(value) and byte_size(value) == 32 -> {:ok, value}
+      _ -> {:error, :invalid_transition}
+    end
+  end
+
+  defp produce_key_transition_signing_input(transition, bounds) do
+    case BoundedAuthorityProtocol.V1.key_transition_signing_input(transition, bounds) do
+      {:ok, signing_input} -> {:ok, signing_input}
+      {:error, :invalid} -> {:error, {:producer_error, :invalid}}
+    end
+  end
+
   defp sign_via_handle({module, handle}, message) do
     # `key_handle` shape is validated upstream by resolve_public_key/1 (the only
     # path here is through the `with` after a successful resolve), so the handle
@@ -704,11 +849,11 @@ defmodule BoundedAuthorityReportAdapter do
 
   @doc """
   Returns the key's identity — its registry `kid` AND its 32-byte raw Ed25519
-  public key — as a single atomic `{key_id, public_key}` snapshot. Required only
-  by `sign_anchor/3`, which resolves both in ONE call so a stateful handle
-  cannot split `kid` from `public_key` across a rotation race (defense-in-depth
-  at sign time; any `sign/2`-vs-snapshot mismatch is then caught by the
-  `verify_signature` guard). **Optional** callback — a proof-only handle (used
+  public key — as a single atomic `{key_id, public_key}` snapshot. Required by
+  `sign_anchor/3` and `sign_key_transition/3`, which resolve both in ONE call so a
+  stateful handle cannot split `kid` from `public_key` across a rotation race
+  (defense-in-depth at sign time; any `sign/2`-vs-snapshot mismatch is then caught by
+  the `verify_signature` guard). **Optional** callback — a proof-only handle (used
   only with `sign_report/3`) need not implement it.
   """
   @callback key_identity(handle :: term()) ::
