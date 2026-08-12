@@ -26,11 +26,31 @@ Livebook's account. The handoff that pointed at this work named the exact files:
 (`public_key_thumbprint_raw/2`). Build verifier/consumer calls from the struct
 defs + the function `@spec`s, not from prose.
 
-**Verify before you cite.** ADR numbers, ROADMAP rows, and "the standard says X"
-claims are all UNVERIFIED until you check the actual file. Two phantom citations
-bit a prior slice: a "Req per repo-root AGENTS.md" rule (no such rule existed)
-and "BAP ADR-0014/0015" (only ADRs 0001–0008 exist at the pinned ref). `ls
-deps/bounded_authority_protocol/docs/adr/` before you cite a BAP ADR number.
+**Verify before you cite — and check BAP/BA MAIN, not just BARA's pin.** ADR numbers,
+ROADMAP rows, and "the standard says X" claims are all UNVERIFIED until you check the actual
+file. Two layers matter and they drift:
+
+- **BARA's pinned ref** (`mix.exs`, currently `4c64be3`) — what BARA *compiles against*. The
+  contract surfaces above live here. Read `deps/bounded_authority_protocol/...` for the V1
+  struct/function defs BARA calls.
+- **BAP main + BA main** — what those projects have *decided/shipped*. BARA's pin lags main
+  (it was 84 commits behind at RA8 closeout; all docs/corpus/CI, zero V1 `lib/` changes — but
+  the *docs* drift is real). A BAP ADR may be ACCEPTED on main and ABSENT at BARA's pin.
+
+Lesson (paid for at RA8): a prior handoff cited "BAP ADR-0014/0015"; I checked only BARA's pin
+(ADRs 0001–0008 there), declared the citation phantom, and redirected RA10 to ADR-0005. Wrong
+layer — **ADR-0014 (`cross-language-verifier-sdks`) and ADR-0015 ARE accepted on BAP main.** The
+handoff author was citing main; I "corrected" them by checking the pin. `ls deps/.../docs/adr/`
+tells you what the PIN has; for what BAP has decided, check the sibling checkout:
+
+```
+../bounded_authority_protocol/   # BAP main — ADRs, ROADMAP, the conformance corpus, the spec
+../bounded_authority/            # BA main  — the runtime, key custody, issuance, the doc-map
+```
+
+Both are sibling repos under `BaseLabs/`. Before claiming "X is blocked on BAP/BA" or citing a
+BAP ADR, check the relevant sibling's main branch first-hand (`git log`, `ls docs/adr/`,
+`grep`), not just BARA's pin.
 
 ## The dependency-direction wall (RA3 — non-negotiable)
 
