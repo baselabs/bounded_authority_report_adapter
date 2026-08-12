@@ -143,8 +143,9 @@ minor bumps (pre-1.0 freedom per SemVer).
 - CI gains an `example` job compiling + testing the app, so a broken example is caught at the
   gate, not at provision time.
 - ROADMAP RA10 (cross-language verifier) narrowed: out of BARA's scope — a cross-language
-  verifier validates BAP's portable format (anchored to BAP's conformance corpus), not this
-  adapter; BARA's involvement is none. See `docs/ROADMAP.md`.
+  verifier validates BAP's portable format, owned by BAP per [BAP ADR-0014](https://github.com/baselabs/bounded_authority_protocol/blob/main/docs/adr/0014-cross-language-verifier-sdks.md)
+  (cross-language verifier SDKs, accepted; consuming the ADR-0005 conformance corpus), not
+  this adapter; BARA's involvement is none. See `docs/ROADMAP.md`.
 - `AGENTS.md` (new, repo-root) — the operational doc for AI coding agents editing this repo:
   the dependency wall, the two-project build + dual CI, the per-file floor (with the example-app
   test-file-warning nuance), the transport posture (Req/Bandit, incl. the Bandit ≥1.12 top-level
