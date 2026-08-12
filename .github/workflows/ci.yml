@@ -44,3 +44,42 @@ jobs:
 
       - name: Test (includes the conformance round-trip)
         run: mix test
+
+  example:
+    name: examples/edge_agent (Format · Compile · Credo · Test)
+    runs-on: ubuntu-latest
+
+    env:
+      # Same private-dep posture as the gate job: the example app pulls BAP
+      # transitively through the path-relative adapter dep.
+      MIX_ENV: test
+
+    defaults:
+      run:
+        working-directory: examples/edge_agent
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.20.2'
+          otp-version: '29'
+
+      - name: Configure git for private deps
+        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Install deps
+        run: mix deps.get
+
+      - name: Check formatting
+        run: mix format --check-formatted
+
+      - name: Compile (warnings as errors)
+        run: mix compile --warnings-as-errors
+
+      - name: Lint (credo)
+        run: mix credo --strict
+
+      - name: Test (the end-to-end round-trip + the four rejection classes)
+        run: mix test
