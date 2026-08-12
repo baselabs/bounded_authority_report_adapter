@@ -204,8 +204,9 @@ defmodule BoundedAuthorityReportAdapter.SignKeyTransitionTest do
     end
 
     test "a missing content field is :invalid_transition" do
-      # next_public_key omitted -> the 32-byte pre-check in build_key_transition fails fast.
-      bad_input = %{build_transition_input() | next_public_key: nil}
+      # next_public_key genuinely absent (Map.delete) -> required_transition_public_key/1's
+      # Map.fetch returns :error -> the 32-byte pre-check in build_key_transition fails fast.
+      bad_input = Map.delete(build_transition_input(), :next_public_key)
 
       assert {:error, :invalid_transition} =
                BoundedAuthorityReportAdapter.sign_key_transition(bad_input, current_handle(), %{})
@@ -237,6 +238,20 @@ defmodule BoundedAuthorityReportAdapter.SignKeyTransitionTest do
                  build_transition_input(),
                  {CountingKeyHandle, current_keypair()},
                  %{}
+               )
+    end
+  end
+
+  describe "opts normalization (closed-atom: a non-map opts coerces, never crashes)" do
+    # The guard-family rule: every sign_*/3 entry point that calls normalize_opts/1 carries
+    # this tripwire (sign_report/sign_anchor/sign_grant). sign_key_transition/3 is the fourth;
+    # removing its normalize_opts/1 call would go undetected without this test.
+    test "a non-map opts uses defaults instead of a value-echoing BadMapError" do
+      assert {:ok, _} =
+               BoundedAuthorityReportAdapter.sign_key_transition(
+                 build_transition_input(),
+                 current_handle(),
+                 :not_a_map
                )
     end
   end
