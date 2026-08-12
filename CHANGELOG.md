@@ -101,3 +101,29 @@ minor bumps (pre-1.0 freedom per SemVer).
 - The same round-trip is CI-covered by RA1's `sign_report_test.exs`; the notebook is the human
   view, not a CI gate.
 
+### Added — RA9 (2026-08-11) edge-agent reference app
+
+- `examples/edge_agent/` — a runnable mix app (its own project; the adapter is a
+  `path: "../.."` dep) that signs a application report via `sign_report/3` and POSTs it over HTTP (Req)
+  to a receiver (a Plug on Bandit) that verifies via `check_envelope/2`. The proof the adapter
+  works in a real deployment. The receiver implements the complete consumer contract — raw-body
+  decode, the one-`with` `check_envelope`, the §8 identity binding, the §9 nonce-dedup replay
+  ledger — and depends ONLY on `bounded_authority_protocol`, never on this adapter (the
+  dependency-direction wall, from the consumer side).
+- `examples/edge_agent/test/edge_agent_test.exs` — the end-to-end round-trip through real HTTP,
+  plus the four rejection classes (tampered proof, stranger's proof, wrong identity, replayed
+  nonce). The §8 binding and §9 ledger are mutation-proven non-vacuous.
+- CI gains an `example` job compiling + testing the app, so a broken example is caught at the
+  gate, not at provision time.
+- ROADMAP RA10 (cross-language verifier) narrowed: out of BARA's scope — a cross-language
+  verifier validates BAP's portable format (anchored to BAP's conformance corpus), not this
+  adapter; BARA's involvement is none. See `docs/ROADMAP.md`.
+- `AGENTS.md` (new, repo-root) — the operational doc for AI coding agents editing this repo:
+  the dependency wall, the two-project build + dual CI, the per-file floor (with the example-app
+  test-file-warning nuance), the transport posture (Req/Bandit, incl. the Bandit ≥1.12 top-level
+  options gotcha), and the read-BAP-first-hand / verify-before-citing mandate (closes the gap that
+  let two phantom citations — "Req per repo-root AGENTS.md" + "BAP ADR-0014/0015" — reach a prior
+  handoff). `docs/consumer-integration.md` + the example README cross-reference it; the parent
+  README Development section is refreshed (test count, dual-app note).
+
+

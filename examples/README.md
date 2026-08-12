@@ -1,8 +1,19 @@
 # Examples
 
-A self-contained, runnable demo of the adapter — **no database, no Docker, no other project
-running.** The adapter is pure crypto (it signs; it does not persist), so the demo needs no
+Self-contained, runnable demos of the adapter — **no database, no Docker, no other project
+running.** The adapter is pure crypto (it signs; it does not persist), so neither demo needs a
 backing store.
+
+## `edge_agent/` — a runnable end-to-end app (RA9)
+
+A minimal mix app that adds the piece the Livebook does not — **real HTTP transport** between
+an edge signer and a consumer. An **edge agent** calls `sign_report/3` and POSTs the envelope
+via Req to a **receiver** (a Plug on Bandit) that verifies via `check_envelope/2`, binds the
+holder to the configured identity (`docs/consumer-integration.md` §8), and dedupes nonces on a
+replay ledger (§9). A demo grant minter + an in-memory key-handle make the loop runnable with
+zero external services. CI-covered (`test/edge_agent_test.exs`).
+
+See [`edge_agent/README.md`](edge_agent/README.md) for how to run both sides.
 
 ## `report_envelope_roundtrip.livemd` — a Livebook
 

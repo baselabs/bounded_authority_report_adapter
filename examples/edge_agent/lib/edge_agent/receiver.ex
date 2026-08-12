@@ -1,0 +1,189 @@
+defmodule EdgeAgent.Receiver do
+  @moduledoc """
+  The consumer side of the BA envelope — a Plug served by Bandit that verifies a
+  `{grant, proof}` envelope via `BoundedAuthorityProtocol.V1.check_envelope/2`.
+
+  This module depends ONLY on the public `bounded_authority_protocol` package —
+  NEVER on `BoundedAuthorityReportAdapter`. That is the dependency-direction wall
+  (`docs/consumer-integration.md` §1): the verifier consumes the published
+  protocol package; the adapter is the holder-side signing glue the edge agent
+  uses, invisible to the receiver. A consumer who coupled to the adapter would
+  have built the wall backwards.
+
+  ## The complete safe path (consumer-integration.md §4 + §8 + §9)
+
+  ONE `with`, fail closed to a uniform `401`:
+
+    1. `V1.Json.decode(raw_body)` — decode the request's RAW bytes into BAP's
+       tagged `cast_arguments` (a BAP-strict decode catches Jason-valid-but-BAP-
+       invalid bodies: duplicate keys, number bounds).
+    2. `V1.check_envelope/2` — verify the grant + proof cryptographically against
+       the published issuer key + the reconstructed expected request.
+    3. Bind the verified envelope's `holder_thumbprint` to the configured
+       identity key (§8) — defeats cross-identity replay of a captured envelope.
+    4. Claim the nonce on the replay ledger (§9) — defeats same-identity replay
+       within the proof window.
+
+  Every failure collapses to the SAME `401 invalid` body (§5): an attacker learns
+  nothing about which factor failed.
+
+  ## Raw-body retention
+
+  This minimal receiver reads the body directly via `Plug.Conn.read_body/1` — no
+  `Plug.Parsers` competes for it (this pipeline has only the report route), so a
+  `body_reader` is unnecessary here. consumer-integration.md §2's `body_reader`
+  guidance applies to a pipeline that ALSO parses other routes behind
+  `Plug.Parsers`; this example has no such competing parser.
+
+  ## What the demo simplifies
+
+  In production the "authenticated identity" (step 3) is established by a
+  SEPARATE transport-auth layer (api_key, mTLS) and the ledger (step 4) is a
+  durable unique constraint. This demo uses a configured identity key as a
+  stand-in for the transport-auth layer and an ETS table for the ledger — enough
+  to demonstrate BOTH obligations are present and non-vacuous, which is the point.
+  """
+
+  @behaviour Plug
+
+  alias BoundedAuthorityProtocol.V1
+  alias BoundedAuthorityProtocol.V1.Jwk
+  alias EdgeAgent.Receiver.NonceLedger
+
+  @impl true
+  def init(opts) do
+    # Resolve the trusted issuer + expected-identity keys ONCE at server start
+    # (boot-validated), not per request: a malformed config fails loudly at boot
+    # rather than as a 401 storm. The expected identity is overridable per
+    # receiver instance (used by the wrong-identity tripwire test); the default is
+    # the configured holder key (the demo's stand-in for the transport identity).
+    %{
+      issuer_key_id: cfg(:issuer_key_id),
+      issuer: cfg(:issuer),
+      audience: cfg(:audience),
+      operation: cfg(:operation),
+      target_uri: cfg(:target_uri),
+      clock_skew: cfg(:clock_skew),
+      proof_max_age: cfg(:proof_max_age),
+      trusted_issuer_key: public_key(cfg(:issuer_seed)),
+      expected_identity_key: Keyword.get(opts, :expected_identity, public_key(cfg(:holder_seed)))
+    }
+  end
+
+  @impl true
+  def call(conn, config) do
+    # read_body/1 returns {:ok, body, conn} once the whole body is read,
+    # {:more, partial, conn} when it exceeded Plug's length limit (an oversize
+    # body for this demo — reject it), or {:error, reason} (a 2-tuple; the
+    # original conn is all we have). Each branch threads the conn it actually
+    # has so the 401 is written against the read-state Bandit expects.
+    case Plug.Conn.read_body(conn) do
+      {:ok, raw_body, conn} ->
+        verify_and_respond(conn, raw_body, config)
+
+      {:more, _partial, conn} ->
+        Plug.Conn.send_resp(conn, 401, "invalid")
+
+      {:error, _reason} ->
+        Plug.Conn.send_resp(conn, 401, "invalid")
+    end
+  end
+
+  defp verify_and_respond(conn, raw_body, config) do
+    grant = first_header(conn, "x-ba-grant")
+    proof = first_header(conn, "x-ba-proof")
+    invocation_id = first_header(conn, "x-ba-invocation-id")
+    nonce = first_header(conn, "x-ba-nonce")
+
+    case verify(raw_body, grant, proof, invocation_id, nonce, config) do
+      :ok -> Plug.Conn.send_resp(conn, 200, "accepted")
+      :invalid -> Plug.Conn.send_resp(conn, 401, "invalid")
+    end
+  end
+
+  # The complete safe path — ONE `with`, fail closed. A BAP-strict decode
+  # failure, a check_envelope failure, an identity-binding mismatch, AND a replay
+  # ALL collapse to :invalid -> the uniform 401. nil grant/proof (a header
+  # absent) hits check_envelope's non-binary catch-all clause -> :invalid.
+  defp verify(raw_body, grant, proof, invocation_id, nonce, config) do
+    with {:ok, cast_arguments} <- V1.Json.decode(raw_body),
+         {:ok, facts} <-
+           V1.check_envelope(
+             %V1.Credentials{grant: grant, proof: proof},
+             %V1.ExpectedRequest{
+               trusted_issuer: %V1.TrustedIssuer{
+                 key_id: config.issuer_key_id,
+                 public_key: config.trusted_issuer_key
+               },
+               issuer: config.issuer,
+               audience: config.audience,
+               method: "POST",
+               target_uri: config.target_uri,
+               invocation_id: invocation_id,
+               operation: config.operation,
+               cast_arguments: cast_arguments,
+               evaluation_time: System.system_time(:second),
+               clock_skew: config.clock_skew,
+               proof_max_age: config.proof_max_age,
+               nonce: {:required, nonce},
+               bounds: V1.Bounds.maximum()
+             }
+           ),
+         :ok <- bind_and_dedupe(facts.holder_thumbprint, config.expected_identity_key, nonce) do
+      :ok
+    else
+      _ -> :invalid
+    end
+  end
+
+  # §8 identity binding + §9 nonce dedup folded into one step: both need the
+  # configured identity's thumbprint, so compute it once. A thumbprint mismatch
+  # (the envelope's holder is not the identity this transport authenticated)
+  # rejects; then the nonce is atomically claimed (a replay rejects).
+  defp bind_and_dedupe(holder_thumbprint, identity_raw_key, nonce) do
+    with {:ok, identity_thumbprint} <- Jwk.public_key_thumbprint_raw(identity_raw_key, %{}) do
+      cond do
+        identity_thumbprint != holder_thumbprint -> {:error, :not_bound}
+        not is_binary(nonce) -> {:error, :no_nonce}
+        true -> NonceLedger.claim(identity_thumbprint, nonce)
+      end
+    end
+  end
+
+  defp first_header(conn, name) do
+    case Plug.Conn.get_req_header(conn, name) do
+      [value | _] -> value
+      [] -> nil
+    end
+  end
+
+  defp public_key(seed), do: elem(:crypto.generate_key(:eddsa, :ed25519, seed), 0)
+  defp cfg(key), do: Application.fetch_env!(:edge_agent, key)
+
+  @doc """
+  Starts the receiver (the nonce-ledger GenServer + a Bandit server) for
+  standalone `mix run --no-halt -e EdgeAgent.Receiver.start` use. ip/port default
+  to config; pass `ip:` / `port:` to override.
+  """
+  @spec start_link(keyword()) :: Supervisor.on_start()
+  def start_link(opts \\ []) do
+    ip = Keyword.get(opts, :ip, cfg(:receiver_ip))
+    port = Keyword.get(opts, :port, cfg(:receiver_port))
+
+    children = [
+      # Bandit 1.12 takes :ip/:port/:scheme at the top level (not nested under
+      # :options — that was the pre-1.12 shape).
+      NonceLedger,
+      {Bandit, plug: __MODULE__, scheme: :http, ip: ip, port: port}
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one, name: __MODULE__.Supervisor)
+  end
+
+  @doc "Convenience for `mix run -e EdgeAgent.Receiver.start` — starts + returns :ok."
+  @spec start() :: :ok
+  def start do
+    {:ok, _pid} = start_link([])
+    :ok
+  end
+end
