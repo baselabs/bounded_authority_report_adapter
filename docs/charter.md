@@ -91,14 +91,14 @@ These negatives are load-bearing — each maps to a different repo's job:
 |---|---|---|---|---|
 | **Authority / issuer** | `bounded_authority` (runtime service) | issuer key | grants at issuance | revocation-sensitive decisions |
 | **Holder / prover** (the edge agent) | **this adapter** | holder (private Ed25519) | all four BAP object kinds — proofs (holder role), anchors + key transitions (role-agnostic), grants (issuer-role instantiation, C1-gated per ADR-0007) | — |
-| **Verifier** (the verifier + any third party) | `bounded_authority_protocol` (public package) | none (verifies against published keys) | — | grants, proofs, envelopes |
+| **Verifier** (the verifier + any third party) | `bounded_authority_protocol` (public package) | none (verifies against published keys) | — | grants, proofs, envelopes, boundary anchors, key transitions |
 
 This is the DPoP-shaped split (RFC 9449): the holder proves possession of a key
 bound to the request, without exposing the key. The adapter is the holder-side
 glue — and, for issuer-side callers, the grant-signing SDK (ADR-0007); the
 protocol package is the shared verifier; the runtime is the issuer.
 
-## 5. The checkpoint-ack boundary anchor (exploratory — ROADMAP B2 acceptance)
+## 5. The checkpoint-ack boundary anchor (`sign_anchor/3` shipped at RA4; the consumer use case is exploratory)
 
 The verifier's durable-commit confirmation back to the edge (the
 checkpoint-after-persist ack) MAY be a signed **boundary anchor**
