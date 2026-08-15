@@ -109,11 +109,12 @@ minor bumps (pre-1.0 freedom per SemVer).
 
 ### Closed — RA6 (2026-08-10) closeout gate
 
-- The closeout gate: ADRs `docs/adr/0001`–`0006` landed (`2d44df5` — topology,
+- The closeout gate: ADRs `docs/adr/0001`–`0005` landed in `2d44df5` (topology,
   proof-only holder signing, dep wall, private-not-hex posture, separate-repo
-  placement, universal companion signer) with RA1–RA4 shipped and the full
-  suite + conformance round-trip green. (verifier application's B2-row SHIPPED derivation
-  lives on verifier application's board, not this repo's.)
+  placement), with ADR-0006 (universal companion signer) landing alongside RA4
+  in `f82339b` — RA1–RA4 shipped and the full suite + conformance round-trip
+  green. (verifier application's B2-row SHIPPED derivation lives on verifier application's board, not
+  this repo's.)
 
 ### Added — example Livebook (2026-08-11) self-contained round-trip demo
 
