@@ -1,6 +1,7 @@
 # Charter — Bounded Authority Report Adapter
 
-**Status:** Draft (2026-08-09 scaffold) · **Roadmap row:** verifier application ROADMAP B2
+**Status:** Governing — reconciled 2026-08-15 to the shipped four-instantiation
+API (RA1–RA9; original 2026-08-09 scaffold) · **Roadmap row:** verifier application ROADMAP B2
 (`b2-report-path-adapter`) · **Authority:** `bounded_authority_protocol`
 `docs/design/consumer-seams-application-report-path.md` (first-hand, the application-report-path
 seam note) + `bounded_authority_protocol`'s `docs/adr/0001` (the public-verifier / private-runtime topology) + verifier application
@@ -26,17 +27,22 @@ a captured transport cannot re-purpose one.
 ## 2. What this adapter does
 
 This library is BAP's universal companion signer (ADR-0006): it signs BAP
-protocol objects via a local key-handle. Two instantiations have landed — proof
-signing (`sign_report/3`, this section) and boundary-anchor signing
-(`sign_anchor/3`, RA4). This section describes the proof/envelope flow.
+protocol objects via a local key-handle. Four instantiations have landed —
+proof signing (`sign_report/3`, RA1, this section), boundary-anchor signing
+(`sign_anchor/3`, RA4, §5), grant signing (`sign_grant/3`, RA7 — the
+issuer-role instantiation, ADR-0007), and key-transition signing
+(`sign_key_transition/3`, RA8 — ADR-0009). This section describes the
+proof/envelope flow; each extension carries its own ADR.
 
 **In the envelope, the adapter signs the holder proof — and only the holder
 proof.** Concretely, the edge agent calls this adapter with an issuer-signed
 grant + a application report, and the adapter returns the grant + proof envelope:
 
 1. Receive the issuer-signed `grant_compact` as an INPUT. The grant was signed
-   out of band by the `bounded_authority` runtime (the issuer) — this adapter
-   never signs the grant.
+   out of band by the `bounded_authority` runtime (the issuer) — in THIS flow
+   the adapter never signs the grant (grant signing is the separate
+   issuer-role instantiation `sign_grant/3`, gated on the handle's
+   `signing_identity/1` resolving `:issuer` — RA7/ADR-0007).
 2. Build the holder proof struct binding that grant to the report's request
    fields (`method`, `target_uri`, `invocation_id`, `operation`,
    `cast_arguments`).
@@ -57,8 +63,9 @@ public key (verifier application already calls it at `deny_stack.ex:178` for the
 verify). The adapter produces what the verifier checks.
 
 Signing the grant with the holder key would produce an envelope no
-correctly-configured verifier accepts — the adapter's one signing artifact is
-the proof (see §4 for the three-role split).
+correctly-configured verifier accepts — `sign_report/3`'s one signing artifact
+is the proof, which is why grant signing lives in its own issuer-role,
+C1-gated instantiation (see §4 for the three-role split).
 
 ## 3. What this adapter does NOT do
 
@@ -83,12 +90,13 @@ These negatives are load-bearing — each maps to a different repo's job:
 | Role | Repo | Keys it holds | Signs? | Verifies? |
 |---|---|---|---|---|
 | **Authority / issuer** | `bounded_authority` (runtime service) | issuer key | grants at issuance | revocation-sensitive decisions |
-| **Holder / prover** (the edge agent) | **this adapter** | holder (private Ed25519) | holder proofs on reports | — |
+| **Holder / prover** (the edge agent) | **this adapter** | holder (private Ed25519) | all four BAP object kinds — proofs (holder role), anchors + key transitions (role-agnostic), grants (issuer-role instantiation, C1-gated per ADR-0007) | — |
 | **Verifier** (the verifier + any third party) | `bounded_authority_protocol` (public package) | none (verifies against published keys) | — | grants, proofs, envelopes |
 
 This is the DPoP-shaped split (RFC 9449): the holder proves possession of a key
 bound to the request, without exposing the key. The adapter is the holder-side
-glue; the protocol package is the shared verifier; the runtime is the issuer.
+glue — and, for issuer-side callers, the grant-signing SDK (ADR-0007); the
+protocol package is the shared verifier; the runtime is the issuer.
 
 ## 5. The checkpoint-ack boundary anchor (exploratory — ROADMAP B2 acceptance)
 
