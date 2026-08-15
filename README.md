@@ -122,7 +122,7 @@ git dep). Both repos must be reachable from the consumer's build environment.
 
 ```bash
 mix deps.get          # fetches bounded_authority_protocol
-mix test              # 97 tests (sign_report + sign_anchor + sign_grant + sign_key_transition + conformance + dep-direction)
+mix test              # 98 tests (sign_report + sign_anchor + sign_grant + sign_key_transition + conformance + dep-direction)
 mix compile --warnings-as-errors
 mix credo
 ```

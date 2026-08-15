@@ -10,9 +10,10 @@
 #
 # HONESTY BOUNDARY (stated plainly): in an agent's own session this is ADVISORY —
 # the agent could tamper the runner it invokes. Honesty-INDEPENDENT only when CI
-# runs this on the PUSHED commit (the H9 boundary). No CI exists in this repo
-# today; a workflow calling `dispatch.py --verify-conformance` is the ops
-# follow-on that makes this proof.
+# runs this on the PUSHED commit (the H9 boundary). CI has run in this repo
+# since `45a8bc2` (2026-08-11) but does not execute this script; wiring
+# `dispatch.py --verify-conformance` into a workflow is the ops follow-on
+# that makes this proof.
 #
 # What this runner does (three stages):
 #   1. PARSE the matrix — extract the named test phrases (the evidence column).

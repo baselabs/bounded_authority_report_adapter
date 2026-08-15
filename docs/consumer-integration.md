@@ -14,7 +14,9 @@ verifier application's report path is the first instance; the contract is genera
 
 `sign_report/3` returns `{:ok, %{grant: grant_compact, proof: proof_compact}}` — two compact-JWS
 binary strings. The grant is the pass-through of the issuer-signed grant the caller supplied
-(this adapter never signs the grant); the proof is the holder's binding of that grant to the
+(`sign_report/3` never signs the grant — grant signing is the separate issuer-role
+instantiation `sign_grant/3`, ADR-0007, not part of this flow); the proof is the holder's
+binding of that grant to the
 report, signed via the holder key behind the `{module(), term()}` key-handle.
 
 ## 2. Transport the envelope + retain the raw body

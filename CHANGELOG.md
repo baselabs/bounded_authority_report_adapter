@@ -107,6 +107,14 @@ minor bumps (pre-1.0 freedom per SemVer).
 - README reframe: corrected the stale "holder-side signing adapter" intro to the ADR-0006
   "universal companion signer" framing + a pointer to the guide.
 
+### Closed — RA6 (2026-08-10) closeout gate
+
+- The closeout gate: ADRs `docs/adr/0001`–`0006` landed (`2d44df5` — topology,
+  proof-only holder signing, dep wall, private-not-hex posture, separate-repo
+  placement, universal companion signer) with RA1–RA4 shipped and the full
+  suite + conformance round-trip green. (verifier application's B2-row SHIPPED derivation
+  lives on verifier application's board, not this repo's.)
+
 ### Added — example Livebook (2026-08-11) self-contained round-trip demo
 
 - `examples/report_envelope_roundtrip.livemd` — a Livebook that runs the full capability
@@ -116,6 +124,37 @@ minor bumps (pre-1.0 freedom per SemVer).
   tamper-reject, wrong-key-reject.
 - The same round-trip is CI-covered by RA1's `sign_report_test.exs`; the notebook is the human
   view, not a CI gate.
+
+### Added — RA7 (2026-08-11) grant signing
+
+- `sign_grant/3` — the issuer-role instantiation, the 3rd of the universal
+  companion-signer tail's named instantiations (ADR-0006; recorded in
+  ADR-0007). Signs a grant (the issuer's authority assertion), returning
+  `%{grant: compact}`, round-tripping through `verify_grant/3`.
+- **The role mechanism is a new optional key-handle callback,
+  `signing_identity/1`** — returns `{:issuer | :holder, key_id, public_key}`
+  as ONE atomic snapshot, so a stateful handle cannot return `:issuer` then
+  rotate between role resolution and signing (the rotation-race defense
+  extended to cover the role). `sign_grant/3` gates on `role == :issuer`
+  (the C1 gate: a handle declaring `:holder` — or implementing no
+  `signing_identity/1` — is rejected as `:invalid_key_handle` with `sign/2`
+  never called). The first draft's separate `role/1` + `key_identity/1`
+  callbacks were rejected by the design-adversarial pass (a role→key TOCTOU);
+  the atomic callback closes it.
+- `Keys.RawKey` (test-only reference handle) declares `:holder` — it signs
+  proofs + anchors, not grants; the issuer test handles live in
+  `test/support/.../test_handles.ex`.
+- `test/bounded_authority_report_adapter/sign_grant_test.exs` — 17 tests:
+  round-trip through `verify_grant/3`, the C1 holder/roleless rejections
+  (`GrantHolderCountingHandle`: `sign_call_count == 0`), post-snapshot key
+  swap (`GrantRacingIdentityHandle`, caught by the wrong-key verify),
+  defect-injection, missing-field, opts, and exiting-handle cases. Tripwires
+  are mutation-proven (removing the role guard / disabling
+  `verify_signature` drives them red).
+- Closeout follow-ups: raw_key alias + opts guard + producer-error test
+  (`0828ca3`); diff-review doc polish (`2e367f0`); non-map opts normalized
+  to defaults in ALL three `sign_*` (uniform tripwires in the three suites,
+  `2ee2bbd`).
 
 ### Added — RA8 (2026-08-12) key-transition signing
 
@@ -144,7 +183,7 @@ minor bumps (pre-1.0 freedom per SemVer).
 - The four named companion-signer instantiations are complete (proof, anchor, grant,
   key-transition).
 
-### Added — RA9 (2026-08-11) edge-agent reference app
+### Added — RA9 (2026-08-12) edge-agent reference app
 
 - `examples/edge_agent/` — a runnable mix app (its own project; the adapter is a
   `path: "../.."` dep) that signs a application report via `sign_report/3` and POSTs it over HTTP (Req)

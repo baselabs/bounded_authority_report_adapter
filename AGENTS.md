@@ -10,9 +10,9 @@ the build arc. Read this FIRST, then the charter/strategy for the *why*.
 `bounded_authority_report_adapter` (BARA) — the HOLDER-side signing glue for the
 Bounded Authority protocol. It takes a `{module(), term()}` key-handle + a BAP
 signing input, signs via the handle's local key, assembles the compact via the
-public `bounded_authority_protocol` (BAP) package. It signs proofs, grants, and
-boundary anchors; it does NOT verify, does NOT transport, does NOT persist, is NOT
-the runtime, is NOT hex-published.
+public `bounded_authority_protocol` (BAP) package. It signs proofs, grants,
+boundary anchors, and key transitions; it does NOT verify, does NOT transport,
+does NOT persist, is NOT the runtime, is NOT hex-published.
 
 ## Read BAP first-hand — never trust a summary (handoff, doc, or your own memory)
 
@@ -30,9 +30,10 @@ defs + the function `@spec`s, not from prose.
 ROADMAP rows, and "the standard says X" claims are all UNVERIFIED until you check the actual
 file. Two layers matter and they drift:
 
-- **BARA's pinned ref** (`mix.exs`, currently `4c64be3`) — what BARA *compiles against*. The
-  contract surfaces above live here. Read `deps/bounded_authority_protocol/...` for the V1
-  struct/function defs BARA calls.
+- **BARA's pinned ref** (the `ref:` in `mix.exs` — read it there, never from
+  prose; a restated sha rots on the next bump) — what BARA *compiles against*. The
+  contract surfaces above live at the pin. Read `deps/bounded_authority_protocol/...` for
+  the V1 struct/function defs BARA calls.
 - **BAP main + BA main** — what those projects have *decided/shipped*. BARA's pin lags main
   (it was 84 commits behind at RA8 closeout; all docs/corpus/CI, zero V1 `lib/` changes — but
   the *docs* drift is real). A BAP ADR may be ACCEPTED on main and ABSENT at BARA's pin.
