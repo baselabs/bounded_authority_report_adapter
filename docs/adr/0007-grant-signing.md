@@ -93,5 +93,6 @@ with `sign/2`, `public_key/1`, `thumbprint/1` required and `key_identity/1` opti
   (RA4), grant (RA7), all through the shared tail. The one remaining named extension is
   key-transition signing (RA8) — the fourth instantiation, design-gated on its own
   BAP-contract read (`key_transition_signing_input`). *(Landed 2026-08-12:
-  `sign_key_transition/3`, role-agnostic — recorded in ADR-0009, which also amends
-  ADR-0006's `key_identity/1` consumers. The four named instantiations are complete.)*
+  `sign_key_transition/3`, role-agnostic — recorded in ADR-0009, whose
+  Consequences name the broadened `key_identity/1` consumer set. The four named
+  instantiations are complete.)*
