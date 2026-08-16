@@ -52,7 +52,11 @@ The adapter signs **only the holder proof**. Concretely, `sign_report/3`:
 6. Assembles the compact proof via `assemble_compact/2`.
 7. Returns `{grant: grant_compact, proof: proof_compact}` — the grant untouched.
 
-The adapter **never** calls `grant_signing_input`, and `lib/` contains no
+The adapter **never** calls `grant_signing_input` in the envelope flow. *(Amended
+2026-08-15: since RA7 the issuer-role instantiation `sign_grant/3` calls it —
+`produce_grant_signing_input/2`, lib — with the C1 gate (`signing_identity/1`
+resolving `:issuer`, ADR-0007) holding the holder key out of that path. The
+envelope-flow prohibition this ADR governs is unchanged.)* `lib/` contains no
 `:crypto.sign` call (the only `:crypto` calls are `:crypto.verify` for the
 wrong-key guard and `:crypto.strong_rand_bytes` for the proof's `jti`).
 

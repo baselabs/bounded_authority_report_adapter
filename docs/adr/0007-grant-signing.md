@@ -80,8 +80,9 @@ with `sign/2`, `public_key/1`, `thumbprint/1` required and `key_identity/1` opti
   production issuer handle implements it, returning `:issuer` + its registry kid + public
   key from one consistent snapshot. A proof-only or anchor-only handle need not implement
   it (and is then rejected by `sign_grant/3` as `:invalid_key_handle`). The test-only
-  reference handle (`Keys.RawKey`) declares `:holder` — it signs proofs + anchors, not
-  grants.
+  reference handle (`Keys.RawKey`) declares `:holder` — it signs proofs + anchors
+  and, since RA8, key transitions (the role-agnostic path needs no role;
+  ADR-0009), not grants.
 - The C1 tripwire is in force: `sign_grant` on a `:holder`-declaring handle returns
   `{:error, :invalid_key_handle}` and `sign_call_count == 0` (the `GrantHolderCountingHandle`
   tripwire, the mirror of `sign_report`'s `sign_call_count == 1` pointed the other way);
@@ -91,4 +92,6 @@ with `sign/2`, `public_key/1`, `thumbprint/1` required and `key_identity/1` opti
 - The universal companion-signer pattern is now three-for-three: proof (RA1), anchor
   (RA4), grant (RA7), all through the shared tail. The one remaining named extension is
   key-transition signing (RA8) — the fourth instantiation, design-gated on its own
-  BAP-contract read (`key_transition_signing_input`).
+  BAP-contract read (`key_transition_signing_input`). *(Landed 2026-08-12:
+  `sign_key_transition/3`, role-agnostic — recorded in ADR-0009, which also amends
+  ADR-0006's `key_identity/1` consumers. The four named instantiations are complete.)*
