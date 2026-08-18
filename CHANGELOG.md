@@ -9,6 +9,23 @@ minor bumps (pre-1.0 freedom per SemVer).
 
 ## [Unreleased]
 
+### Changed — 2026-08-18 BAP pin bump (b2-ra-pin-bump)
+
+- `bounded_authority_protocol` git pin `c65d3bea` → `5ed7b41` (a BAP main
+  snapshot, 103 commits past the old pin / 176 past BA's `4c64be3`) under
+  ADR-0010's BARA-ahead exception (user opt-in): span `lib/` diff EMPTY,
+  every top-level surface class enumerated + classified allowed, BAP's own
+  `mix.exs` change docs-lists-only (no dependency-graph change). The consumed
+  conformance vector `grant-holder-proof.json` is blob-identical across the
+  span; RA2 quoted green at the new pin (16 conformance tests; suite 98).
+  Corpus change outside the vector surfaced + classified per ADR-0013 D1
+  (10 `corpus/cases` + `index.json` + `vectors/manifest.json`, all M; harness
+  NOT extended — deliberate). Both locks moved: `mix.lock` +
+  `examples/edge_agent/mix.lock` (the transitively-pinned second surface);
+  `dependency_direction_test.exs` `@protocol_ref` + rationale updated with the
+  bump. `mix ci` green (both jobs) — local gates are the evidence of record
+  while Actions is billing-blocked.
+
 ### Changed — 2026-08-18 post-release docs reconciliation
 
 - `.forge/conformance-surfaces` — the harness's product-contract authority now
