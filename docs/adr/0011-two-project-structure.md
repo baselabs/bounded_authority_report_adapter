@@ -5,7 +5,9 @@ Date: 2026-08-17
 ## Status
 
 Accepted. Records the structure the RA9 example app forced (2026-08-12) and CI
-has enforced since `45a8bc2`; the dependency-direction carve-out it rests on has
+has enforced since — CI itself landed at `45a8bc2` (2026-08-11) as a SINGLE
+`gate` job; the two-job bar this ADR records arrived with the example job in
+`79fe668` (2026-08-12). The dependency-direction carve-out it rests on has
 governed since RA3 (ADR-0003) without its own record. Authored when the
 2026-08-17 alignment audit listed it an ADR-gap candidate.
 
@@ -34,8 +36,12 @@ and demo contexts, and lets demo deps ride the library's dependency graph;
    the wall's design, not a hole. The wall
    (`dependency_direction_test.exs`) scans `lib/`, `test/support/`, and the
    library's `mix.exs`/`mix.lock`; a transport dep added to the LIBRARY still
-   trips it red. The example's own dependency hygiene is enforced by its own CI
-   job, not the library's wall.
+   trips it red. The example holds transport deps LEGITIMATELY (they are its
+   purpose), so there is no dep-direction scan to run there — and nothing in
+   `examples/` can leak into the library's artifact (the path dep points the
+   example AT the library, never the reverse). The example's CI job proves the
+   app builds + tests green with exactly its declared deps; it is not a
+   namespace/dep scan.
 3. **CI is two jobs, both green is the bar** (`.github/workflows/ci.yml`):
    `gate` (root: format · compile warnings-as-errors · credo --strict · test,
    including the conformance round-trip) and the `examples/edge_agent` job (the

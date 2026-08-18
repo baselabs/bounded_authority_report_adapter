@@ -171,8 +171,9 @@ defmodule EdgeAgent.Receiver do
     port = Keyword.get(opts, :port, cfg(:receiver_port))
 
     children = [
-      # Bandit 1.12 takes :ip/:port/:scheme at the top level (not nested under
-      # :options — that was the pre-1.12 shape).
+      # Bandit takes :ip/:port/:scheme at the top level (since 0.7.6; the
+      # nested :options key was removed then — under our ~> 1.0 constraint no
+      # version accepts it).
       NonceLedger,
       {Bandit, plug: __MODULE__, scheme: :http, ip: ip, port: port}
     ]

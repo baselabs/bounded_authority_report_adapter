@@ -27,11 +27,22 @@ The corpus is the only oracle whose green MEANS "BAP accepts what BARA produces.
 
 ## Decision
 
-1. **BAP's published vector corpus defines BARA's green.** Every published
-   ENVELOPE case verifies via `check_envelope/2` and every GRANT-TIME case via
-   `verify_grant/3`, matching each declared `expected_verdict` — data-driven
-   per verdict, with an exhaustive-coverage guard so a newly published case
-   cannot be silently untested.
+1. **BAP's published `grant-holder-proof` vector defines BARA's green.** Every
+   case in `vectors/grant-holder-proof.json` — every ENVELOPE case verifies via
+   `check_envelope/2`, every GRANT-TIME case via `verify_grant/3` — matching
+   each declared `expected_verdict`, data-driven per verdict, with an
+   exhaustive-coverage guard so a case newly added TO THAT VECTOR cannot be
+   silently untested. **Scope, stated plainly:** this is one vector file, not
+   the whole published corpus. BAP also publishes `corpus/cases/` — a
+   function-level surface-class matrix (`envelope`, `grant-verify`,
+   `proof-decode`, `key-transition`, `assemble-compact`, …) — and two further
+   vector files (`chain-semantic-edge`, `consumption-chain-archive`). Those are
+   BAP's own conformance suite's territory, run by BAP against BAP; BARA
+   consumes BAP as a pinned dep and does not re-run BAP's suite. A vector file
+   or corpus class OUTSIDE `grant-holder-proof.json` is therefore NOT
+   automatically exercised by BARA's harness — a bump whose span adds one is
+   surfaced by ADR-0010's surface-class enumeration, where extending this
+   harness to consume it is a deliberate decision, never an accident.
 2. **Defect-injection keeps the harness non-vacuous** (a green harness over a
    broken contract is the failure class this decision exists to prevent):
    signature-flip and `ba_req` tamper tripwires go RED, plus the corpus's own
@@ -40,11 +51,12 @@ The corpus is the only oracle whose green MEANS "BAP accepts what BARA produces.
    `sign_report/3` → `check_envelope/2` against a freshly issuer-signed grant —
    the corpus proves BARA consumes BAP's format; the round-trip proves BARA
    produces it.
-4. **Re-verified at EVERY pin bump** — the corpus at the new pin is the oracle
+4. **Re-verified at EVERY pin bump** — the vector at the new pin is the oracle
    for the new pin. This is ADR-0010's corpus clause from the consumption side:
-   corpus growth inside an accepted bump span is admitted only with this
-   harness green at the new ref (growth can only ADD cases — a stricter oracle,
-   never a relaxation).
+   growth of the consumed vector inside an accepted bump span is admitted only
+   with this harness green at the new ref (within the vector, growth can only
+   ADD cases — a stricter oracle, never a relaxation; growth in the corpus's
+   other files follows Decision 1's scope rule).
 
 ## Consequences
 

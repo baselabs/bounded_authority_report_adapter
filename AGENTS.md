@@ -116,9 +116,11 @@ current convention:
 - **HTTP server: Bandit + Plug** (pure-Elixir Plug adapter). The receiver is a
   bare `@behaviour Plug` served by Bandit.
 
-**Bandit ≥ 1.12 option gotcha:** listener options (`:ip`, `:port`, `:scheme`) go at
-the **top level** of the Bandit child spec, NOT nested under `:options:`. The
-pre-1.12 `options: [ip: ..., port: ...]` shape raises
+**Bandit option-shape gotcha:** listener options (`:ip`, `:port`, `:scheme`) go at
+the **top level** of the Bandit child spec, NOT nested under `:options:` — and have
+since Bandit 0.7.6 (which removed the nested key; under the example's `~> 1.0` pin no
+version accepts it). The nested
+`options: [ip: ..., port: ...]` shape raises
 `Unsupported key(s) in top level config: [:options]` at server start — it passes
 `mix compile` (no spec) and fails at `mix test` / runtime. Pin Bandit `~> 1.0` and
 use top-level options.

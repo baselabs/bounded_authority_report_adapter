@@ -25,13 +25,19 @@ exists for.
 2. **HTTP server: Bandit** (`~> 1.0`) **+ Plug** (`~> 1.15`). The receiver
    (`EdgeAgent.Receiver`) is a bare `@behaviour Plug` served by Bandit's
    `plug:` child-spec form — no Phoenix, no router.
-3. **The Bandit ≥ 1.12 option gotcha is part of this decision's record:**
+3. **The Bandit option-shape gotcha is part of this decision's record:**
    listener options (`:ip`, `:port`, `:scheme`) go at the TOP level of the
    Bandit child spec (`{Bandit, plug: __MODULE__, scheme: :http, ip: ip,
-   port: port}` — `receiver.ex`), NOT nested under `options:`. The pre-1.12
-   shape raises `Unsupported key(s) in top level config: [:options]` at server
-   START — it passes `mix compile` (no dialyzer spec on the child spec) and
-   fails first at `mix test`/runtime, the quiet class.
+   port: port}` — `receiver.ex`) — and have since **0.7.6** (Apr 2023), which
+   renamed the nested top-level `options` field to `thousand_island_options`
+   and added `ip`/`port` top-level support. Under the example's `~> 1.0`
+   constraint NO resolvable version accepts the nested `options:` shape: it
+   raises `Unsupported key(s) in top level config: [:options]` at server START
+   — it passes `mix compile` (no dialyzer spec on the child spec) and fails
+   first at `mix test`/runtime, the quiet class. *(Corrected 2026-08-17: this
+   repo's record — and the RA9 session that met the error on a 1.12 install —
+   attributed the break to "Bandit ≥ 1.12"; the changelog shows the option
+   shape has been top-level-only since 0.7.6.)*
 4. **Raw-body retention follows from the receiver's shape:** with no competing
    parser in the pipeline, the receiver reads the raw body directly via
    `Plug.Conn.read_body/1` (3-clause, threading the returned `conn`). A

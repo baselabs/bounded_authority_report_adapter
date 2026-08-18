@@ -17,8 +17,9 @@ minor bumps (pre-1.0 freedom per SemVer).
   there; the example's hygiene enforced by its own CI job), the two-job CI bar,
   and the Livebook-not-in-CI rule. Previously governed only by AGENTS.md prose.
 - `docs/adr/0012-example-transport-choices.md` — RA9's selections (Req `~> 0.5`
-  client; Bandit `~> 1.0` + Plug `~> 1.15` receiver), including the Bandit ≥ 1.12
-  top-level listener-option gotcha (passes compile, fails at server start) and
+  client; Bandit `~> 1.0` + Plug `~> 1.15` receiver), including the Bandit
+  option-shape gotcha (top-level listener options since 0.7.6; the nested shape
+  passes compile and fails at server start) and
   the raw-body retention consequence. Binds the example app only — convention,
   not mandate.
 - `docs/adr/0013-corpus-as-acceptance-oracle.md` — RA2's acceptance posture: BAP's
@@ -263,7 +264,7 @@ minor bumps (pre-1.0 freedom per SemVer).
   this adapter; BARA's involvement is none. See `docs/ROADMAP.md`.
 - `AGENTS.md` (new, repo-root) — the operational doc for AI coding agents editing this repo:
   the dependency wall, the two-project build + dual CI, the per-file floor (with the example-app
-  test-file-warning nuance), the transport posture (Req/Bandit, incl. the Bandit ≥1.12 top-level
+  test-file-warning nuance), the transport posture (Req/Bandit, incl. the Bandit top-level
   options gotcha), and the read-BAP-first-hand / verify-before-citing mandate (closes the gap that
   let two phantom citations — "Req per repo-root AGENTS.md" + "BAP ADR-0014/0015" — reach a prior
   handoff). `docs/consumer-integration.md` + the example README cross-reference it; the parent
