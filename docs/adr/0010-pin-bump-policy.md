@@ -72,10 +72,18 @@ the repos, never cite them from prose.
    its next dependency pass.
 4. **Enforcement is reviewer discipline, by necessity.** BA's pin lives in a
    sibling repo the wall test cannot reach (a cross-repo mechanical check would
-   couple BARA's CI to a private sibling). The bumper MUST run the diff check by
-   hand and quote the empty-`lib/` result + the surface classification in the
-   bump commit message. A BARA-ahead bump commit without that evidence violates
-   this policy and is revertible on sight.
+   couple BARA's CI to a private sibling). The bumper MUST run the diff sweep by
+   hand and quote three results in the bump commit message: (a) the span's full
+   `git diff --stat <ba-pin>..<bara-pin>` (Decision 2.2's enumeration basis);
+   (b) `git diff --stat <ba-pin>..<bara-pin> -- lib/` — EMPTY (Decision 2.1);
+   (c) the corpus sweep — `git diff --stat <ba-pin>..<bara-pin> --
+   priv/conformance test/conformance` — classified per Decision 2.2, any growth
+   re-verified green by RA2 at the new pin per ADR-0013 Decision 4. A BARA-ahead
+   bump commit without that evidence violates this policy and is revertible on
+   sight. *(Amended 2026-08-18, completing the 2026-08-18 audit's §4-5 flag
+   ahead of the first corpus-growing span: the original text named only "the
+   diff check" against `lib/`, leaving the corpus sweep's command shape
+   implicit.)*
 5. **The pin is read from `mix.exs`, never from prose** (the AGENTS.md rule; a
    restated sha rots on the next bump).
 
