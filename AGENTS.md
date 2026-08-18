@@ -73,7 +73,7 @@ adding them to the library's `mix.exs` trips the wall red.
 1. **The library** (repo root) — `mix.exs` with `bounded_authority_protocol` +
    dev/test-only `credo`/`ex_doc`. `lib/bounded_authority_report_adapter.ex` is the
    one signing module. `test/support/` compiles only under `:test` (the reference
-   key-handle + fixtures do NOT ship — design C5).
+   key-handle + fixtures do NOT ship — design C5, ADR-0014).
 2. **The example app** (`examples/edge_agent/`, ROADMAP RA9) — its own `mix.exs`,
    its own `mix.lock`, its own `deps/`. The adapter is a `path: "../.."` dep; it
    pulls req/bandit/plug. Runnable end-to-end (`EdgeAgent.run` → `EdgeAgent.Receiver`).

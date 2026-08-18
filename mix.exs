@@ -34,9 +34,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
 
   # test/support/ holds the reference key-handle impl (Keys.RawKey) + test-only
   # keypair fixtures — compiled ONLY in :test so the {pub, priv} reference impl
-  # does not ship in the artifact (design C5: a key-in-process-memory impl in
-  # lib/ would pave a road to the failure strategy §4 says the separate repo
-  # exists to prevent).
+  # does not ship in the artifact (design C5, ADR-0014: a key-in-process-memory
+  # impl in lib/ would pave a road to the failure strategy §4 says the separate
+  # repo exists to prevent).
   defp elixirc_paths(:test), do: ["lib/", "test/support/"]
   defp elixirc_paths(_env), do: ["lib/"]
 

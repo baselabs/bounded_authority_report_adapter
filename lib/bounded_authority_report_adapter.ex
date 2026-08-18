@@ -58,8 +58,8 @@ defmodule BoundedAuthorityReportAdapter do
   ## What this library does NOT do
 
     * Not a verifier — verification lives in every party via the protocol package
-      (`check_envelope/2`, `verify_historical_anchor/3`). Consumers verify; this
-      library signs.
+      (`check_envelope/2`, `verify_grant/3`, `verify_historical_anchor/3`,
+      `verify_key_transition/4`). Consumers verify; this library signs.
     * Not the runtime — grant issuance, key custody/rotation, and revocation are
       the `bounded_authority` runtime's job. This library holds a key handle and
       signs on invocation; it does not mint capabilities.
