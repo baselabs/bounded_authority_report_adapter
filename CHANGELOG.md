@@ -40,13 +40,22 @@ minor bumps (pre-1.0 freedom per SemVer).
   resolves the cross-vendor [should-fix] from that slice's review (the
   normative "use it … as the pre-push gate" read as steering the verifying
   agent; same facts, imperative removed).
-- ADR-0010 Decision 4 amended (dated note): the hand-run pin-bump verification
-  sweep is now three explicit commands — the full-span stat (Decision 2.2's
-  enumeration basis), the empty-`lib/` check (2.1), and a named
-  `priv/conformance` + `test/conformance` corpus sweep coupled to ADR-0013
-  Decision 4's re-verification. Completes the 08-18 handoff §4-5's policy half;
-  the bump itself stays a future slice (sibling at 2026-08-18, as-sit: 100
-  commits past the pin, `lib/` still empty, corpus paths touched).
+- ADR-0010 amended (dated note): the hand-run pin-bump verification sweep is
+  now three explicit commands — the full-span stat (Decision 2.2's enumeration
+  basis), the empty-`lib/` check (2.1), and a named `priv/conformance` +
+  `test/conformance` corpus sweep. Completes the 08-18 handoff §4-5's policy
+  half; the bump itself stays a future slice (sibling at 2026-08-18, as-sit:
+  100 commits past the pin, `lib/` still empty, corpus paths touched — all
+  modified, zero added files).
+- Cross-vendor review round on this slice (codex blocking + claude-opus
+  should-fix, both CONFIRMED and fixed same-round): the amendment's first
+  wording made RA2 re-verification growth-conditional and over-claimed its
+  scope. Corrected in Decision 4 + Decision 2.2: RA2's round-trip is quoted
+  green at the new pin on EVERY bump (ADR-0013 D4), discharging exactly the
+  consumed vector (`grant-holder-proof.json`, ADR-0013 D1); corpus change
+  outside it is surfaced by the sweep and governed by D1's scope rule —
+  extend-the-harness only deliberately, never an implied RA2 green. Fix diff
+  self-verified (round cap: the fix is not re-dispatched).
 
 ## [0.1.0] — 2026-08-17
 
