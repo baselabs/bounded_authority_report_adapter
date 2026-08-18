@@ -54,14 +54,16 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # wire profile). DEFAULT: pinned to the SAME ref BA pins — drifting ahead couples the
   # adapter to a protocol surface the authority layer has not validated.
   #
-  # NARROW EXCEPTION: BARA may bump its pin ahead of BA ONLY when BAP's advance is
-  # verifiably docs/corpus-only with ZERO V1 `lib/` changes (no surface the authority
-  # layer needs to validate) — proven by `git diff --stat <ba-pin>..<bara-pin> -- lib/`
-  # being empty. The current pin (v0.1.0, c65d3bea) is 73 commits ahead of BA's pin
-  # (4c64be3) and carries ZERO V1 lib/ changes — BAP's advance over that span is ADRs
-  # (0009-0014) + conformance corpus + CI only. When BA bumps to a newer ref, BARA
-  # re-aligns to it. (BA's pin is in ../bounded_authority/mix.exs — verify the
-  # git-diff-empty condition before any further BARA-ahead bump.)
+  # NARROW EXCEPTION (governed by docs/adr/0010-pin-bump-policy.md): BARA may bump its
+  # pin ahead of BA ONLY when the span has ZERO V1 `lib/` changes AND every touched
+  # surface class is enumerated + classified under ADR-0010's allowed classes (no surface
+  # the authority layer needs to validate) — proven by `git diff --stat <ba-pin>..<bara-pin> -- lib/`
+  # being empty. At the bump, the pin (v0.1.0, c65d3bea) was 73 commits ahead of BA's
+  # pin (4c64be3) with ZERO V1 lib/ changes; the span carried ADRs (0009-0014), the
+  # birth of sdks/ (54 files), CI + packaging/prose — and no corpus change. Derive
+  # today's distance from the repos, never from this comment. When BA bumps to
+  # a newer ref, BARA re-aligns to it. (BA's pin is in ../bounded_authority/mix.exs —
+  # verify the git-diff-empty condition before any further BARA-ahead bump.)
   #
   # ENFORCEMENT NOTE: this exception is REVIEWER DISCIPLINE, not a mechanical check
   # here — BA's pin lives in a sibling repo this test cannot reach, so the wall asserts

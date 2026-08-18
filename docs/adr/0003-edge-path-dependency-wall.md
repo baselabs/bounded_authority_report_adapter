@@ -53,6 +53,9 @@ with dep-removal and form-precise regex RED proofs.
   bumping/deleting the protocol dep reds the test.
 - The BAP pin in `mix.exs` is the explicit ref that gates when an adapter bump
   is required (if BAP's vectors change, this adapter's conformance test goes red
-  — the coupling is intentional).
+  — the coupling is intentional). *(Amended 2026-08-17: the pin's
+  alignment-with-BA posture — default alignment, a verifiability-gated
+  BARA-ahead exception — is governed by [ADR-0010](0010-pin-bump-policy.md),
+  which extends this ADR.)*
 - Transports stay protocol-free: this adapter is called *by* the edge agent, not
   embedded in the transport libraries.

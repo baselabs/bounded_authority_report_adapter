@@ -9,13 +9,32 @@ minor bumps (pre-1.0 freedom per SemVer).
 
 ## [Unreleased]
 
+### Added — 2026-08-17 pin-bump policy ADR (ADR-0010)
+
+- `docs/adr/0010-pin-bump-policy.md` — governs the BAP-pin alignment the v0.1.0
+  bump (`5782634`) practiced: BARA's pin tracks BA's by default; a BARA-ahead bump
+  is allowed ONLY when the span is verifiably non-contract
+  (`git diff --stat <ba-pin>..<bara-pin> -- lib/` empty AND every touched
+  surface class enumerated + classified in the bump commit); BARA re-aligns when
+  BA bumps. The empty-`lib/` condition was the bump's practice; the
+  surface-enumeration gate and the `sdks/`/BAP-test-tooling allowances are NEW
+  policy in the ADR — the bump's own class list was wrong both ways (claimed
+  corpus growth that had not happened — the corpus was byte-identical across
+  4c64be3..c65d3bea — and missed the span's largest class, the birth of `sdks/`,
+  54 files). ADR-0003's Consequences amended with the pointer; the RA3 test
+  comment now cites the ADR.
+
 ### Changed — 2026-08-12 BAP pin bump (v0.1.0)
 
 - Bumped the `bounded_authority_protocol` pin from `4c64be3` to v0.1.0
   (`c65d3bea` — BAP's "internal reference tag (release candidate)" cut for internal
   consumer pinning). v0.1.0 is 73 commits ahead of the prior pin; the span is ADRs
   0009–0014 + conformance-corpus growth + CI — **zero V1 `lib/` changes** (the V1
-  signing surface BARA compiles against is identical).
+  signing surface BARA compiles against is identical). *(Amended 2026-08-17: the
+  corpus claim was wrong — `priv/` was byte-identical across the span — and the
+  enumeration missed the span's largest class, the birth of `sdks/` (54 files).
+  The empty-`lib/` claim stands; the corrected span record + the governing policy
+  are ADR-0010.)*
 - BARA's pin now leads BA's (BA still pins `4c64be3`). The RA3 dependency-direction
   test's rationale is narrowed to permit this: BARA tracks BA's pin by default; a
   BARA-only bump ahead of BA is allowed ONLY when BAP's advance is verifiably
