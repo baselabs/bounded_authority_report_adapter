@@ -16,9 +16,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       docs: docs(),
       name: "Bounded Authority Report Adapter",
       description:
-        "holder-side signing adapter for application reports — wraps the public " <>
-          "bounded_authority_protocol package's grant/proof envelopes with " <>
-          "local private-key signing. Private BaseLabs library (not hex-published).",
+        "Universal companion signer for the Bounded Authority protocol (ADR-0006) — " <>
+          "signs BAP protocol objects (holder proofs, boundary anchors, grants, " <>
+          "key transitions) via a local {module(), term()} key-handle and BAP's " <>
+          "signing-input producers. Private BaseLabs library (not hex-published).",
       source_url: @source_url,
       homepage_url: @source_url
     ]

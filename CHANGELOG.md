@@ -53,7 +53,8 @@ minor bumps (pre-1.0 freedom per SemVer).
   misconfigured signer fails as `:signing_failed` — not a silent false-success
   or a crash.
 - `test/bounded_authority_report_adapter/sign_report_test.exs` — 13 round-trip
-  + tripwire tests.
+  + tripwire tests at landing (cross-cutting follow-ups have since added more;
+  the live count is the suite total, README Development).
 
 ### Added — RA2 (2026-08-09) conformance round-trip
 
@@ -92,8 +93,8 @@ minor bumps (pre-1.0 freedom per SemVer).
 - `sign_report/3` refactored onto the same shared tail; the wrong-key verify guard
   now covers both the proof and anchor paths.
 - `test/bounded_authority_report_adapter/sign_anchor_test.exs` — 12 tripwires
-  (round-trip, wrong-key, key_id-from-handle, exit containment, no-canonical-bytes
-  fork, defect injection, closed-atom errors).
+  at landing (cross-cutting follow-ups have since added more; the live count is
+  the suite total, README Development).
 
 ### Added — RA5 (2026-08-10) universal consumer-integration guide
 
@@ -157,6 +158,18 @@ minor bumps (pre-1.0 freedom per SemVer).
   to defaults in ALL three `sign_*` (uniform tripwires in the three suites,
   `2ee2bbd`).
 
+### Added — RA11 direction (2026-08-11) role-attestation ADR
+
+- `docs/adr/0008-role-attestation-direction.md` — PROPOSED (not implemented): the
+  C1-strengthening path. When BAP defines `RoleAttestation` + `verify_attestation/2`
+  and BA issues role-attestations at key provisioning, `sign_grant/3` accepts a
+  BA-signed attestation compact as an input (the same class as `grant_compact`) and
+  gates on the BA-asserted role + key binding — closing ADR-0007 Decision 5's
+  consistent-lie residual (a handle that self-declares `:issuer` consistently).
+  Cross-repo sequencing: BAP first, BA second, BARA last (`03a6083`).
+- ROADMAP gains the RA11 row with the cross-repo dependencies named; README's
+  remaining-work section + ADR-0007 Decision 5 carry the pointers.
+
 ### Added — RA8 (2026-08-12) key-transition signing
 
 - `sign_key_transition/3` — the 4th instantiation of the universal companion-signer tail
@@ -175,10 +188,11 @@ minor bumps (pre-1.0 freedom per SemVer).
   `next_{key_id, public_key}` + content are caller-supplied. `next_public_key` is pre-checked
   for 32 bytes (the adapter's public-key guard); a self-transition is rejected by BAP's
   `distinct_fingerprints`.
-- `test/bounded_authority_report_adapter/sign_key_transition_test.exs` — 10 tests: the
+- `test/bounded_authority_report_adapter/sign_key_transition_test.exs` — 11 tests: the
   round-trip through `verify_key_transition/4` + wrong-key, atomic-snapshot drift,
   no-canonical-bytes-fork, defect-injection, self-transition, missing-field, non-32-byte
-  next key, exiting handle, and roleless-handle rejection. Wrong-key + racing tripwires
+  next key, exiting handle, and roleless-handle rejection — plus the non-map-opts
+  defaults tripwire added by the `0728d49` cross-vendor closeout. Wrong-key + racing tripwires
   are mutation-proven (disabling `verify_signature` drives them RED). Four transition
   handles in `test_handles.ex`.
 - The four named companion-signer instantiations are complete (proof, anchor, grant,
