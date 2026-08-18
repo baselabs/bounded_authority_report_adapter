@@ -84,6 +84,14 @@ compile · credo · test) and `example` (the example app, same four steps, run f
 (`examples/report_envelope_roundtrip.livemd`) is NOT run in CI — its round-trip is
 covered by the library's `sign_report_test.exs`.
 
+**Local CI parity: `mix ci`** (root mix.exs alias) reproduces the workflow
+step-for-step — both jobs, all five build steps each, every step forced under
+`MIX_ENV=test` (the workflow's job-level env; a bare local `:dev` boot would skip
+`test/support` at compile — the RA7 trap). It aborts at the first red step, like a
+failed CI job. Use it when Actions can't run (billing-blocked/usage-capped as of
+2026-08-18) or as the pre-push gate; workflow steps NOT reproduced locally:
+checkout/setup-beam (asdf here) and private-dep git auth (per-host).
+
 ## Per-file floor on EVERY touched file (the RA7 lesson)
 
 Before calling anything done, run **on every file you touched**:
