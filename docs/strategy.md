@@ -1,6 +1,7 @@
 # Strategy — Bounded Authority Report Adapter
 
-**Status:** Draft (2026-08-09) · **Companion to:** `docs/charter.md` (the what),
+**Status:** Governing — reconciled 2026-08-15 to the shipped API (original
+2026-08-09 draft) · **Companion to:** `docs/charter.md` (the what),
 `docs/ROADMAP.md` (the build order). This doc carries the *how* and *why* of the
 engineering + release posture.
 

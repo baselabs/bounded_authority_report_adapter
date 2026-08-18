@@ -32,7 +32,7 @@ The split of responsibility across the three BA repos:
 |---|---|---|---|
 | `bounded_authority_protocol` | the public verifier + signing-input producer | No (produces inputs only) | **Yes** (pure verifier) |
 | `bounded_authority` (runtime) | issuance, key custody/rotation, live revocation | At issuance | — |
-| **`bounded_authority_report_adapter`** (this repo) | holder-side signing glue | **Yes** (holder proof, local key) | No |
+| **`bounded_authority_report_adapter`** (this repo) | universal companion signer (ADR-0006) — holder-side by default, issuer-side for grants | **Yes** — proofs (holder role), boundary anchors + key transitions (role-agnostic), grants (issuer-role, C1-gated) | No |
 
 The verifier (verifier application) verifies the envelope using the protocol package;
 it never depends on this adapter (the dependency-direction wall). See
@@ -95,7 +95,7 @@ app runs the full loop over **real HTTP** (agent signs + POSTs → receiver veri
   contract (identity binding §8 + nonce dedup §9) and depends only on BAP.
 
 Remaining: RA10 (cross-language verifier — **out of BARA's scope**: BARA is the
-Elixir holder-side signing adapter; a cross-language verifier validates BAP's
+Elixir companion-signer library; a cross-language verifier validates BAP's
 portable format, not this adapter, and anchors to BAP's conformance corpus — see
 `docs/ROADMAP.md`), RA11 (role-attestation consumption — **cross-repo**: gated on
 BAP defining `RoleAttestation` + `verify_attestation/2` and BA issuing

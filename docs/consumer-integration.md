@@ -24,7 +24,9 @@ report, signed via the holder key behind the `{module(), term()}` key-handle.
 Carry the two compacts to the verifier over your transport. The RECOMMENDED wire shape (verifier application
 instance #1): two request headers, `X-BA-Grant` and `X-BA-Proof`, each one compact string. Presence
 of BOTH is the scheme discriminator (a single header alone is neither a valid BA report nor the
-legacy scheme — it falls to the legacy path and fails closed there).
+legacy scheme — it falls to the legacy path and fails closed there). The de facto contract of
+record for this wire shape is verifier application's
+[ADR-0012 (report-path BA-envelope verification)](https://hexdocs.pm/bounded_authority_protocol).
 
 **Retain the request body's RAW bytes.** `cast_arguments` reconstruction decodes the raw body (not
 the HTTP framework's parsed map — parsing loses both the bytes and the tagged structure). With

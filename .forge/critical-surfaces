@@ -12,13 +12,15 @@
 #
 # Globs match the full repo-relative path. `*` matches any chars including `/`.
 
-# RA1+ — the holder-side signing surface. Private-key handling, deterministic
-# signing-input assembly, and compact-envelope framing all fail silently if
-# wrong: a key leak, a mis-built signing input, or a malformed envelope still
-# produces bytes — the defect surfaces only when a verifier rejects (or worse,
-# accepts) downstream. The holder-key-never-leaves-the-edge invariant
-# (charter §6) lives here.
-lib/bounded_authority_report_adapter/**/*.ex
+# RA1+ — the universal companion-signing surface. Private-key handling,
+# deterministic signing-input assembly, and compact-envelope framing all fail
+# silently if wrong: a key leak, a mis-built signing input, or a malformed
+# envelope still produces bytes — the defect surfaces only when a verifier
+# rejects (or worse, accepts) downstream. The holder-key-never-leaves-the-edge
+# invariant (charter §6) lives here. (The module is ONE flat file — the prior
+# directory glob `lib/bounded_authority_report_adapter/**/*.ex` never matched
+# anything; fixed 2026-08-17.)
+lib/bounded_authority_report_adapter.ex
 
 # RA3 — the dependency-direction wall. The "adapter depends ONLY on the public
 # protocol package" invariant (charter §6, strategy §3) is structural; a regression
