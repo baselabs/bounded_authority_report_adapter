@@ -9,6 +9,31 @@ minor bumps (pre-1.0 freedom per SemVer).
 
 ## [Unreleased]
 
+### Added — 2026-08-17 ADR-gap closures (ADR-0011/0012/0013) + audit items F/G
+
+- `docs/adr/0011-two-project-structure.md` — the two-mix-project structure: the
+  example app as its own project (path dep), the `examples/` carve-out from the
+  dep-wall scan as the wall's DESIGN (not a hole; transport deps live only
+  there; the example's hygiene enforced by its own CI job), the two-job CI bar,
+  and the Livebook-not-in-CI rule. Previously governed only by AGENTS.md prose.
+- `docs/adr/0012-example-transport-choices.md` — RA9's selections (Req `~> 0.5`
+  client; Bandit `~> 1.0` + Plug `~> 1.15` receiver), including the Bandit ≥ 1.12
+  top-level listener-option gotcha (passes compile, fails at server start) and
+  the raw-body retention consequence. Binds the example app only — convention,
+  not mandate.
+- `docs/adr/0013-corpus-as-acceptance-oracle.md` — RA2's acceptance posture: BAP's
+  published conformance corpus defines BARA's green (self-signed fixtures prove
+  round-trip, not conformance); defect-injection non-vacuity; re-verified at
+  every pin bump (couples to ADR-0010's corpus clause).
+- Audit item F: the ROADMAP header is re-worded — the ID/What/Acceptance/Depends/
+  Why columns are AUTHORED by design (no live-state claims); status/evidence stay
+  DERIVED; the dead `forge-roadmap.py` reference (the script was decommissioned
+  from the harness home 2026-08-16) is replaced with the audits/handoffs tracking
+  note.
+- Audit item G: charter §3's "It does not verify" gains the ADR-0008 nuance — the
+  sign-time gating verifies (wrong-key guard; role-attestation if RA11 lands)
+  gate the SIGNING, never the content.
+
 ### Added — 2026-08-17 pin-bump policy ADR (ADR-0010)
 
 - `docs/adr/0010-pin-bump-policy.md` — governs the BAP-pin alignment the v0.1.0

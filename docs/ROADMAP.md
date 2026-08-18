@@ -1,9 +1,12 @@
 # ROADMAP — Bounded Authority Report Adapter
 
-Authored capability definitions only. **Status and evidence are DERIVED** from
-`.forge/` machine state by `~/.claude/scripts/forge-roadmap.py --report` — never
-hand-edited here. The board is machine-local (`.forge/` is gitignored), so a
-fresh clone derives every row `DEFINED` until its machine state is rebuilt.
+ID / What / Acceptance / Depends / Why are **AUTHORED definitions** — hand-edited
+by design, and they carry no live-state claims (no "currently", no pin shas, no
+suite counts): frozen historical framing only. **Status and evidence are
+DERIVED** from `.forge/`/`.kimosabe/` machine state — never hand-edited here.
+(The forge-era deriver script was decommissioned from the harness home
+2026-08-16; until a replacement lands, status is tracked by the alignment audits
++ handoffs, and the rows below carry authored definitions only.)
 
 Rows seed from the charter (`docs/charter.md`) + the strategy (`docs/strategy.md`).
 The **Why** column links the governing section; a per-slice ADR

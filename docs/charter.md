@@ -71,9 +71,14 @@ C1-gated instantiation (see §4 for the three-role split).
 
 These negatives are load-bearing — each maps to a different repo's job:
 
-- **It does not verify.** Verification is embedded in every party via the
+- **It does not verify (content).** Verification is embedded in every party via the
   protocol package. The verifier verifies; this adapter signs. Conflating
-  the two puts the signer in the verifier's trust boundary.
+  the two puts the signer in the verifier's trust boundary. *(Nuance — the
+  adapter DOES run sign-time gating verifies: the wrong-key guard on every sign
+  path, and a role-attestation gate if RA11 lands — per ADR-0008, those gate
+  the SIGNING so a mis-signed artifact fails loudly at the signing boundary;
+  they never verify the artifact's content, which stays the verifier's job via
+  BAP.)*
 - **It is not the runtime.** Grant *issuance*, key custody/rotation, and live
   revocation are the `bounded_authority` runtime service's job (ADR 0001). This
   adapter holds a holder key it was issued and signs on invocation; it does not
