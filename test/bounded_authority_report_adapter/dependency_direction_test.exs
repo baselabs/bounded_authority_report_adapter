@@ -58,10 +58,12 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # pin ahead of BA ONLY when the span has ZERO V1 `lib/` changes AND every touched
   # surface class is enumerated + classified under ADR-0010's allowed classes (no surface
   # the authority layer needs to validate) — proven by `git diff --stat <ba-pin>..<bara-pin> -- lib/`
-  # being empty. At the bump, the pin (v0.1.0, c65d3bea) was 73 commits ahead of BA's
-  # pin (4c64be3) with ZERO V1 lib/ changes; the span carried ADRs (0009-0014), the
-  # birth of sdks/ (54 files), CI + packaging/prose — and no corpus change. Derive
-  # today's distance from the repos, never from this comment. When BA bumps to
+  # being empty. At the bump, the pin (5ed7b41, a main snapshot) was 176 commits ahead of
+  # BA's pin (4c64be3) with ZERO V1 lib/ changes; the span grew sdks/ further (111 files),
+  # ADRs 0009–0019 + governance docs, and MODIFIED the conformance corpus (10 corpus/cases
+  # + index + vectors/manifest, all M) — with the consumed vector grant-holder-proof.json
+  # blob-identical and RA2 quoted green at the new pin. Derive today's distance from the
+  # repos, never from this comment. When BA bumps to
   # a newer ref, BARA re-aligns to it. (BA's pin is in ../bounded_authority/mix.exs —
   # verify the git-diff-empty condition before any further BARA-ahead bump.)
   #
@@ -71,7 +73,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # empty-V1-lib-diff condition or compare against BA's live pin. A future bumper MUST
   # run the git-diff check by hand and state it in the commit, or re-align to BA's pin.
   @protocol_app "bounded_authority_protocol"
-  @protocol_ref "c65d3bea37b08da631423bcfe2a12fa0f669933d"
+  @protocol_ref "5ed7b4167f427f36f3b9517cd78ef7a91c0ed611"
 
   # Forbidden dep-app atoms — form-precise regex so prose does not false-positive (design
   # §1.4). A REAL dep is the tuple `{:bounded_authority, …}` / `{:replicant, …}` /
