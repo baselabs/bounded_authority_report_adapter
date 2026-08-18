@@ -13,7 +13,10 @@ minor bumps (pre-1.0 freedom per SemVer).
 
 - `bounded_authority_protocol` git pin `c65d3bea` → `5ed7b41` (a BAP main
   snapshot, 103 commits past the old pin / 176 past BA's `4c64be3`) under
-  ADR-0010's BARA-ahead exception (user opt-in): span `lib/` diff EMPTY,
+  ADR-0010's BARA-ahead exception — operator-authorized by the 2026-08-18
+  session direction (provenance recorded in the bump + review-fix commit
+  messages, the tracked audit trail; a changelog line does not itself
+  establish authorization): span `lib/` diff EMPTY,
   every top-level surface class enumerated + classified allowed, BAP's own
   `mix.exs` change docs-lists-only (no dependency-graph change). The consumed
   conformance vector `grant-holder-proof.json` is blob-identical across the
