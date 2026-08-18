@@ -59,7 +59,10 @@ the repos, never cite them from prose.
       commit and classified allowed**. Allowed classes (this ADR's NEW extension
       of the prior "docs/corpus-only" language — the v0.1.0 bump never
       enumerated classes at all): `docs/` (ADRs, design notes), the conformance
-      corpus (corpus growth re-verified green by RA2 at the new pin), CI, and
+      corpus (RA2's round-trip quoted green at the new pin on EVERY bump —
+      discharging the consumed vector per ADR-0013 Decision 4; corpus change
+      outside that vector follows ADR-0013 Decision 1's scope rule: surfaced +
+      classified, the harness extended only deliberately), CI, and
       BAP-internal `test/` + corpus/tooling scripts (e.g. the `conformance/`
       checker). Cross-language `sdks/` (Rust/Python/TypeScript verifier SDKs,
       BAP ADR-0014) are allowed by the same logic — separate build targets that
@@ -77,13 +80,25 @@ the repos, never cite them from prose.
    `git diff --stat <ba-pin>..<bara-pin>` (Decision 2.2's enumeration basis);
    (b) `git diff --stat <ba-pin>..<bara-pin> -- lib/` — EMPTY (Decision 2.1);
    (c) the corpus sweep — `git diff --stat <ba-pin>..<bara-pin> --
-   priv/conformance test/conformance` — classified per Decision 2.2, any growth
-   re-verified green by RA2 at the new pin per ADR-0013 Decision 4. A BARA-ahead
+   priv/conformance test/conformance` — classified per Decision 2.2. RA2's
+   round-trip is quoted green at the new pin on EVERY bump, unconditionally,
+   and it discharges exactly the CONSUMED vector
+   (`vectors/grant-holder-proof.json`, ADR-0013 Decision 1's scope) — added,
+   modified, or deleted cases there are what RA2 verifies. Change in the
+   corpus's other files or in BAP-internal `test/conformance` is NOT
+   RA2-discharged: the sweep surfaces it and ADR-0013 Decision 1's scope rule
+   governs (extending the harness to consume it is a deliberate decision
+   recorded in the bump commit, never an accident). A BARA-ahead
    bump commit without that evidence violates this policy and is revertible on
    sight. *(Amended 2026-08-18, completing the 2026-08-18 audit's §4-5 flag
-   ahead of the first corpus-growing span: the original text named only "the
-   diff check" against `lib/`, leaving the corpus sweep's command shape
-   implicit.)*
+   ahead of the first corpus-growing span: the original named only "the diff
+   check" against `lib/`, leaving the corpus sweep's command shape implicit.
+   The same-day cross-vendor round corrected the coupling twice over: RA2
+   green is quoted at EVERY bump — never growth-conditional (the current
+   sibling span is all-modified, zero added files) — and it discharges only
+   the consumed vector; corpus change outside that vector routes to
+   ADR-0013 D1's scope rule, not an implied RA2 green. Decision 2.2's
+   parenthetical carried the same over-broad phrasing; both fixed.)*
 5. **The pin is read from `mix.exs`, never from prose** (the AGENTS.md rule; a
    restated sha rots on the next bump).
 
