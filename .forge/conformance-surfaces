@@ -7,7 +7,8 @@
 #
 # The obligation is forge-skill process authority (the T2 conformance loop, per
 # the user-level AGENTS.md), NOT a landed repo document — the product-contract
-# authority for the harness itself is ROADMAP RA2 + charter §6 invariant 2.
+# authority for the harness itself is ADR-0013 (corpus-as-acceptance-oracle),
+# which superseded the pre-ADR "ROADMAP RA2 + charter §6 invariant 2" pointer.
 #
 # This manifest is FORCE-TRACKED (git add -f) past the broad .forge/ ignore.
 # Globs match the full repo-relative path; `*` matches any chars including `/`;

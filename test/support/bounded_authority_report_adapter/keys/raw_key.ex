@@ -9,7 +9,7 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
   keys. This compiles ONLY under `:test` (via `mix.exs` `elixirc_paths`) — it
   does NOT ship in the artifact.
 
-  ## Why test-only (design C5 / strategy §4)
+  ## Why test-only (design C5 / strategy §4 / ADR-0014)
 
   A `{pub, priv}` tuple puts the private key in process memory as a recoverable
   BEAM binary. That posture is acceptable for tests and local development, but

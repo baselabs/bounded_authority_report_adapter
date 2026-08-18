@@ -9,6 +9,27 @@ minor bumps (pre-1.0 freedom per SemVer).
 
 ## [Unreleased]
 
+### Changed — 2026-08-18 post-release docs reconciliation
+
+- `.forge/conformance-surfaces` — the harness's product-contract authority now
+  cites ADR-0013 (the pre-ADR "ROADMAP RA2 + charter §6 invariant 2" pointer it
+  named was superseded when that ADR landed).
+- CHANGELOG shape: the RA7/RA8 test counts below carry at-landing stamps
+  (matching the RA1/RA4 shape); the new `0.1.0` header records the release tag.
+- `docs/adr/0014-test-support-compile-scope.md` — the design-C5 packaging
+  decision (`test/support/` compiles only in `:test`; the `Keys.RawKey`
+  reference handle does not ship in the artifact) promoted from mix.exs /
+  raw_key.ex comments to a tracked ADR; those comments + AGENTS.md now cite it.
+- Library moduledoc: the "Not a verifier" bullet lists all four protocol
+  verifiers (`check_envelope/2`, `verify_grant/3`, `verify_historical_anchor/3`,
+  `verify_key_transition/4`), matching the per-function docs.
+
+## [0.1.0] — 2026-08-17
+
+First tagged release: annotated `v0.1.0` at `c1861a2`, pushed — the
+`source_ref: "v0.1.0"` in mix.exs `docs` resolves on origin. Everything below
+shipped in the tag.
+
 ### Added — 2026-08-17 ADR-gap closures (ADR-0011/0012/0013) + audit items F/G
 
 - `docs/adr/0011-two-project-structure.md` — the two-mix-project structure: the
@@ -192,13 +213,15 @@ minor bumps (pre-1.0 freedom per SemVer).
 - `Keys.RawKey` (test-only reference handle) declares `:holder` — it signs
   proofs + anchors, not grants; the issuer test handles live in
   `test/support/.../test_handles.ex`.
-- `test/bounded_authority_report_adapter/sign_grant_test.exs` — 17 tests:
-  round-trip through `verify_grant/3`, the C1 holder/roleless rejections
-  (`GrantHolderCountingHandle`: `sign_call_count == 0`), post-snapshot key
-  swap (`GrantRacingIdentityHandle`, caught by the wrong-key verify),
-  defect-injection, missing-field, opts, and exiting-handle cases. Tripwires
-  are mutation-proven (removing the role guard / disabling
-  `verify_signature` drives them red).
+- `test/bounded_authority_report_adapter/sign_grant_test.exs` — 17 tests at
+  the slice's close (`bf373e9` landed 15; the same-day `0828ca3` + `2ee2bbd`
+  follow-ups took it to 17; unchanged since — the live count is the suite
+  total, README Development): round-trip through `verify_grant/3`, the C1
+  holder/roleless rejections (`GrantHolderCountingHandle`:
+  `sign_call_count == 0`), post-snapshot key swap (`GrantRacingIdentityHandle`,
+  caught by the wrong-key verify), defect-injection, missing-field, opts, and
+  exiting-handle cases. Tripwires are mutation-proven (removing the role
+  guard / disabling `verify_signature` drives them red).
 - Closeout follow-ups: raw_key alias + opts guard + producer-error test
   (`0828ca3`); diff-review doc polish (`2e367f0`); non-map opts normalized
   to defaults in ALL three `sign_*` (uniform tripwires in the three suites,
@@ -234,8 +257,11 @@ minor bumps (pre-1.0 freedom per SemVer).
   `next_{key_id, public_key}` + content are caller-supplied. `next_public_key` is pre-checked
   for 32 bytes (the adapter's public-key guard); a self-transition is rejected by BAP's
   `distinct_fingerprints`.
-- `test/bounded_authority_report_adapter/sign_key_transition_test.exs` — 11 tests: the
-  round-trip through `verify_key_transition/4` + wrong-key, atomic-snapshot drift,
+- `test/bounded_authority_report_adapter/sign_key_transition_test.exs` — 11 tests
+  at the slice's close (`8c0e8bd` landed 10; the `0728d49` cross-vendor
+  closeout's opts tripwire took it to 11; unchanged since — the live count is
+  the suite total, README Development): the round-trip through
+  `verify_key_transition/4` + wrong-key, atomic-snapshot drift,
   no-canonical-bytes-fork, defect-injection, self-transition, missing-field, non-32-byte
   next key, exiting handle, and roleless-handle rejection — plus the non-map-opts
   defaults tripwire added by the `0728d49` cross-vendor closeout. Wrong-key + racing tripwires
