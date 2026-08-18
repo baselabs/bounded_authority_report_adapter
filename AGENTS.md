@@ -7,8 +7,9 @@ the build arc. Read this FIRST, then the charter/strategy for the *why*.
 
 ## What this is
 
-`bounded_authority_report_adapter` (BARA) — the HOLDER-side signing glue for the
-Bounded Authority protocol. It takes a `{module(), term()}` key-handle + a BAP
+`bounded_authority_report_adapter` (BARA) — BAP's universal companion-signer
+glue (ADR-0006; holder-side by default, issuer-side for grants). It takes a
+`{module(), term()}` key-handle + a BAP
 signing input, signs via the handle's local key, assembles the compact via the
 public `bounded_authority_protocol` (BAP) package. It signs proofs, grants,
 boundary anchors, and key transitions; it does NOT verify, does NOT transport,
