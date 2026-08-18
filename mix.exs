@@ -21,7 +21,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
           "key transitions) via a local {module(), term()} key-handle and BAP's " <>
           "signing-input producers. Private BaseLabs library (not hex-published).",
       source_url: @source_url,
-      homepage_url: @source_url
+      homepage_url: @source_url,
+      aliases: aliases()
     ]
   end
 
@@ -29,6 +30,33 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   def application do
     [
       extra_applications: [:crypto]
+    ]
+  end
+
+  # `mix ci` — local CI parity: reproduces .github/workflows/ci.yml step-for-
+  # step (both jobs, the five build steps each) with zero GitHub Actions spend.
+  # The workflow exports MIX_ENV: test at the JOB level, so every step here
+  # re-execs mix under MIX_ENV=test via env(1) — a bare local `mix ci` would
+  # otherwise boot in :dev, and a :dev compile skips test/support (the RA7
+  # warnings trap). `mix cmd` aborts on the first non-zero step, like a failed
+  # CI job. Not reproduced locally: checkout/setup-beam (asdf here) and the
+  # private-dep git auth (already configured per host).
+  defp aliases do
+    [
+      ci: [
+        # job: gate (the library)
+        "cmd env MIX_ENV=test mix deps.get",
+        "cmd env MIX_ENV=test mix format --check-formatted",
+        "cmd env MIX_ENV=test mix compile --warnings-as-errors",
+        "cmd env MIX_ENV=test mix credo --strict",
+        "cmd env MIX_ENV=test mix test",
+        # job: example (the workflow's working-directory: examples/edge_agent)
+        "cmd --cd examples/edge_agent env MIX_ENV=test mix deps.get",
+        "cmd --cd examples/edge_agent env MIX_ENV=test mix format --check-formatted",
+        "cmd --cd examples/edge_agent env MIX_ENV=test mix compile --warnings-as-errors",
+        "cmd --cd examples/edge_agent env MIX_ENV=test mix credo --strict",
+        "cmd --cd examples/edge_agent env MIX_ENV=test mix test"
+      ]
     ]
   end
 

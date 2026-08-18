@@ -24,6 +24,16 @@ minor bumps (pre-1.0 freedom per SemVer).
   verifiers (`check_envelope/2`, `verify_grant/3`, `verify_historical_anchor/3`,
   `verify_key_transition/4`), matching the per-function docs.
 
+### Added — 2026-08-18 local CI parity (`mix ci`)
+
+- Root `mix.exs` gains a `ci` alias reproducing `.github/workflows/ci.yml`
+  step-for-step — both jobs (`gate` + `example`), the five build steps each,
+  every step re-executed under `MIX_ENV=test` (the workflow's job-level env; a
+  bare local `:dev` boot would skip `test/support` at compile). RED-capability
+  proven: a formatting violation aborts the run at the gate job's format step
+  with exit 1. Motivated by the 2026-08 Actions usage cap — the zero-spend
+  evidence-of-record gate (AGENTS.md CI section documents it).
+
 ## [0.1.0] — 2026-08-17
 
 First tagged release: annotated `v0.1.0` at `c1861a2`, pushed — the
