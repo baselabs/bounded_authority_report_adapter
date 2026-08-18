@@ -5,8 +5,8 @@ by design, and they carry no live-state claims (no "currently", no pin shas, no
 suite counts): frozen historical framing only. **Status and evidence are
 DERIVED** from `.forge/`/`.kimosabe/` machine state — never hand-edited here.
 (The forge-era deriver script was decommissioned from the harness home
-2026-08-16; until a replacement lands, status is tracked by the alignment audits
-+ handoffs, and the rows below carry authored definitions only.)
+2026-08-16; until a replacement lands, status is tracked by the alignment
+audits and handoffs, and the rows below carry authored definitions only.)
 
 Rows seed from the charter (`docs/charter.md`) + the strategy (`docs/strategy.md`).
 The **Why** column links the governing section; a per-slice ADR
