@@ -92,8 +92,9 @@ minor bumps (pre-1.0 freedom per SemVer).
   so proof-only handles need not implement it.
 - `sign_report/3` refactored onto the same shared tail; the wrong-key verify guard
   now covers both the proof and anchor paths.
-- `test/bounded_authority_report_adapter/sign_anchor_test.exs` — 12 tripwires
-  at landing (cross-cutting follow-ups have since added more; the live count is
+- `test/bounded_authority_report_adapter/sign_anchor_test.exs` — 13 tripwires
+  at the slice's close (`f82339b` + the same-day `9d3092d` key-identity fix took
+  it 12 → 13; 14 today after later cross-cutting follow-ups — the live count is
   the suite total, README Development).
 
 ### Added — RA5 (2026-08-10) universal consumer-integration guide
