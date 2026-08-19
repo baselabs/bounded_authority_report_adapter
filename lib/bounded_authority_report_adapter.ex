@@ -175,16 +175,14 @@ defmodule BoundedAuthorityReportAdapter do
        `grant_compact` (BAP's `proof_signing_input` derives `ath` = grant hash
        from it, and `ba_req` = request digest from `cast_arguments`).
     3. Produce the deterministic proof signing input via BAP.
-    4. Sign + assemble via the shared signing tail (`sign_and_assemble/3`) — the
+    4. Sign + assemble via the shared signing tail (`sign_and_assemble/4`) — the
        adapter signs ONLY the proof; the grant is never signed here.
     5. Return `%{grant: report.grant_compact, proof: proof_compact}`.
 
   ## Options
 
-    * `:bounds` — resource ceilings forwarded to BAP's producer (default `%{}`,
-      BAP's maxima). NOTE: `assemble_compact/2` is forced to `%{}` — the public
-      `V1.assemble_compact/2` hard-codes it; tightening assemble bounds is a
-      named BAP surface gap (design C7), not something this adapter can do.
+    * `:bounds` — resource ceilings forwarded unchanged to BAP's producer and
+      bounds-aware compact assembler (default `%{}`, BAP's maxima).
     * `:issued_at` — the proof's `iat` (default: `System.system_time(:second)`).
       Pin this when the verifier's `evaluation_time` is far from wall-clock
       (e.g. tests) so the proof's time window overlaps the grant's.
@@ -213,7 +211,8 @@ defmodule BoundedAuthorityReportAdapter do
          {:ok, holder_public_key} <- resolve_public_key(key_handle),
          proof = build_proof(report, holder_public_key, proof_id, issued_at),
          {:ok, signing_input} <- produce_proof_signing_input(proof, bounds),
-         {:ok, proof_compact} <- sign_and_assemble(key_handle, signing_input, holder_public_key) do
+         {:ok, proof_compact} <-
+           sign_and_assemble(key_handle, signing_input, holder_public_key, bounds) do
       {:ok, %{grant: report.grant_compact, proof: proof_compact}}
     end
   end
@@ -255,7 +254,8 @@ defmodule BoundedAuthorityReportAdapter do
     * `:anchored_at` — the anchor's timestamp (default:
       `System.system_time(:second)`). Pin this when the verifier's evaluation time
       is far from wall-clock so it falls inside the key's validity window.
-    * `:bounds` — resource ceilings forwarded to BAP's producer (default `%{}`).
+    * `:bounds` — resource ceilings forwarded unchanged to BAP's producer and
+      bounds-aware compact assembler (default `%{}`).
 
   ## Errors (closed-atom set — no key material or anchor content in errors)
 
@@ -278,7 +278,7 @@ defmodule BoundedAuthorityReportAdapter do
     with {:ok, {key_id, public_key}} <- resolve_key_identity(key_handle),
          {:ok, anchor} <- build_anchor(anchor_input, public_key, key_id, anchored_at),
          {:ok, signing_input} <- produce_anchor_signing_input(anchor, bounds),
-         {:ok, anchor_compact} <- sign_and_assemble(key_handle, signing_input, public_key) do
+         {:ok, anchor_compact} <- sign_and_assemble(key_handle, signing_input, public_key, bounds) do
       {:ok, %{anchor: anchor_compact}}
     end
   end
@@ -317,7 +317,8 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Options
 
-    * `:bounds` — resource ceilings forwarded to the producer (default `%{}`).
+    * `:bounds` — resource ceilings forwarded unchanged to BAP's producer and
+      bounds-aware compact assembler (default `%{}`).
 
   ## Errors (closed-atom set — no key material or grant content in errors)
 
@@ -338,7 +339,7 @@ defmodule BoundedAuthorityReportAdapter do
     with {:ok, {key_id, public_key}} <- resolve_signing_identity(key_handle),
          {:ok, grant} <- build_grant(grant_input, key_id),
          {:ok, signing_input} <- produce_grant_signing_input(grant, bounds),
-         {:ok, grant_compact} <- sign_and_assemble(key_handle, signing_input, public_key) do
+         {:ok, grant_compact} <- sign_and_assemble(key_handle, signing_input, public_key, bounds) do
       {:ok, %{grant: grant_compact}}
     end
   end
@@ -370,7 +371,8 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Options
 
-    * `:bounds` — resource ceilings forwarded to the producer (default `%{}`).
+    * `:bounds` — resource ceilings forwarded unchanged to BAP's producer and
+      bounds-aware compact assembler (default `%{}`).
 
   ## Errors (closed-atom set — no key material or transition content in errors)
 
@@ -395,7 +397,8 @@ defmodule BoundedAuthorityReportAdapter do
          {:ok, transition} <-
            build_key_transition(transition_input, current_key_id, current_public_key),
          {:ok, signing_input} <- produce_key_transition_signing_input(transition, bounds),
-         {:ok, compact} <- sign_and_assemble(key_handle, signing_input, current_public_key) do
+         {:ok, compact} <-
+           sign_and_assemble(key_handle, signing_input, current_public_key, bounds) do
       {:ok, %{key_transition: compact}}
     end
   end
@@ -409,10 +412,10 @@ defmodule BoundedAuthorityReportAdapter do
   # the resolved public key is :signing_failed, never a silent false-success.
   # ---------------------------------------------------------------------------
 
-  defp sign_and_assemble(key_handle, signing_input, public_key) do
+  defp sign_and_assemble(key_handle, signing_input, public_key, bounds) do
     with {:ok, signature} <- sign_via_handle(key_handle, signing_input.message),
          :ok <- verify_signature(signing_input.message, signature, public_key) do
-      assemble_compact(signing_input, signature)
+      assemble_compact(signing_input, signature, bounds)
     end
   end
 
@@ -778,11 +781,12 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  defp assemble_compact(signing_input, signature) do
+  defp assemble_compact(signing_input, signature, bounds) do
     # Generic over the signing input's kind (:proof, :boundary_anchor, ...) —
-    # V1.assemble_compact/2 dispatches on kind and validates via the matching
-    # codec. Both sign_report/3 and sign_anchor/3 flow through here.
-    case BoundedAuthorityProtocol.V1.assemble_compact(signing_input, signature) do
+    # V1.assemble_compact/3 dispatches on kind and validates via the matching
+    # codec under the same bounds used to produce the signing input. All four
+    # public signing paths flow through here.
+    case BoundedAuthorityProtocol.V1.assemble_compact(signing_input, signature, bounds) do
       {:ok, compact} -> {:ok, compact}
       {:error, :invalid} -> {:error, {:producer_error, :invalid}}
     end

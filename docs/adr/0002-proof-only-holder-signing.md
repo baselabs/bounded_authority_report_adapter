@@ -49,7 +49,8 @@ The adapter signs **only the holder proof**. Concretely, `sign_report/3`:
    key-handle callback — never the key bytes in-process).
 5. Verifies the signature against the resolved holder public key (wrong-key
    guard).
-6. Assembles the compact proof via `assemble_compact/2`.
+6. Assembles the compact proof via `assemble_compact/3`, with the same caller bounds
+   used by `proof_signing_input/2`.
 7. Returns `{grant: grant_compact, proof: proof_compact}` — the grant untouched.
 
 The adapter **never** calls `grant_signing_input` in the envelope flow. *(Amended
