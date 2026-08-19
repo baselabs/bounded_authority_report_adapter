@@ -9,6 +9,17 @@ minor bumps (pre-1.0 freedom per SemVer).
 
 ## [Unreleased]
 
+### Changed — 2026-08-19 bounds-aware assembly alignment
+
+- Re-aligned both BAP lock surfaces with the BA-selected
+  `ee2e36eb8ec894f0e4ffa2b488527062d6a33976` ref.
+- Every signing entry point now threads one caller-supplied bounds value through
+  the BAP signing-input producer and `assemble_compact/3`; the shared signing tail
+  can no longer silently widen assembly back to profile maxima.
+- Added adapter-boundary compact-limit rejection coverage. Because BAP producers
+  reject that ceiling before assembly, the separate source tripwire is the proof
+  that `/2` fallback or a dropped bounds binding fails across all four signing paths.
+
 ### Changed — 2026-08-18 BAP pin bump (b2-ra-pin-bump)
 
 - `bounded_authority_protocol` git pin `c65d3bea` → `5ed7b41` (a BAP main
@@ -348,5 +359,3 @@ shipped in the tag.
   let two phantom citations — "Req per repo-root AGENTS.md" + "BAP ADR-0014/0015" — reach a prior
   handoff). `docs/consumer-integration.md` + the example README cross-reference it; the parent
   README Development section is refreshed (test count, dual-app note).
-
-

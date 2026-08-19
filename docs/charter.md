@@ -52,7 +52,8 @@ grant + a application report, and the adapter returns the grant + proof envelope
    on the edge — never in the verifier; the adapter holds a
    `{module(), term()}` key-handle callback, never the key bytes).
 5. Assemble the compact proof via
-   `BoundedAuthorityProtocol.V1.assemble_compact/2`.
+   `BoundedAuthorityProtocol.V1.assemble_compact/3`, using the same caller bounds
+   as the signing-input producer.
 6. Return `{grant: grant_compact, proof: proof_compact}` — the grant passes
    through untouched.
 

@@ -58,14 +58,10 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # pin ahead of BA ONLY when the span has ZERO V1 `lib/` changes AND every touched
   # surface class is enumerated + classified under ADR-0010's allowed classes (no surface
   # the authority layer needs to validate) — proven by `git diff --stat <ba-pin>..<bara-pin> -- lib/`
-  # being empty. At the bump, the pin (5ed7b41, a main snapshot) was 176 commits ahead of
-  # BA's pin (4c64be3) with ZERO V1 lib/ changes; the span grew sdks/ further (111 files),
-  # ADRs 0009–0019 + governance docs, and MODIFIED the conformance corpus (10 corpus/cases
-  # + index + vectors/manifest, all M) — with the consumed vector grant-holder-proof.json
-  # blob-identical and RA2 quoted green at the new pin. Derive today's distance from the
-  # repos, never from this comment. When BA bumps to
-  # a newer ref, BARA re-aligns to it. (BA's pin is in ../bounded_authority/mix.exs —
-  # verify the git-diff-empty condition before any further BARA-ahead bump.)
+  # being empty. BARA is currently re-aligned with BA at the bounds-aware assembly head;
+  # derive today's distance from the repos, never from this comment. If BARA moves ahead
+  # again, verify the git-diff-empty condition first. (BA's pin is in
+  # ../bounded_authority/mix.exs.)
   #
   # ENFORCEMENT NOTE: this exception is REVIEWER DISCIPLINE, not a mechanical check
   # here — BA's pin lives in a sibling repo this test cannot reach, so the wall asserts
@@ -73,7 +69,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # empty-V1-lib-diff condition or compare against BA's live pin. A future bumper MUST
   # run the git-diff check by hand and state it in the commit, or re-align to BA's pin.
   @protocol_app "bounded_authority_protocol"
-  @protocol_ref "5ed7b4167f427f36f3b9517cd78ef7a91c0ed611"
+  @protocol_ref "ee2e36eb8ec894f0e4ffa2b488527062d6a33976"
 
   # Forbidden dep-app atoms — form-precise regex so prose does not false-positive (design
   # §1.4). A REAL dep is the tuple `{:bounded_authority, …}` / `{:replicant, …}` /
