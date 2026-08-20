@@ -1,7 +1,7 @@
 defmodule BoundedAuthorityReportAdapter.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
   @source_url "https://github.com/baselabs/bounded_authority_report_adapter"
 
   def project do
@@ -16,10 +16,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       docs: docs(),
       name: "Bounded Authority Report Adapter",
       description:
-        "Universal companion signer for the Bounded Authority protocol (ADR-0006) — " <>
-          "signs BAP protocol objects (holder proofs, boundary anchors, grants, " <>
-          "key transitions) via a local {module(), term()} key-handle and BAP's " <>
-          "signing-input producers. Private BaseLabs library (not hex-published).",
+        "Holder-side companion signer for the Bounded Authority Protocol — signs protocol " <>
+          "objects (holder proofs, boundary anchors, grants, key transitions) through a local " <>
+          "key handle over the protocol's deterministic signing inputs. The private key never " <>
+          "enters the library.",
       source_url: @source_url,
       homepage_url: @source_url,
       aliases: aliases()
@@ -37,10 +37,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   # step (both jobs, the five build steps each) with zero GitHub Actions spend.
   # The workflow exports MIX_ENV: test at the JOB level, so every step here
   # re-execs mix under MIX_ENV=test via env(1) — a bare local `mix ci` would
-  # otherwise boot in :dev, and a :dev compile skips test/support (the RA7
+  # otherwise boot in :dev, and a :dev compile skips test/support (the
   # warnings trap). `mix cmd` aborts on the first non-zero step, like a failed
-  # CI job. Not reproduced locally: checkout/setup-beam (asdf here) and the
-  # private-dep git auth (already configured per host).
+  # CI job. Not reproduced locally: checkout/setup-beam (asdf here).
   defp aliases do
     [
       ci: [
@@ -70,13 +69,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
 
   # The adapter depends ONLY on the public bounded_authority_protocol package on
   # the edge path — no private runtime dependency (the dependency-direction wall,
-  # ADR 0003). BAP is consumed as a PRIVATE git dep (not hex-published yet); the
-  # same posture this adapter carries. See docs/strategy.md § Dependencies.
+  # ADR 0003). BAP is consumed from its Hex release.
   defp deps do
     [
-      {:bounded_authority_protocol,
-       git: "https://github.com/baselabs/bounded_authority_protocol.git",
-       ref: "ee2e36eb8ec894f0e4ffa2b488527062d6a33976"},
+      {:bounded_authority_protocol, "~> 0.1.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false}
     ]
@@ -93,11 +89,13 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "CHANGELOG.md",
         "LICENSE",
         "NOTICE",
-        "docs"
+        "SECURITY.md",
+        "docs/consumer-integration.md"
       ],
       licenses: ["Apache-2.0"],
       links: %{
-        "GitHub" => @source_url
+        "GitHub" => @source_url,
+        "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md"
       }
     ]
   end
@@ -112,9 +110,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "CHANGELOG.md",
         "LICENSE",
         "NOTICE",
-        "docs/charter.md",
-        "docs/strategy.md",
-        "docs/ROADMAP.md"
+        "SECURITY.md",
+        "docs/consumer-integration.md"
       ]
     ]
   end

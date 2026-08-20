@@ -51,25 +51,16 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   use ExUnit.Case, async: false
 
   # The ALLOWED public protocol package the adapter MUST declare (the trust root for the
-  # wire profile). DEFAULT: pinned to the SAME ref BA pins — drifting ahead couples the
-  # adapter to a protocol surface the authority layer has not validated.
+  # wire profile). Consumed from its Hex release: the adapter requires the published
+  # `bounded_authority_protocol` package at @protocol_requirement, and the resolved lock
+  # carries the Hex tuple (not a git ref) — the wall asserts BOTH below.
   #
-  # NARROW EXCEPTION (governed by docs/adr/0010-pin-bump-policy.md): BARA may bump its
-  # pin ahead of BA ONLY when the span has ZERO V1 `lib/` changes AND every touched
-  # surface class is enumerated + classified under ADR-0010's allowed classes (no surface
-  # the authority layer needs to validate) — proven by `git diff --stat <ba-pin>..<bara-pin> -- lib/`
-  # being empty. BARA is currently re-aligned with BA at the bounds-aware assembly head;
-  # derive today's distance from the repos, never from this comment. If BARA moves ahead
-  # again, verify the git-diff-empty condition first. (BA's pin is in
-  # ../bounded_authority/mix.exs.)
-  #
-  # ENFORCEMENT NOTE: this exception is REVIEWER DISCIPLINE, not a mechanical check
-  # here — BA's pin lives in a sibling repo this test cannot reach, so the wall asserts
-  # ONLY that mix.exs/mix.lock carry @protocol_ref (below); it does NOT re-derive the
-  # empty-V1-lib-diff condition or compare against BA's live pin. A future bumper MUST
-  # run the git-diff check by hand and state it in the commit, or re-align to BA's pin.
+  # A protocol version bump is a deliberate, reviewed change: raise @protocol_requirement
+  # here in the same commit that bumps the dep in mix.exs, and the SemVer bump is governed
+  # by docs/adr/0010-pin-bump-policy.md (a wire/verification change is a protocol
+  # contract-major; an additive change is a minor).
   @protocol_app "bounded_authority_protocol"
-  @protocol_ref "ee2e36eb8ec894f0e4ffa2b488527062d6a33976"
+  @protocol_requirement "~> 0.1.1"
 
   # Forbidden dep-app atoms — form-precise regex so prose does not false-positive (design
   # §1.4). A REAL dep is the tuple `{:bounded_authority, …}` / `{:replicant, …}` /
@@ -168,20 +159,24 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
                "trust root — charter §6 invariant 3; strategy §3)"
     end
 
-    test "mix.exs pins the protocol package at @protocol_ref" do
+    test "mix.exs requires the protocol package at @protocol_requirement" do
       mix_exs = File.read!("mix.exs")
 
-      assert String.contains?(mix_exs, @protocol_ref),
-             "mix.exs must pin the protocol package to ref #{@protocol_ref} " <>
-               "(BARA's deliberate pin — tracks BA's by default; a BARA-ahead bump is " <>
-               "permitted only under the NARROW EXCEPTION in the @protocol_ref comment block)"
+      assert String.contains?(mix_exs, "{:#{@protocol_app}, \"#{@protocol_requirement}\"}"),
+             "mix.exs must require the Hex package :#{@protocol_app} at " <>
+               "#{@protocol_requirement} (the published wire-profile trust root; a version bump " <>
+               "raises @protocol_requirement here in the same commit)"
     end
 
-    test "mix.lock resolves the protocol package at @protocol_ref" do
+    test "mix.lock resolves the protocol package from Hex, not a git ref" do
       mix_lock = File.read!("mix.lock")
 
-      assert String.contains?(mix_lock, @protocol_ref),
-             "mix.lock must resolve :#{@protocol_app} at ref #{@protocol_ref}"
+      assert String.contains?(mix_lock, "{:hex, :#{@protocol_app},"),
+             "mix.lock must resolve :#{@protocol_app} from Hex (a `{:git, ...}` resolution " <>
+               "would reintroduce the pre-publication private-dep coupling the wall forbids)"
+
+      refute String.contains?(mix_lock, "{:git, :#{@protocol_app},"),
+             "mix.lock must NOT resolve :#{@protocol_app} from a git ref"
     end
   end
 
