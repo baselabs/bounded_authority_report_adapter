@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0, `0.x` minor bumps may carry
 breaking changes (SemVer §4).
 
+## [0.2.1] — 2026-08-20
+
+### Fixed
+
+- Reference the repository's `examples/` (Livebook demo and edge-agent app) in prose rather than by
+  relative link, since `examples/` is not shipped in the package — removes the dangling
+  documentation links from the published README and consumer-integration guide.
+
 ## [0.2.0] — 2026-08-20
 
 First public release on Hex.

@@ -5,7 +5,7 @@ produced by `BoundedAuthorityReportAdapter.sign_report/3`. The verifier depends 
 `bounded_authority_protocol` package** — never on this adapter (the dependency-direction wall).
 A application verifier is the first consumer; the contract is general.
 
-> **Runnable reference:** [`examples/edge_agent/`](../examples/edge_agent/) implements this whole
+> **Runnable reference:** the repository's `examples/edge_agent` app implements this whole
 > contract end-to-end — a `Plug`/Bandit receiver (`EdgeAgent.Receiver`) that retains the raw body,
 > runs the one-`with` verify below, binds the holder to the configured identity (§8), and dedupes
 > nonces (§9). It is the first runnable instance of this guide; read it alongside the prose.

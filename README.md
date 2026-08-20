@@ -42,11 +42,10 @@ The signer is universal across the four protocol objects, each through one share
 The role gate is load-bearing: a holder handle **cannot** sign a grant. Only a handle that resolves
 the issuer role may, so an agent can never mint its own capability.
 
-**See it run, self-contained (no database, no Docker):** the [Livebook
-demo](examples/report_envelope_roundtrip.livemd) plays issuer → holder → verifier in one notebook,
-and the [`edge_agent/`](examples/edge_agent/) example runs the full loop over real HTTP (agent signs
-and POSTs; receiver verifies via `check_envelope`). Both prove a tampered or wrong-key proof is
-rejected.
+**See it run, self-contained (no database, no Docker):** the repository's `examples/` directory
+carries a Livebook demo that plays issuer → holder → verifier in one notebook, and an `edge_agent`
+app that runs the full loop over real HTTP (agent signs and POSTs; receiver verifies via
+`check_envelope`). Both prove a tampered or wrong-key proof is rejected.
 
 ## Key custody
 
@@ -68,9 +67,8 @@ mix ci
 full test suite (including the conformance round-trip against the protocol package's published
 oracle vectors and the dependency-direction wall), for both the library and the example app.
 
-Requires Elixir 1.18+ (developed on 1.20 / OTP 29). The runnable example at
-[`examples/edge_agent/`](examples/edge_agent/) is a separate mix project with its own deps and CI
-job — develop it from inside that directory.
+Requires Elixir 1.18+ (developed on 1.20 / OTP 29). The runnable `examples/edge_agent` app is a
+separate mix project with its own deps and CI job — develop it from inside that directory.
 
 ## Security
 
