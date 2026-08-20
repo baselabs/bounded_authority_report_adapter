@@ -3,7 +3,7 @@
 This is the **universal consumer contract**: how any verifier consumes a `{grant, proof}` envelope
 produced by `BoundedAuthorityReportAdapter.sign_report/3`. The verifier depends **only on the public
 `bounded_authority_protocol` package** — never on this adapter (the dependency-direction wall).
-verifier application's report path is the first instance; the contract is general.
+A application verifier is the first consumer; the contract is general.
 
 > **Runnable reference:** [`examples/edge_agent/`](../examples/edge_agent/) implements this whole
 > contract end-to-end — a `Plug`/Bandit receiver (`EdgeAgent.Receiver`) that retains the raw body,
@@ -15,18 +15,17 @@ verifier application's report path is the first instance; the contract is genera
 `sign_report/3` returns `{:ok, %{grant: grant_compact, proof: proof_compact}}` — two compact-JWS
 binary strings. The grant is the pass-through of the issuer-signed grant the caller supplied
 (`sign_report/3` never signs the grant — grant signing is the separate issuer-role
-instantiation `sign_grant/3`, ADR-0007, not part of this flow); the proof is the holder's
+instantiation `sign_grant/3`, not part of this flow); the proof is the holder's
 binding of that grant to the
 report, signed via the holder key behind the `{module(), term()}` key-handle.
 
 ## 2. Transport the envelope + retain the raw body
 
-Carry the two compacts to the verifier over your transport. The RECOMMENDED wire shape (verifier application
+Carry the two compacts to the verifier over your transport. The RECOMMENDED wire shape (as used by the first consumer
 instance #1): two request headers, `X-BA-Grant` and `X-BA-Proof`, each one compact string. Presence
 of BOTH is the scheme discriminator (a single header alone is neither a valid BA report nor the
 legacy scheme — it falls to the legacy path and fails closed there). The de facto contract of
-record for this wire shape is verifier application's
-[ADR-0012 (report-path BA-envelope verification)](https://hexdocs.pm/bounded_authority_protocol).
+record for this wire shape is the first consumer's own integration.
 
 **Retain the request body's RAW bytes.** `cast_arguments` reconstruction decodes the raw body (not
 the HTTP framework's parsed map — parsing loses both the bytes and the tagged structure). With
@@ -177,7 +176,7 @@ defp bind_holder_to_identity(bound_holder_thumbprint, identity) do
 end
 ```
 
-verifier application instance #1 implements this: the reporter's stored Ed25519 key (the same one the S1 body-
+The first consumer implements this: the reporter's stored Ed25519 key (the same one the S1 body-
 signature verifies against) IS the BA holder key, and `ReportSignature` asserts
 `facts.holder_thumbprint == Jwk.public_key_thumbprint_raw(reporter_raw_key, %{})` (a cross-
 identity-replay tripwire proves it red). A consumer that does NOT bind the envelope to the
@@ -189,7 +188,7 @@ authenticated identity carries the cross-identity-replay gap — do not enable B
 `secure_equal/2`) — it is **stateless and does NOT dedupe**. So a byte-identical captured request
 (same identity, valid signature, binding passes) is accepted AGAIN until `proof_max_age` expires —
 same-identity replay within the proof window. The consumer MUST keep a replay ledger (a unique
-constraint on `(identity, nonce)` — verifier application keys it `(org_id, nonce)`) and reject a seen nonce.
+constraint on `(identity, nonce)`) and reject a seen nonce.
 Nonce uniqueness is NOT something the protocol package does for you; it is a consumer obligation,
 alongside the §8 identity binding.
 

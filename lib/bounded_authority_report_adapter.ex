@@ -61,12 +61,10 @@ defmodule BoundedAuthorityReportAdapter do
       (`check_envelope/2`, `verify_grant/3`, `verify_historical_anchor/3`,
       `verify_key_transition/4`). Consumers verify; this library signs.
     * Not the runtime — grant issuance, key custody/rotation, and revocation are
-      the `bounded_authority` runtime's job. This library holds a key handle and
+      the stateful authority runtime's job. This library holds a key handle and
       signs on invocation; it does not mint capabilities.
-    * Not a transport — the application transport libraries stay protocol-free. This
-      library is a composable lib an edge agent (or any signing party) calls.
-    * Not hex-published — private BaseLabs library until consumed + exercised +
-      tuned across the projects that use it (see `docs/strategy.md`).
+    * Not a transport — transport layers stay protocol-free. This library is a
+      composable lib an edge agent (or any signing party) calls.
   """
 
   alias BoundedAuthorityProtocol.V1.Json

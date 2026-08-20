@@ -11,8 +11,9 @@ bounded_authority_report_adapter-*.tar
 /.lexical/
 /.serena/
 /graphify-out/
-/.env
-/.env.*
+.env
+.env.*
+.DS_Store
 
 # Forge lifecycle artifacts are local; the surface declarations + the conformance
 # re-execution runner + the conformance matrix are tracked (they are the gates,

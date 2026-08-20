@@ -4,9 +4,14 @@ Date: 2026-08-10
 
 ## Status
 
-Accepted. Records the owner directive of 2026-08-09 (strategy §1); in force
-since the scaffold. Authored retroactively when the ADR gap was flagged by the
-2026-08-10 alignment audit.
+**Superseded 2026-08-20** by the owner decision to publish. The package is released to Hex as
+`bounded_authority_report_adapter` (0.2.0) once its sibling protocol package published; consumption
+uses the Hex release. The unlock condition this ADR itself named — an external re-implementation
+against the documented protocol format — was met by the protocol's public release. This record is
+retained as history; the private-posture directive below is no longer in force.
+
+Accepted (historical). Records the owner directive of 2026-08-09 (strategy §1); in force
+since the scaffold until superseded above.
 
 ## Context
 
