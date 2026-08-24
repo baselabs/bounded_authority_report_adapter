@@ -26,6 +26,11 @@ BA_SIBLING="$REPO/../bounded_authority"
 BAP_SIBLING="$REPO/../bounded_authority_protocol"
 
 say() { printf '%s\n' "$*"; }
+print_files() {
+  while IFS= read -r file; do
+    [ -n "$file" ] && printf '    %s\n' "$file"
+  done <<<"$1"
+}
 
 # --- 1. BARA's own declaration (the source of truth — never a restated version) ------
 locked="$(sed -nE "s/.*\"$APP\": [{]:hex, :$APP, \"([^\"]+)\".*/\1/p" "$REPO/mix.lock" | head -1)"
@@ -42,17 +47,27 @@ say "BARA:    locks $APP $locked (requirement $requirement)"
 hex_json="$(curl -fsSm 10 https://hex.pm/api/packages/$APP 2>/dev/null || true)"
 
 if [ -n "$hex_json" ]; then
-  read -r hex_latest hex_releases <<<"$(printf '%s' "$hex_json" | python3 -c '
+  hex_metadata="$(printf '%s' "$hex_json" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
-vs = sorted(r["version"] for r in d["releases"])
+latest = d["latest_stable_version"]
+vs = [r["version"] for r in d["releases"]]
+if not isinstance(latest, str) or not latest or latest not in vs:
+    raise ValueError("incoherent Hex package metadata")
 try:
     vs = sorted(vs, key=lambda v: tuple(int(p) for p in v.split(".")))
 except ValueError:
-    pass
-print(d.get("latest_stable_version", "?"), " ".join(vs))
-' 2>/dev/null || echo "? ?")"
-  say "hex.pm:  latest stable $hex_latest (published: $hex_releases)"
+    vs = sorted(vs)
+print(latest, " ".join(vs))
+' 2>/dev/null || true)"
+
+  if [ -n "$hex_metadata" ]; then
+    read -r hex_latest hex_releases <<<"$hex_metadata"
+    say "hex.pm:  latest stable $hex_latest (published: $hex_releases)"
+  else
+    hex_latest=""
+    say "hex.pm:  WITHHELD (malformed API response) — release verdicts withheld"
+  fi
 else
   hex_latest=""
   say "hex.pm:  SKIP (offline or API unreachable) — release verdicts withheld"
@@ -76,13 +91,25 @@ locked_commit="$(
 
 if [ -n "$bap_main" ]; then
   say "BAP:     main ${bap_main:0:12}"
-  [ -n "$locked_commit" ] && say "         v$locked tag commit ${locked_commit:0:12}" ||
+  if [ -n "$locked_commit" ]; then
+    say "         v$locked tag commit ${locked_commit:0:12}"
+  else
     say "         v$locked tag commit unknown on the remote (peeled ref absent — is $locked a real release tag?)"
+  fi
 fi
 
 # --- the authority runtime's pin (sibling file, AS CHECKED OUT — not fetched) --------
 if [ -f "$BA_SIBLING/mix.exs" ]; then
-  ba_pin="$(sed -nE 's/.*ref: "([0-9a-f]{40})".*/\1/p' "$BA_SIBLING/mix.exs" | head -1)"
+  ba_pin="$(python3 -c '
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+match = re.search(
+    r"\{\s*:bounded_authority_protocol\s*,[^}]*?\bref:\s*\"([0-9a-f]{40})\"",
+    text,
+    re.S,
+)
+print(match.group(1) if match else "")
+' "$BA_SIBLING/mix.exs" 2>/dev/null || true)"
   if [ -n "$ba_pin" ]; then
     say "BA:      pins ${ba_pin:0:12} (sibling as checked out — fetch BA before relying on this in an audit)"
   else
@@ -127,7 +154,7 @@ if [ -n "$hex_latest" ] && [ "$hex_latest" != "?" ] && [ "$hex_latest" != "$lock
           "still a deliberate, enumerated, same-commit bump (wall attributes + both locks)."
     else
       say "  Release span lib/ is NON-EMPTY:"
-      printf '    %s\n' $lib_files
+      print_files "$lib_files"
       say "  It CANNOT ride ADR-0010's exception — no bump unless the authority runtime" \
           "validates the span first, or the policy is deliberately amended."
     fi
@@ -159,7 +186,7 @@ elif have_span "$ba_pin" "$locked_commit"; then
       say "ALIGNMENT: BARA is AHEAD of the authority pin (it pins ${ba_pin:0:12}); the span's lib/ is EMPTY — legal per ADR-0010 D2.1."
     else
       say "ALIGNMENT: BARA is AHEAD of the authority pin (it pins ${ba_pin:0:12}) and the span's lib/ is NON-EMPTY:"
-      printf '    %s\n' $ba_lib
+      print_files "$ba_lib"
       say "  A POLICY-VIOLATING ahead state (ADR-0010 D2.1) — re-align or amend the policy, deliberately."
     fi
   elif git -C "$BAP_SIBLING" merge-base --is-ancestor "$locked_commit" "$ba_pin" 2>/dev/null; then
@@ -184,7 +211,7 @@ if [ -n "$bap_main" ] && [ -n "$locked_commit" ]; then
       say "MAIN DRIFT: main sits past our lock with lib/ UNTOUCHED — a future release from it may ride the exception (once tagged)."
     else
       say "MAIN DRIFT: main sits past our lock with lib/ NON-EMPTY:"
-      printf '    %s\n' $main_lib
+      print_files "$main_lib"
       say "  Future releases from this span CANNOT ride ADR-0010's exception until the authority validates."
     fi
   else

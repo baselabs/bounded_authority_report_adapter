@@ -10,8 +10,8 @@ breaking changes (SemVer §4).
 
 - Guard against silent protocol-version drift: the dependency-direction wall now pins the
   resolved `mix.lock` version (mutation-proven, including the `0.1.10` prefix-extension
-  case), a `Version.match?` invariant ties the wall's requirement and locked-version
-  attributes, and the edge-agent example asserts its lock resolves the protocol at the
+  case), an exact identity invariant ties the wall's requirement floor to its locked-version
+  attribute, and the edge-agent example asserts its lock resolves the protocol at the
   same version as the library's (a split between them would put the two CI jobs on
   different protocol spans).
 - `scripts/check-bap-drift.sh` — a read-only, one-command ecosystem drift check (locked
@@ -25,6 +25,10 @@ breaking changes (SemVer §4).
   consumption on 2026-08-20; the decision records how each policy term (BA's pin, the
   `lib/`-empty gate, the same-commit bump discipline, RA2-at-version) maps onto release
   tags and the now-mechanical wall clauses. ADR-0013's one-vector scope reaffirmed.
+- Independent full-range review hardened the drift probe to withhold release verdicts on a
+  malformed Hex response and to select only BA's `:bounded_authority_protocol` ref; both paths
+  now have executable regressions. The review also replaced the compatible-version and
+  duplicated-predicate guard checks with exact shared predicates, each tamper-proven RED.
 
 ## [0.2.1] — 2026-08-20
 
