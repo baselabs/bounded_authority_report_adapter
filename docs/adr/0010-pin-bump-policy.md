@@ -101,6 +101,33 @@ the repos, never cite them from prose.
    parenthetical carried the same over-broad phrasing; both fixed.)*
 5. **The pin is read from `mix.exs`, never from prose** (the AGENTS.md rule; a
    restated sha rots on the next bump).
+6. **Hex-era mapping (amended 2026-08-24; the substrate moved 2026-08-20 — the
+   first public release, 0.2.0, switched BARA to consuming BAP from its Hex
+   package; no git ref remains in `mix.exs`/`mix.lock`).** The policy's
+   substance is unchanged — BA validates the contract surface, BARA follows;
+   the mechanism maps, term by term:
+   - "BA's pin" is still the ref BA's `mix.exs` declares (BA consumes the git
+     pin). A Hex version maps to a commit via the protocol repo's release
+     tags (`v<version>`, peeled); `scripts/check-bap-drift.sh` performs the
+     comparison read-only (ls-remote + file reads — a sibling fetch is NOT
+     read-only and can be rejected on tag clobber).
+   - Decision 2.1's `lib/`-EMPTY gate is the `lib/` diff between RELEASE-TAG
+     commits (`v<locked>..v<candidate>`), evaluated in the protocol repo.
+     Decisions 2.2/4's span, enumeration, and the three quoted commands ride
+     the same release-tag span; the bump commit also names the Hex release it
+     consumes.
+   - Decision 5's "pin" is now the pair: the requirement in `mix.exs` AND the
+     locked version in `mix.lock` — the drift-guard slice (2026-08-24) made
+     the same-commit bump discipline mechanical: the wall pins
+     `@protocol_requirement` + `@protocol_locked_version` + asserts the lock
+     resolves exactly that version, and the example app's lock is pinned to
+     parity; a bare `mix deps.update` (which reconciles lock and deps in one
+     quiet step — Mix's consistency check only reds a lock/dep MISMATCH) reds
+     the gate.
+   - RA2's round-trip quoted green at the new version stays unconditional
+     (Decision 4 as amended), discharging exactly the consumed vector per
+     ADR-0013 Decision 1 — whose one-vector scope was operator-reaffirmed
+     2026-08-24.
 
 ## Consequences
 
@@ -114,4 +141,5 @@ the repos, never cite them from prose.
   in the bump commit.
 - The wall test itself is unchanged: it still asserts the pin is declared +
   locked in `mix.exs`/`mix.lock`; the BA-alignment condition stays a
-  hand-verified commit-message obligation (decision 4).
+  hand-verified commit-message obligation (decision 4) — now armed by the
+  wall's locked-version clause and the drift probe (decision 6).
