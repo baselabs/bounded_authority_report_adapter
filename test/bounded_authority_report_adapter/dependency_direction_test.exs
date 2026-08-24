@@ -62,6 +62,15 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   @protocol_app "bounded_authority_protocol"
   @protocol_requirement "~> 0.1.1"
 
+  # The LOCKED version — the guard against silent lock drift. The requirement above admits
+  # later releases in the same pre-1.0 minor range, so a bare `mix deps.update
+  # bounded_authority_protocol` re-locks at the newest published release and crosses a
+  # protocol span nobody reviewed or chose (the 0.1.2 case: published with `lib/` changes
+  # the authority runtime has not validated). A version bump is a deliberate, reviewed
+  # change — the same commit raises the mix.exs requirement, BOTH wall attributes, and the
+  # lock; this attribute makes the lock half mechanically loud instead of trusted.
+  @protocol_locked_version "0.1.1"
+
   # Forbidden dep-app atoms — form-precise regex so prose does not false-positive (design
   # §1.4). A REAL dep is the tuple `{:bounded_authority, …}` / `{:replicant, …}` /
   # `{:capstan, …}`. The `(?:["']|)` terminator catches BOTH the bare-atom form
@@ -177,6 +186,29 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
       refute String.contains?(mix_lock, "{:git, :#{@protocol_app},"),
              "mix.lock must NOT resolve :#{@protocol_app} from a git ref"
+    end
+
+    test "mix.lock resolves the protocol package at @protocol_locked_version (no silent drift)" do
+      mix_lock = File.read!("mix.lock")
+
+      # The predicate TERMINATES at the comma after the version: an unterminated
+      # prefix would match "0.1.1" inside "0.1.10"/"0.1.11"/… — reopening the exact
+      # silent-drift hole this clause closes.
+      assert String.contains?(
+               mix_lock,
+               "\"#{@protocol_app}\": {:hex, :#{@protocol_app}, \"#{@protocol_locked_version}\","
+             ),
+             "mix.lock must resolve :#{@protocol_app} at exactly #{@protocol_locked_version} — " <>
+               "a silent `mix deps.update` lock drift crossed an unreviewed protocol span. " <>
+               "A version bump is deliberate: raise the mix.exs requirement + both wall " <>
+               "attributes + the lock in the SAME commit"
+    end
+
+    test "@protocol_locked_version satisfies @protocol_requirement (the attributes cannot drift apart)" do
+      assert Version.match?(@protocol_locked_version, @protocol_requirement),
+             "the locked version #{@protocol_locked_version} does not satisfy the requirement " <>
+               "#{@protocol_requirement} — the two wall attributes drifted apart; both move " <>
+               "together in the same deliberate-bump commit"
     end
   end
 
@@ -366,7 +398,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
     test "the positive clause reds when the protocol dep is removed (a dep-less mix.exs is caught)" do
       # design-adversarial C2: a dep-less mix.exs passes every negative regex trivially ("no
-      # forbidden dep" is vacuously true when there are no deps). The positive clause is the
+      # forbidden dep" is vacuously true when there are no deps at all). The positive clause is the
       # falsifier — remove the protocol dep from an in-memory copy and assert the declaration
       # assertion reds.
       mix_exs = File.read!("mix.exs")
@@ -381,6 +413,37 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
       refute String.contains?(depless, ":#{@protocol_app}"),
              "the dep-removal fixture did not strip the protocol dep — the positive-clause " <>
                "mutation proof is not exercising the red path (the fixture itself is broken)"
+    end
+
+    test "the lock-version clause reds on a drifted lock (plain bump + prefix extension)" do
+      # Two mutations, one per real hole. A plain drift (0.1.2 — what `mix deps.update`
+      # writes) exercises the obvious red. The PREFIX EXTENSION (0.1.10) exercises the
+      # one an unterminated predicate would still match: mutating to 0.1.2 alone passes
+      # even while the prefix hole is open, so the proof would mask the very defect the
+      # terminator in the clause above exists to prevent. Fixture discipline follows the
+      # C2 shape above: in-memory String.replace, refute the production predicate on the
+      # mutated copy.
+      locked_line =
+        "\"#{@protocol_app}\": {:hex, :#{@protocol_app}, \"#{@protocol_locked_version}\","
+
+      real_lock = File.read!("mix.lock")
+
+      assert String.contains?(real_lock, locked_line),
+             "fixture setup: the real lock does not carry the locked-version line — the " <>
+               "green clause above is red and must be fixed before this proof means anything"
+
+      for drifted <- ["0.1.2", "0.1.10"] do
+        drifted_line = "\"#{@protocol_app}\": {:hex, :#{@protocol_app}, \"#{drifted}\","
+        mutated_lock = String.replace(real_lock, locked_line, drifted_line)
+
+        refute mutated_lock == real_lock,
+               "the drift fixture for #{drifted} did not change the lock — the mutation " <>
+                 "proof is not exercising the red path (the fixture itself is broken)"
+
+        refute String.contains?(mutated_lock, locked_line),
+               "a lock drifted to #{drifted} still satisfies the locked-version clause — " <>
+                 "the wall would stay green across an unreviewed protocol span"
+      end
     end
 
     test "the protocol namespace is ALLOWED (BoundedAuthorityProtocol. never trips the wall)" do

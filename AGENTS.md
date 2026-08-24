@@ -68,6 +68,24 @@ That scan does **NOT cover `examples/`** — so the example app
 (req/bandit/plug) in its OWN `mix.exs`. Adding transport deps THERE is fine;
 adding them to the library's `mix.exs` trips the wall red.
 
+## Protocol version discipline + the drift probe
+
+BAP is consumed from **Hex** (`~> 0.1.1`). A protocol version bump is a
+deliberate, reviewed change — the wall test pins the LOCKED version
+(`@protocol_locked_version`) and the requirement in the same commit, so a bare
+`mix deps.update bounded_authority_protocol` (which reconciles lock + deps in
+one quiet step — Mix's own consistency check only catches a lock/dep
+MISMATCH, not a reconciled drift) reds the gate. The example app's lock is
+pinned to parity with the library's by its own test. Every bump moves the
+mix.exs requirement + both wall attributes + BOTH locks in one commit, with
+the span's `lib/` delta classified per ADR-0010 (a `lib/`-non-empty span
+cannot ride the BARA-ahead exception).
+
+**`scripts/check-bap-drift.sh`** — the one-command ecosystem check: what we
+lock vs what hex.pm publishes vs BA's pin vs BAP main (read-only: `ls-remote`
++ file reads, no fetches). Run it before citing sibling state or planning any
+version move. A probe, not a gate — not part of `mix ci`.
+
 ## The build: TWO mix projects, each with its own CI
 
 1. **The library** (repo root) — `mix.exs` with `bounded_authority_protocol` +

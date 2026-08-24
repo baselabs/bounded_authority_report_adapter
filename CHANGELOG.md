@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0, `0.x` minor bumps may carry
 breaking changes (SemVer §4).
 
+## [Unreleased]
+
+### Added
+
+- Guard against silent protocol-version drift: the dependency-direction wall now pins the
+  resolved `mix.lock` version (mutation-proven, including the `0.1.10` prefix-extension
+  case), a `Version.match?` invariant ties the wall's requirement and locked-version
+  attributes, and the edge-agent example asserts its lock resolves the protocol at the
+  same version as the library's (a split between them would put the two CI jobs on
+  different protocol spans).
+- `scripts/check-bap-drift.sh` — a read-only, one-command ecosystem drift check (locked
+  version vs hex.pm releases vs the authority runtime's pin vs protocol main, with the
+  release span's `lib/` delta classified). A probe for audit and bump sessions, not a
+  gate.
+
 ## [0.2.1] — 2026-08-20
 
 ### Fixed
