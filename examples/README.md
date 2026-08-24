@@ -29,8 +29,7 @@ what the adapter does and doesn't do:
 
 Open it in Livebook (the desktop app: *File → Open* → this file; or `livebook server` from the
 repo root and open the URL), then **Run All**. The setup cell pulls this repo + the
-`bounded_authority_protocol` dependency (first run fetches BAP from its private git remote — needs
-access), then each cell prints a plain `✅` / `❌` line.
+`bounded_authority_protocol` dependency from Hex, then each cell prints a plain `✅` / `❌` line.
 
 ### What you'll see (verified output)
 

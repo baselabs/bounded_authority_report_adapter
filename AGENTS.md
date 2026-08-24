@@ -13,37 +13,40 @@ glue (ADR-0006; holder-side by default, issuer-side for grants). It takes a
 signing input, signs via the handle's local key, assembles the compact via the
 public `bounded_authority_protocol` (BAP) package. It signs proofs, grants,
 boundary anchors, and key transitions; it does NOT verify, does NOT transport,
-does NOT persist, is NOT the runtime, is NOT hex-published.
+does NOT persist, and is NOT the runtime. The package is public on Hex at 0.2.1;
+the source repository remains private pending the source/registry alignment row.
 
 ## Read BAP first-hand — never trust a summary (handoff, doc, or your own memory)
 
-The contract surfaces live in the **BAP dependency** at a pinned git ref. Before
-building anything that calls BAP, **read the BAP source first-hand** — the pinned
-ref is the truth, not this repo's docs, not a prior session's handoff, not the
-Livebook's account. The handoff that pointed at this work named the exact files:
+The contract surfaces live in the **resolved BAP dependency** locked from Hex.
+Before building anything that calls BAP, **read that source first-hand** — the
+version in `mix.lock` plus the resolved checkout are the compiled truth, not this
+repo's docs, a prior session's handoff, or the Livebook's account. The handoff
+that pointed at this work named the exact files:
 `deps/bounded_authority_protocol/lib/bounded_authority_protocol/v1/runtime.ex`
 (`check_envelope/2`, `verify_grant/3`), the struct files (`expected_request.ex`,
 `trusted_issuer.ex`, `envelope_facts.ex`, `credentials.ex`), `jwk.ex`
 (`public_key_thumbprint_raw/2`). Build verifier/consumer calls from the struct
 defs + the function `@spec`s, not from prose.
 
-**Verify before you cite — and check BAP/BA MAIN, not just BARA's pin.** ADR numbers,
-ROADMAP rows, and "the standard says X" claims are all UNVERIFIED until you check the actual
-file. Two layers matter and they drift:
+**Verify before you cite — and check BAP/BA MAIN, not just BARA's locked
+release.** ADR numbers, ROADMAP rows, and "the standard says X" claims are all
+UNVERIFIED until you check the actual file. Two layers matter and they drift:
 
-- **BARA's pinned ref** (the `ref:` in `mix.exs` — read it there, never from
-  prose; a restated sha rots on the next bump) — what BARA *compiles against*. The
-  contract surfaces above live at the pin. Read `deps/bounded_authority_protocol/...` for
-  the V1 struct/function defs BARA calls.
-- **BAP main + BA main** — what those projects have *decided/shipped*. BARA's pin lags main
-  (it was 84 commits behind at RA8 closeout; all docs/corpus/CI, zero V1 `lib/` changes — but
-  the *docs* drift is real). A BAP ADR may be ACCEPTED on main and ABSENT at BARA's pin.
+- **BARA's locked Hex release** (`mix.exs` declares the compatible range;
+  `mix.lock` records the exact resolved version) — what BARA *compiles against*.
+  Read `deps/bounded_authority_protocol/...` for the V1 struct/function defs
+  BARA calls.
+- **BAP main + BA main** — what those projects have *decided/shipped*. A BAP ADR
+  may be accepted on main and absent from BARA's locked release.
 
-Lesson (paid for at RA8): a prior handoff cited "BAP ADR-0014/0015"; I checked only BARA's pin
-(ADRs 0001–0008 there), declared the citation phantom, and redirected RA10 to ADR-0005. Wrong
-layer — **ADR-0014 (`cross-language-verifier-sdks`) and ADR-0015 ARE accepted on BAP main.** The
-handoff author was citing main; I "corrected" them by checking the pin. `ls deps/.../docs/adr/`
-tells you what the PIN has; for what BAP has decided, check the sibling checkout:
+Lesson (paid for at RA8, during the former git-pin era): a prior handoff cited
+"BAP ADR-0014/0015"; I checked only BARA's resolved dependency, declared the
+citation phantom, and redirected RA10 to ADR-0005. Wrong layer — **ADR-0014
+(`cross-language-verifier-sdks`) and ADR-0015 ARE accepted on BAP main.** The
+handoff author was citing main; I "corrected" them by checking only the consumed
+release. `ls deps/.../docs/adr/` tells you what the locked release has; for what
+BAP has decided, check the sibling checkout:
 
 ```
 ../bounded_authority_protocol/   # BAP main — ADRs, ROADMAP, the conformance corpus, the spec
@@ -52,7 +55,7 @@ tells you what the PIN has; for what BAP has decided, check the sibling checkout
 
 Both are sibling repos under `BaseLabs/`. Before claiming "X is blocked on BAP/BA" or citing a
 BAP ADR, check the relevant sibling's main branch first-hand (`git log`, `ls docs/adr/`,
-`grep`), not just BARA's pin.
+`grep`), not just BARA's locked release.
 
 ## The dependency-direction wall (RA3 — non-negotiable)
 
@@ -111,7 +114,7 @@ after dependency resolution, every step forced under
 failed CI job. It is the zero-spend stand-in while Actions can't run
 (billing-blocked/usage-capped as of 2026-08-18) and doubles as the one-command
 pre-push check; workflow steps NOT reproduced locally: checkout/setup-beam (asdf
-here) and private-dep git auth (per-host).
+here).
 
 ## Per-file floor on EVERY touched file (the RA7 lesson)
 
@@ -198,5 +201,4 @@ by construction. Do not reach for an `encode`; the body is bytes that already ex
 ## Environment
 
 Elixir 1.20.2 / OTP 29 (`.tool-versions`, asdf). Run `mix` from inside the repo
-dir (the asdf shim quirk). The BAP dep is a private git remote — `mix deps.get`
-needs GitHub access to `baselabs/bounded_authority_protocol`.
+dir (the asdf shim quirk). BAP is consumed from its public Hex release.

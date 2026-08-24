@@ -1,40 +1,33 @@
 # Strategy — Bounded Authority Report Adapter
 
-**Status:** Governing — reconciled 2026-08-15 to the shipped API (original
+**Status:** Governing — reconciled 2026-08-24 to the shipped API and public package (original
 2026-08-09 draft) · **Companion to:** `docs/charter.md` (the what),
 `docs/ROADMAP.md` (the build order). This doc carries the *how* and *why* of the
 engineering + release posture.
 
-## 1. Repo posture: private, not hex-published
+## 1. Release posture: public package, private source repository
 
-**Decision (owner directive 2026-08-09):** this is a **private BaseLabs GitHub
-repo**, consumed via private git dep, **not published to hex.**
+The owner superseded the original private-not-Hex posture on 2026-08-20 (ADR
+0004). `bounded_authority_report_adapter` 0.2.1 is public on Hex and consumes the
+public `bounded_authority_protocol` Hex package. The adapter is pre-1.0 and every
+release remains responsible for its own compatibility, conformance, provenance,
+security, and clean-consumer evidence.
 
-The rationale matches the sibling repos:
-- `bounded_authority_protocol` is private because its API is still being tuned
-  against the first real consumers; publishing to hex signals a stability
-  contract that does not yet hold.
-- `bounded_authority` (runtime) is private because it is a service, not a library.
-- **This adapter** is private for the same reason as the protocol package: it is
-  a new library whose API will be exercised + tuned by the first consumers
-  (verifier application's report path first), and publishing prematurely would freeze a
-  shape that should still be malleable.
+The GitHub source repository is still private even though the package metadata
+points to it. That is an explicit incomplete source/registry alignment state, not
+a public-source claim: anonymous source, tag, changelog, and documentation links
+must be verified together before the repository is described as public. The
+alignment work belongs to its own owner row and visibility/rule confirmation.
+The `bounded_authority` runtime remains private/commercial and is not a library
+dependency.
 
-**Hex publication is deferred** until the adapter has been consumed across the
-BaseLabs projects that need it, the conformance round-trip is stable, and the
-API has survived at least one external (non-Elixir) consumer's re-implementation
-against the documented format. Flipping private → public later costs nothing
-structurally (the git dep stays valid); publishing-then-revoking costs
-reputation + semver.
+## 2. "Public" terminology
 
-## 2. "Public" terminology — the inter-repo API, not the registry
-
-When the docs (this repo's charter, BAP's docs, verifier application's ADRs) call
-`bounded_authority_protocol` "public," that means **the API contract between
-BaseLabs repos that depend on it — NOT hex-published, NOT available to the
-world.** It is fetched via a private git dep. The same sense applies to this
-adapter: its surface is an inter-repo API for BaseLabs consumers. Do not
-`mix hex.publish` either package.
+"Public" now means the actual registry and portable-contract boundary: BAP and
+BARA are available from Hex. It does not mean their APIs are 1.0-stable, and it
+does not make the private BA runtime public. Statements about public source must
+remain separate until the source repository's visibility and immutable release
+identities are aligned.
 
 ## 3. Dependencies — the edge-path constraint
 
@@ -43,9 +36,7 @@ The adapter's dependency graph is deliberately minimal and one-directional:
 ```
 bounded_authority_report_adapter
         │
-        └──► bounded_authority_protocol   (private git dep; the ONLY dep)
-                   │
-                   └──► (standard hex deps: :crypto, etc.)
+        └──► bounded_authority_protocol   (public Hex dep; the ONLY runtime dep)
 ```
 
 - **The adapter depends only on the public protocol package.** This is the
@@ -53,7 +44,7 @@ bounded_authority_report_adapter
   package on the edge path — no private runtime dependency"). The
   dependency-direction wall in verifier application (`dependency_direction_test.exs`) forbids
   verifier application from depending on anything that signs; this adapter is the thing that
-  signs, so it lives outside verifier application and depends on nothing private except BAP.
+  signs, so it lives outside verifier application and depends only on BAP.
 - **The runtime (`bounded_authority`) is NOT a dependency.** The adapter signs
   with a holder key it already holds; it does not call the runtime at sign time.
   Grant issuance + revocation are out of band (the runtime talks to the verifier, not to this adapter).
@@ -106,19 +97,18 @@ re-architecture, not a refactor.
 
 ## 6. Release cadence
 
-- **0.x** — pre-1.0; breaking changes allowed between minor bumps (SemVer
-  pre-1.0 freedom). The API tunes against the first consumers.
-- **1.0.0** — cut when (a) the conformance round-trip is stable, (b) at least
-  one non-Elixir consumer has re-implemented against the documented format
-  successfully, and (c) the checkpoint-ack probe has resolved (landed or
-  formally deferred).
-- **No hex publish before 1.0.0.** Private git deps throughout.
+- **0.2.x is public** — pre-1.0; compatibility follows the package's declared
+  pre-1.0 policy and every change must retain conformance and release evidence.
+- **1.0.0** — cut only when the public API, consumer evidence, source identity,
+  and release operations meet the owner repository's 1.0 acceptance contract.
+- Package publication and source-repository visibility are separate operations;
+  neither may be inferred from the other.
 
 ## 7. Relationship to the sibling repos' release gates
 
 This adapter inherits no release gate from BAP or the runtime — each repo runs
 its own. But the adapter's conformance test is *defined by* BAP's published
-vectors: if BAP's vectors change in a way this adapter's output no longer
-matches, the adapter's test goes red. That coupling is intentional (the adapter
-tracks BAP's wire format); the BAP pin in `mix.exs` is the explicit ref that
-gates when an adapter bump is required.
+vectors: if a reviewed BAP release changes the consumed surface in a way this
+adapter's output no longer matches, the adapter's test goes red. That coupling
+is intentional; the BAP Hex requirement and resolved lock in this repository
+are the explicit identities that gate an adapter bump.
