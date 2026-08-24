@@ -59,3 +59,12 @@ with dep-removal and form-precise regex RED proofs.
   which extends this ADR.)*
 - Transports stay protocol-free: this adapter is called *by* the edge agent, not
   embedded in the transport libraries.
+
+## Current mechanism (amended 2026-08-24)
+
+ADR 0004 superseded the original private-git release posture on 2026-08-20. The
+same dependency-direction decision now uses the public BAP Hex package: `mix.exs`
+declares the compatible range, `mix.lock` records the exact resolved release,
+and the structural wall checks both identities. ADR 0010 governs release
+alignment. This amendment changes the dependency identity mechanism, not the
+accepted one-way boundary recorded above.

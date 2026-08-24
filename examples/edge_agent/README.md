@@ -30,8 +30,7 @@ edge_agent/
 From `examples/edge_agent/`:
 
 ```bash
-# 0. fetch deps (first run pulls bounded_authority_protocol from its private git
-#    remote — needs access)
+# 0. fetch deps (bounded_authority_protocol resolves from Hex)
 mix deps.get
 
 # 1. terminal one — start the receiver (listens on 127.0.0.1:4001 by default)

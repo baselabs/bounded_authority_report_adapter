@@ -6,6 +6,12 @@ breaking changes (SemVer §4).
 
 ## [Unreleased]
 
+### Documentation
+
+- Reconcile the governing charter, strategy, contributor guide, and examples to the live release
+  state: 0.2.1 is public on Hex and consumes BAP from Hex, while the source repository remains
+  private pending explicit public-source and release-identity alignment.
+
 ### Added
 
 - Guard against silent protocol-version drift: the dependency-direction wall now pins the

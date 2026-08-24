@@ -88,8 +88,10 @@ These negatives are load-bearing — each maps to a different repo's job:
   `capstan`) stay protocol-free (the dependency-direction invariant). This
   adapter is a composable lib the edge agent calls *to envelope a report before
   sending it*; how the envelope crosses the wire is a transport concern.
-- **It is not hex-published.** Private BaseLabs library until consumed + exercised
-  + tuned across the projects that use it (see `docs/strategy.md`).
+- **Publication does not widen its role.** The package is public on Hex at 0.2.1,
+  while its source repository remains private pending explicit source/registry
+  alignment. It is still only a signer and gains no verifier, runtime, transport,
+  persistence, or custody authority from publication (see `docs/strategy.md`).
 
 ## 4. The authority model (three roles, three repos)
 
