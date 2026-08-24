@@ -65,7 +65,9 @@ mix ci
 
 `mix ci` reproduces the CI pipeline locally: format, warnings-as-errors compilation, Credo, and the
 full test suite (including the conformance round-trip against the protocol package's published
-oracle vectors and the dependency-direction wall), for both the library and the example app.
+oracle vectors and the dependency-direction wall), for both the library and the example app. It also
+runs `mix hex.audit` against the edge example's own lock, so a transport advisory fails the local and
+GitHub entry points.
 
 Requires Elixir 1.18+ (developed on 1.20 / OTP 29). The runnable `examples/edge_agent` app is a
 separate mix project with its own deps and CI job — develop it from inside that directory.

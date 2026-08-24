@@ -34,7 +34,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   end
 
   # `mix ci` — local CI parity: reproduces .github/workflows/ci.yml step-for-
-  # step (both jobs, the five build steps each) with zero GitHub Actions spend.
+  # step (five library steps; edge dependency audit + five build steps) with zero
+  # GitHub Actions spend.
   # The workflow exports MIX_ENV: test at the JOB level, so every step here
   # re-execs mix under MIX_ENV=test via env(1) — a bare local `mix ci` would
   # otherwise boot in :dev, and a :dev compile skips test/support (the
@@ -51,6 +52,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "cmd env MIX_ENV=test mix test",
         # job: example (the workflow's working-directory: examples/edge_agent)
         "cmd --cd examples/edge_agent env MIX_ENV=test mix deps.get",
+        "cmd --cd examples/edge_agent env MIX_ENV=test mix hex.audit",
         "cmd --cd examples/edge_agent env MIX_ENV=test mix format --check-formatted",
         "cmd --cd examples/edge_agent env MIX_ENV=test mix compile --warnings-as-errors",
         "cmd --cd examples/edge_agent env MIX_ENV=test mix credo --strict",
