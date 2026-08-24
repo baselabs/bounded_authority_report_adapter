@@ -30,6 +30,13 @@ breaking changes (SemVer §4).
   now have executable regressions. The review also replaced the compatible-version and
   duplicated-predicate guard checks with exact shared predicates, each tamper-proven RED.
 
+### Security
+
+- The edge example now fails both `mix ci` and its GitHub job on Hex advisories in its own lock.
+  Bandit moved from vulnerable 1.12.4 to 1.12.5, which fixes HIGH
+  `GHSA-xj8g-532w-jv94` and MEDIUM `GHSA-x3gh-xhj4-3vq8`. The two orchestration
+  commands are independently mutation-proven by the parity test.
+
 ## [0.2.1] — 2026-08-20
 
 ### Fixed

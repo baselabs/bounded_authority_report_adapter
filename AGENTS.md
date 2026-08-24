@@ -97,13 +97,15 @@ version move. A probe, not a gate — not part of `mix ci`.
    pulls req/bandit/plug. Runnable end-to-end (`EdgeAgent.run` → `EdgeAgent.Receiver`).
 
 CI (`.github/workflows/ci.yml`) runs **two jobs**: `gate` (the library: format ·
-compile · credo · test) and `example` (the example app, same four steps, run from
-`examples/edge_agent/`). Both must stay green. The Livebook
+compile · credo · test) and `example` (the example app: dependency advisory audit,
+then the same four build steps, run from `examples/edge_agent/`). Both must stay
+green. The Livebook
 (`examples/report_envelope_roundtrip.livemd`) is NOT run in CI — its round-trip is
 covered by the library's `sign_report_test.exs`.
 
 **Local CI parity: `mix ci`** (root mix.exs alias) reproduces the workflow
-step-for-step — both jobs, all five build steps each, every step forced under
+step-for-step — both jobs, with the example's owner-local `mix hex.audit` immediately
+after dependency resolution, every step forced under
 `MIX_ENV=test` (the workflow's job-level env; a bare local `:dev` boot would skip
 `test/support` at compile — the RA7 trap). It aborts at the first red step, like a
 failed CI job. It is the zero-spend stand-in while Actions can't run
