@@ -43,6 +43,11 @@ The corpus is the only oracle whose green MEANS "BAP accepts what BARA produces.
    automatically exercised by BARA's harness — a bump whose span adds one is
    surfaced by ADR-0010's surface-class enumeration, where extending this
    harness to consume it is a deliberate decision, never an accident.
+   *(Scope operator-reaffirmed 2026-08-24: one vector. The protocol's corpus
+   estate is churning — SDK-graduation ADRs, a moving `lib/`, releases days
+   apart — and coupling the harness to a moving target buys drift noise, not
+   safety. Extension is revisited at a protocol corpus-stability point, e.g.
+   a tagged corpus release per its ADR-0019 artifact-distribution direction.)*
 2. **Defect-injection keeps the harness non-vacuous** (a green harness over a
    broken contract is the failure class this decision exists to prevent):
    signature-flip and `ba_req` tamper tripwires go RED, plus the corpus's own

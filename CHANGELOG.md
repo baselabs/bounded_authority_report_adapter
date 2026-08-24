@@ -19,6 +19,13 @@ breaking changes (SemVer §4).
   release span's `lib/` delta classified). A probe for audit and bump sessions, not a
   gate.
 
+### Changed
+
+- ADR-0010 amended with a Hex-era mapping (Decision 6): the substrate moved to Hex
+  consumption on 2026-08-20; the decision records how each policy term (BA's pin, the
+  `lib/`-empty gate, the same-commit bump discipline, RA2-at-version) maps onto release
+  tags and the now-mechanical wall clauses. ADR-0013's one-vector scope reaffirmed.
+
 ## [0.2.1] — 2026-08-20
 
 ### Fixed
