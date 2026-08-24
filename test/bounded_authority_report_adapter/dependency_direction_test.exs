@@ -71,6 +71,18 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # lock; this attribute makes the lock half mechanically loud instead of trusted.
   @protocol_locked_version "0.1.1"
 
+  defp requirement_tracks_locked_version?(requirement, locked_version) do
+    requirement == "~> #{locked_version}"
+  end
+
+  defp protocol_lock_line(version) do
+    "\"#{@protocol_app}\": {:hex, :#{@protocol_app}, \"#{version}\","
+  end
+
+  defp protocol_locked_at?(mix_lock, version) do
+    String.contains?(mix_lock, protocol_lock_line(version))
+  end
+
   # Forbidden dep-app atoms — form-precise regex so prose does not false-positive (design
   # §1.4). A REAL dep is the tuple `{:bounded_authority, …}` / `{:replicant, …}` /
   # `{:capstan, …}`. The `(?:["']|)` terminator catches BOTH the bare-atom form
@@ -194,21 +206,27 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
       # The predicate TERMINATES at the comma after the version: an unterminated
       # prefix would match "0.1.1" inside "0.1.10"/"0.1.11"/… — reopening the exact
       # silent-drift hole this clause closes.
-      assert String.contains?(
-               mix_lock,
-               "\"#{@protocol_app}\": {:hex, :#{@protocol_app}, \"#{@protocol_locked_version}\","
-             ),
+      assert protocol_locked_at?(mix_lock, @protocol_locked_version),
              "mix.lock must resolve :#{@protocol_app} at exactly #{@protocol_locked_version} — " <>
                "a silent `mix deps.update` lock drift crossed an unreviewed protocol span. " <>
                "A version bump is deliberate: raise the mix.exs requirement + both wall " <>
                "attributes + the lock in the SAME commit"
     end
 
-    test "@protocol_locked_version satisfies @protocol_requirement (the attributes cannot drift apart)" do
-      assert Version.match?(@protocol_locked_version, @protocol_requirement),
-             "the locked version #{@protocol_locked_version} does not satisfy the requirement " <>
-               "#{@protocol_requirement} — the two wall attributes drifted apart; both move " <>
-               "together in the same deliberate-bump commit"
+    test "@protocol_requirement names @protocol_locked_version exactly" do
+      assert requirement_tracks_locked_version?(
+               @protocol_requirement,
+               @protocol_locked_version
+             ),
+             "the requirement #{@protocol_requirement} does not name the locked version " <>
+               "#{@protocol_locked_version} exactly — SemVer compatibility is insufficient; " <>
+               "both wall attributes move together in the same deliberate-bump commit"
+    end
+
+    test "a compatible patch advance is not accepted as same-commit requirement identity" do
+      refute requirement_tracks_locked_version?(@protocol_requirement, "0.1.2"),
+             "SemVer compatibility must not let the locked-version attribute advance while " <>
+               "the requirement attribute and mix.exs stay unchanged"
     end
   end
 
@@ -423,12 +441,11 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
       # terminator in the clause above exists to prevent. Fixture discipline follows the
       # C2 shape above: in-memory String.replace, refute the production predicate on the
       # mutated copy.
-      locked_line =
-        "\"#{@protocol_app}\": {:hex, :#{@protocol_app}, \"#{@protocol_locked_version}\","
+      locked_line = protocol_lock_line(@protocol_locked_version)
 
       real_lock = File.read!("mix.lock")
 
-      assert String.contains?(real_lock, locked_line),
+      assert protocol_locked_at?(real_lock, @protocol_locked_version),
              "fixture setup: the real lock does not carry the locked-version line — the " <>
                "green clause above is red and must be fixed before this proof means anything"
 
@@ -440,7 +457,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
                "the drift fixture for #{drifted} did not change the lock — the mutation " <>
                  "proof is not exercising the red path (the fixture itself is broken)"
 
-        refute String.contains?(mutated_lock, locked_line),
+        refute protocol_locked_at?(mutated_lock, @protocol_locked_version),
                "a lock drifted to #{drifted} still satisfies the locked-version clause — " <>
                  "the wall would stay green across an unreviewed protocol span"
       end

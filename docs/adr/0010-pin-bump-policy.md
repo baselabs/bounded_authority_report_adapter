@@ -139,7 +139,7 @@ the repos, never cite them from prose.
 - Corpus growth inside an accepted span is not silent: RA2's round-trip against
   the larger published corpus at the new pin is the acceptance evidence, quoted
   in the bump commit.
-- The wall test itself is unchanged: it still asserts the pin is declared +
-  locked in `mix.exs`/`mix.lock`; the BA-alignment condition stays a
+- The wall test now asserts the declared requirement, its exact locked-version
+  identity, and both project locks; the BA-alignment condition stays a
   hand-verified commit-message obligation (decision 4) — now armed by the
   wall's locked-version clause and the drift probe (decision 6).
