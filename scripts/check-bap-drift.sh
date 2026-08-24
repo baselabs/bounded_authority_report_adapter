@@ -45,7 +45,12 @@ if [ -n "$hex_json" ]; then
   read -r hex_latest hex_releases <<<"$(printf '%s' "$hex_json" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
-print(d.get("latest_stable_version", "?"), " ".join(sorted(r["version"] for r in d["releases"])))
+vs = sorted(r["version"] for r in d["releases"])
+try:
+    vs = sorted(vs, key=lambda v: tuple(int(p) for p in v.split(".")))
+except ValueError:
+    pass
+print(d.get("latest_stable_version", "?"), " ".join(vs))
 ' 2>/dev/null || echo "? ?")"
   say "hex.pm:  latest stable $hex_latest (published: $hex_releases)"
 else
@@ -64,6 +69,10 @@ bap_main="$(printf '%s\n' "$remote_refs" | awk '$2 == "refs/heads/main" {print $
 locked_commit="$(
   printf '%s\n' "$remote_refs" | awk -v t="refs/tags/v$locked^{}" '$2 == t {print $1}'
 )"
+# Lightweight-tag fallback (cross-vendor note): the peeled ^{} ref exists only
+# for annotated tags; for a lightweight tag the tag ref itself IS the commit.
+[ -z "$locked_commit" ] &&
+  locked_commit="$(printf '%s\n' "$remote_refs" | awk -v t="refs/tags/v$locked" '$2 == t {print $1}')"
 
 if [ -n "$bap_main" ]; then
   say "BAP:     main ${bap_main:0:12}"
@@ -83,6 +92,10 @@ if [ -f "$BA_SIBLING/mix.exs" ]; then
 else
   say "BA:      SKIP (sibling $BA_SIBLING absent) — alignment verdict withheld"
   ba_pin=""
+fi
+
+if [ ! -d "$BAP_SIBLING" ]; then
+  say "BAP:     SKIP (sibling $BAP_SIBLING absent) — lib/-span verdicts limited to locally verifiable pairs"
 fi
 
 # --- verdicts (only from verified inputs) ---------------------------------------------
@@ -126,17 +139,56 @@ elif [ -n "$hex_latest" ]; then
   say "RELEASES: locked $locked is the latest stable — no bump decision pending."
 fi
 
-# Alignment verdict: the authority runtime's pin vs ours.
-if [ -n "$ba_pin" ] && [ -n "$locked_commit" ] && have_span "$ba_pin" "$locked_commit"; then
+# Alignment verdict: the authority runtime's pin vs ours. Every branch speaks —
+# a silently-absent verdict reads as "no misalignment flagged" (cross-vendor
+# finding: the no-else form violated the script's own every-skip-printed
+# contract).
+if [ -z "$ba_pin" ]; then
+  : # the sibling-absent SKIP already printed above
+elif [ -z "$locked_commit" ]; then
+  say "ALIGNMENT: WITHHELD — the locked version's tag commit is unknown on the remote."
+elif have_span "$ba_pin" "$locked_commit"; then
+  ba_lib="$(lib_span "$ba_pin" "$locked_commit")"
+
   if [ "$ba_pin" = "$locked_commit" ]; then
     say "ALIGNMENT: pins match ($locked) — ADR-0010 default posture holds."
   elif git -C "$BAP_SIBLING" merge-base --is-ancestor "$ba_pin" "$locked_commit" 2>/dev/null; then
-    say "ALIGNMENT: BARA is AHEAD of the authority pin (it pins ${ba_pin:0:12})."
+    # AHEAD legitimacy turns on the span's lib/ being empty (ADR-0010 D2.1) —
+    # classify it, never render both states identically (cross-vendor finding).
+    if [ -z "$ba_lib" ]; then
+      say "ALIGNMENT: BARA is AHEAD of the authority pin (it pins ${ba_pin:0:12}); the span's lib/ is EMPTY — legal per ADR-0010 D2.1."
+    else
+      say "ALIGNMENT: BARA is AHEAD of the authority pin (it pins ${ba_pin:0:12}) and the span's lib/ is NON-EMPTY:"
+      printf '    %s\n' $ba_lib
+      say "  A POLICY-VIOLATING ahead state (ADR-0010 D2.1) — re-align or amend the policy, deliberately."
+    fi
   elif git -C "$BAP_SIBLING" merge-base --is-ancestor "$locked_commit" "$ba_pin" 2>/dev/null; then
     say "ALIGNMENT: AUTHORITY is AHEAD (its pin descends ours) — ADR-0010 D3: re-align" \
         "at the next dependency pass (deliberate, same-commit, wall attributes + locks)."
   else
     say "ALIGNMENT: pins DIVERGED (neither descends the other) — read both repos first-hand."
+  fi
+else
+  say "ALIGNMENT: WITHHELD — both pins known but the span is not locally verifiable" \
+      "(BAP sibling absent or objects missing); read the protocol repo first-hand before deciding."
+fi
+
+# Main drift: what protocol main carries past our locked version — the
+# eligibility question for the NEXT bump (cross-vendor note: the header
+# promised this and the script never computed it).
+if [ -n "$bap_main" ] && [ -n "$locked_commit" ]; then
+  if have_span "$locked_commit" "$bap_main"; then
+    main_lib="$(lib_span "$locked_commit" "$bap_main")"
+
+    if [ -z "$main_lib" ]; then
+      say "MAIN DRIFT: main sits past our lock with lib/ UNTOUCHED — a future release from it may ride the exception (once tagged)."
+    else
+      say "MAIN DRIFT: main sits past our lock with lib/ NON-EMPTY:"
+      printf '    %s\n' $main_lib
+      say "  Future releases from this span CANNOT ride ADR-0010's exception until the authority validates."
+    fi
+  else
+    say "MAIN DRIFT: WITHHELD (span not locally verifiable) — locked ${locked_commit:0:12} vs main ${bap_main:0:12}."
   fi
 fi
 
