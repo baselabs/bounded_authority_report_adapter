@@ -11,8 +11,8 @@ ADR-0001/0002 (those are reconciled in place, not abandoned).
 ## Context
 
 ADR-0001 framed this library as "the holder-side signer" and ADR-0002 as
-"signs ONLY the proof." Both were written against the verifier application consumer
-pattern (one app's topology). The 2026-08-10 alignment work surfaced that this
+"signs ONLY the proof." Both were written against one consumer pattern. The
+2026-08-10 alignment work surfaced that this
 library is better understood — and must be designed — as BAP's **universal
 companion signer**: BAP produces the signing input for every protocol object
 (proof, grant, boundary anchor, key transition) and refuses to sign; this library
@@ -20,9 +20,8 @@ takes a key-handle + a BAP signing input and signs it, usable by whichever party
 holds the right key.
 
 The narrow framing was correct *for RA1's envelope flow* but wrong as the library's
-identity. Anchoring it to one app's topology (verifier application can't sign; the runtime is
-issuer-only) would cripple the library to fit a deployment that, if wrong, is the
-deployment's job to fix — not the public library's.
+identity. Anchoring it to one deployment topology would cripple the library to
+fit a consumer-specific arrangement rather than the public protocol contract.
 
 ## Decision
 

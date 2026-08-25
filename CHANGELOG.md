@@ -9,8 +9,11 @@ breaking changes (SemVer §4).
 ### Documentation
 
 - Reconcile the governing charter, strategy, contributor guide, and examples to the live release
-  state: 0.2.1 is public on Hex and consumes BAP from Hex, while the source repository remains
-  private pending explicit public-source and release-identity alignment.
+  state: 0.2.1 and its source are public, it consumes BAP from Hex, and the separate BA runtime
+  remains a private commercial application that is not distributed from Hex.
+- Remove private-consumer identifiers and deployment-specific topology from the tracked public
+  surface and rewritten repository history; add a hash-based gate over tracked files and all
+  reachable commit messages, paths, and patches.
 
 ### Added
 

@@ -51,7 +51,7 @@ The notebook is the human-readable view of that contract; the test is the gate.
 
 ### What this is not
 
-- **Not a consumer.** The adapter signs; a real consumer (verifier application's report path) additionally
+- **Not a consumer.** The adapter signs; a real consumer (consumer's report path) additionally
   binds the envelope to the authenticated reporter (`docs/consumer-integration.md` §8) and dedupes
   nonces against a replay ledger (§9). Those are the consumer's job — that's where a database
   would enter — not the adapter's.

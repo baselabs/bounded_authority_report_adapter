@@ -46,7 +46,7 @@ BAP's verifier-side `TrustedIssuer` key check. The role-attestation's value is t
 1. A library-level correctness property — "BARA cannot be made to *emit* a mis-roled grant,"
    stronger than "the verifier will catch it downstream." Matters if BARA is audited on what
    it emits.
-2. **Multi-issuer / multi-tenant** — when BARA signs for several issuers (verifier application,
+2. **Multi-issuer / multi-tenant** — when BARA signs for several issuers (consumer,
    commerce_platform, …) and the key→role→issuer mapping is dynamic, a BA-asserted role lets
    BARA enforce the binding without every relying party carrying every `TrustedIssuer`.
 3. **Non-repudiation / audit** — a signed attestation is cryptographic evidence of *who*
