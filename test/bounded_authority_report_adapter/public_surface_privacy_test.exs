@@ -16,6 +16,12 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
 
   @three_word_canary_hash "8e67e6fc7f5e336d9f4e58162eae53641a1426acb9f82767cebde52f68f65a5b"
   @concatenated_canary_hash "2d5601031d798a56a26fc011fb50a6aa13c56d154e10de2746a37c525d9ff7b7"
+  @git_env [
+    {"GIT_GRAFT_FILE", "/dev/null"},
+    {"GIT_CONFIG_COUNT", "1"},
+    {"GIT_CONFIG_KEY_0", "advice.graftFileDeprecated"},
+    {"GIT_CONFIG_VALUE_0", "false"}
+  ]
   @production_canaries [
     [99, 100, 99],
     [101, 100, 103, 101, 45, 104, 111, 108, 100, 101, 114],
@@ -87,6 +93,36 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
     git!(repo, ["commit", "-m", "merge"])
     git!(repo, ["config", "log.diffMerges", "off"])
 
+    original_merge = git!(repo, ["rev-parse", "HEAD"]) |> String.trim()
+    first_parent = git!(repo, ["rev-parse", "HEAD^1"]) |> String.trim()
+    second_parent = git!(repo, ["rev-parse", "HEAD^2"]) |> String.trim()
+    clean_tree = git!(repo, ["rev-parse", "HEAD^1^{tree}"]) |> String.trim()
+
+    replacement_merge =
+      git!(repo, [
+        "commit-tree",
+        clean_tree,
+        "-p",
+        first_parent,
+        "-p",
+        second_parent,
+        "-m",
+        "merge"
+      ])
+      |> String.trim()
+
+    git_with_replacements!(repo, ["replace", original_merge, replacement_merge])
+
+    refute forbidden?(
+             git_with_replacements!(repo, [
+               "log",
+               "--all",
+               "--format=",
+               "--name-only",
+               "--diff-merges=separate"
+             ])
+           )
+
     merge_patch = git!(repo, ["show", "--format=", "--diff-merges=separate", "HEAD"])
     assert forbidden?(merge_patch)
     assert scan_repo(repo) == {1, false, true, false, false}
@@ -94,9 +130,74 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
     git!(repo, ["rm", merge_path])
     git!(repo, ["commit", "-m", "remove merge-only file"])
     assert scan_repo(repo) == {0, false, true, false, false}
+
+    content_path = "historical-content.txt"
+    File.write!(Path.join(repo, content_path), canary <> "\n")
+    git!(repo, ["add", content_path])
+    git!(repo, ["commit", "-m", "historical content"])
+
+    content_commit = git!(repo, ["rev-parse", "HEAD"]) |> String.trim()
+    content_parent = git!(repo, ["rev-parse", "HEAD^1"]) |> String.trim()
+    content_clean_tree = git!(repo, ["rev-parse", "HEAD^1^{tree}"]) |> String.trim()
+
+    replacement_content =
+      git!(repo, [
+        "commit-tree",
+        content_clean_tree,
+        "-p",
+        content_parent,
+        "-m",
+        "historical content"
+      ])
+      |> String.trim()
+
+    git_with_replacements!(repo, ["replace", content_commit, replacement_content])
+
+    {_output, replacement_grep_status} =
+      System.cmd(
+        "git",
+        ["-C", repo, "grep", "--quiet", "-I", "-F", "-e", canary, content_commit, "--"],
+        stderr_to_stdout: true
+      )
+
+    assert replacement_grep_status == 1
+    assert historical_content_forbidden?(repo)
+
+    git!(repo, ["rm", content_path])
+    git!(repo, ["commit", "-m", "remove historical content"])
+    assert scan_repo(repo) == {0, false, true, true, false}
+
+    git_with_replacements!(repo, ["replace", "-d", original_merge])
+    git_with_replacements!(repo, ["replace", "-d", content_commit])
+    tip = git!(repo, ["rev-parse", "HEAD"]) |> String.trim()
+    grafts_path = repo_git_path(repo, "info/grafts")
+    shallow_path = repo_git_path(repo, "shallow")
+
+    File.mkdir_p!(Path.dirname(grafts_path))
+    File.write!(grafts_path, tip <> "\n")
+
+    refute forbidden?(
+             git_with_replacements!(repo, [
+               "log",
+               "--all",
+               "--format=",
+               "--name-only",
+               "--diff-merges=separate"
+             ])
+           )
+
+    assert scan_repo(repo) == {0, false, true, true, false}
+
+    File.write!(shallow_path, tip <> "\n")
+
+    assert_raise RuntimeError, ~r/full reachable history is required/, fn ->
+      scan_repo(repo)
+    end
   end
 
   defp scan_repo(repo) do
+    assert_full_history!(repo)
+
     tracked_findings =
       repo
       |> git!(["ls-files", "-z"])
@@ -131,7 +232,10 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
       ["-C", repo, "grep", "--quiet", "-I", "-P"] ++
         Enum.flat_map(patterns, &["-e", &1]) ++ commits ++ ["--"]
 
-    case System.cmd("git", args, stderr_to_stdout: true) do
+    case System.cmd("git", ["--no-replace-objects" | args],
+           stderr_to_stdout: true,
+           env: @git_env
+         ) do
       {_output, 0} -> true
       {_output, 1} -> false
       {output, status} -> raise "git grep failed with #{status}: #{output}"
@@ -139,8 +243,34 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
   end
 
   defp git!(repo, args) do
+    {output, 0} =
+      System.cmd("git", ["--no-replace-objects", "-C", repo | args],
+        stderr_to_stdout: true,
+        env: @git_env
+      )
+
+    output
+  end
+
+  defp git_with_replacements!(repo, args) do
     {output, 0} = System.cmd("git", ["-C", repo | args], stderr_to_stdout: true)
     output
+  end
+
+  defp assert_full_history!(repo) do
+    case repo |> git!(["rev-parse", "--is-shallow-repository"]) |> String.trim() do
+      "false" -> :ok
+      state -> raise "full reachable history is required; shallow state=#{state}"
+    end
+  end
+
+  defp repo_git_path(repo, name) do
+    path = repo |> git_with_replacements!(["rev-parse", "--git-path", name]) |> String.trim()
+
+    case Path.type(path) do
+      :absolute -> path
+      _relative -> Path.expand(path, repo)
+    end
   end
 
   defp forbidden?(content, forbidden_hashes \\ @forbidden_topology_hashes) do
