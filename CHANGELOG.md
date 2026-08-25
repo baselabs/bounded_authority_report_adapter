@@ -10,10 +10,13 @@ breaking changes (SemVer §4).
 
 - Reconcile the governing charter, strategy, contributor guide, and examples to the live release
   state: 0.2.1 and its source are public, it consumes BAP from Hex, and the separate BA runtime
-  remains a private commercial application that is not distributed from Hex.
+  remains a private commercial application that is never public-Hex-published and is not privately
+  Hex-distributed because no paid private-package subscription exists. A future private BA release
+  requires an active subscription and fresh approval for that exact release and destination.
 - Remove private-consumer identifiers and deployment-specific topology from the tracked public
-  surface and rewritten repository history; add a hash-based gate over tracked files and all
-  reachable commit messages, paths, and patches.
+  surface and rewritten repository history; harden the hash-based gate over tracked files, commit
+  messages, historical paths, every reachable commit snapshot, merge content, and annotated-tag
+  messages.
 
 ### Added
 

@@ -16,7 +16,9 @@ boundary anchors, and key transitions; it does NOT verify, does NOT transport,
 does NOT persist, and is NOT the runtime. The package is public on Hex at 0.2.1 and
 this source repository is public. The separate `bounded_authority` runtime is a
 private commercial application: it is not a public Hex package, is not currently
-published to private Hex, and is never a dependency of this library.
+published to private Hex because no paid private-package subscription exists, and is
+never a dependency of this library. Any future private Hex release requires an active
+subscription and fresh approval for that exact release and destination.
 
 ## Read BAP first-hand — never trust a summary (handoff, doc, or your own memory)
 
