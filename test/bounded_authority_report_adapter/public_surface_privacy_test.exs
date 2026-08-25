@@ -81,17 +81,19 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
     git!(repo, ["add", "master.txt"])
     git!(repo, ["commit", "-m", "master"])
     git!(repo, ["merge", "--no-commit", "side"])
-    File.write!(Path.join(repo, "merge-only.txt"), canary <> "\n")
-    git!(repo, ["add", "merge-only.txt"])
+    merge_path = canary <> ".txt"
+    File.write!(Path.join(repo, merge_path), "merge-only path\n")
+    git!(repo, ["add", merge_path])
     git!(repo, ["commit", "-m", "merge"])
+    git!(repo, ["config", "log.diffMerges", "off"])
 
-    merge_patch = git!(repo, ["show", "--format=", "--diff-merges=on", "HEAD"])
+    merge_patch = git!(repo, ["show", "--format=", "--diff-merges=separate", "HEAD"])
     assert forbidden?(merge_patch)
-    assert scan_repo(repo) == {1, false, false, true, false}
+    assert scan_repo(repo) == {1, false, true, false, false}
 
-    git!(repo, ["rm", "merge-only.txt"])
+    git!(repo, ["rm", merge_path])
     git!(repo, ["commit", "-m", "remove merge-only file"])
-    assert scan_repo(repo) == {0, false, false, true, false}
+    assert scan_repo(repo) == {0, false, true, false, false}
   end
 
   defp scan_repo(repo) do
@@ -104,7 +106,7 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
     messages = git!(repo, ["log", "--all", "--format=fuller"])
 
     historical_paths =
-      git!(repo, ["log", "--all", "--format=", "--name-only", "--diff-merges=on"])
+      git!(repo, ["log", "--all", "--format=", "--name-only", "--diff-merges=separate"])
 
     tag_messages = git!(repo, ["for-each-ref", "--format=%(contents)", "refs/tags"])
 
