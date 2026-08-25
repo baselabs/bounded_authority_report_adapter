@@ -14,6 +14,12 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
 
   @three_word_canary_hash "8e67e6fc7f5e336d9f4e58162eae53641a1426acb9f82767cebde52f68f65a5b"
   @concatenated_canary_hash "2d5601031d798a56a26fc011fb50a6aa13c56d154e10de2746a37c525d9ff7b7"
+  @production_canaries [
+    [99, 100, 99],
+    [101, 100, 103, 101, 45, 104, 111, 108, 100, 101, 114],
+    [99, 104, 97, 110, 103, 101, 45, 100, 97, 116, 97, 45, 99, 97, 112, 116, 117, 114, 101],
+    [99, 111, 110, 116, 114, 111, 108, 32, 112, 108, 97, 110, 101]
+  ]
 
   test "tracked files and reachable history contain no consumer-specific topology" do
     {tracked_output, 0} = System.cmd("git", ["ls-files", "-z"])
@@ -38,6 +44,12 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
   test "candidate normalization is red-capable for three-word and joined variants" do
     assert forbidden?("Public privacy canary", MapSet.new([@three_word_canary_hash]))
     assert forbidden?("Public privacy canary", MapSet.new([@concatenated_canary_hash]))
+  end
+
+  test "every production topology digest is red-capable" do
+    Enum.each(@production_canaries, fn codepoints ->
+      assert forbidden?(List.to_string(codepoints))
+    end)
   end
 
   test "invalid UTF-8 is handled deterministically" do
