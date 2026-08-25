@@ -11,8 +11,8 @@ defmodule EdgeAgent.Receiver.NonceLedger do
   seen nonce.
 
   This is a minimal in-memory ETS ledger keyed `(identity_thumbprint, nonce)`. A
-  production consumer keys a durable unique constraint (e.g. verifier application's
-  `(org_id, nonce)` on its database) — the point this demo makes is that the
+  production consumer keys a durable unique constraint to its authenticated
+  identity and nonce — the point this demo makes is that the
   obligation EXISTS and is the consumer's, not the adapter's or the protocol's.
 
   The ETS table is a `:public` `:named_table` owned by THIS GenServer, so it lives

@@ -176,11 +176,10 @@ defp bind_holder_to_identity(bound_holder_thumbprint, identity) do
 end
 ```
 
-The first consumer implements this: the reporter's stored Ed25519 key (the same one the S1 body-
-signature verifies against) IS the BA holder key, and `ReportSignature` asserts
-`facts.holder_thumbprint == Jwk.public_key_thumbprint_raw(reporter_raw_key, %{})` (a cross-
-identity-replay tripwire proves it red). A consumer that does NOT bind the envelope to the
-authenticated identity carries the cross-identity-replay gap — do not enable BA without this binding.
+A conforming consumer binds the authenticated identity's Ed25519 key to the BA holder key and
+asserts `facts.holder_thumbprint == Jwk.public_key_thumbprint_raw(identity_raw_key, %{})`.
+A consumer that does NOT bind the envelope to the authenticated identity carries the
+cross-identity-replay gap — do not enable BA without this binding.
 
 ## 9. Dedupe nonces (a replay ledger is a consumer obligation)
 
@@ -191,5 +190,4 @@ same-identity replay within the proof window. The consumer MUST keep a replay le
 constraint on `(identity, nonce)`) and reject a seen nonce.
 Nonce uniqueness is NOT something the protocol package does for you; it is a consumer obligation,
 alongside the §8 identity binding.
-
 

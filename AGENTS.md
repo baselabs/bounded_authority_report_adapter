@@ -13,8 +13,10 @@ glue (ADR-0006; holder-side by default, issuer-side for grants). It takes a
 signing input, signs via the handle's local key, assembles the compact via the
 public `bounded_authority_protocol` (BAP) package. It signs proofs, grants,
 boundary anchors, and key transitions; it does NOT verify, does NOT transport,
-does NOT persist, and is NOT the runtime. The package is public on Hex at 0.2.1;
-the source repository remains private pending the source/registry alignment row.
+does NOT persist, and is NOT the runtime. The package is public on Hex at 0.2.1 and
+this source repository is public. The separate `bounded_authority` runtime is a
+private commercial application: it is not a public Hex package, is not currently
+published to private Hex, and is never a dependency of this library.
 
 ## Read BAP first-hand — never trust a summary (handoff, doc, or your own memory)
 

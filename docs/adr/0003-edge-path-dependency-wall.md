@@ -10,11 +10,10 @@ by the 2026-08-10 alignment audit.
 
 ## Context
 
-verifier application's dependency-direction wall forbids the verifier from depending
-on anything that signs — so a compromised app cannot forge authority by calling a
-signing path it links against. This adapter **is** the thing that signs, so it
-must live outside verifier application (ADR 0005). For the same invariant to hold on *this*
-adapter's edge path, the adapter must depend only on the public protocol package:
+A verifier must not depend on anything that signs — otherwise a compromised
+verifier can forge authority by calling a signing path it links against. This
+adapter **is** the signer and therefore remains a separate dependency. For the
+same invariant to hold on this adapter's edge path, it depends only on the public protocol package:
 not on the private runtime, not on transport libraries.
 
 Two failure modes the wall prevents:
@@ -30,8 +29,8 @@ Two failure modes the wall prevents:
 
 ## Decision
 
-The adapter's only dependency is `bounded_authority_protocol` (private git dep,
-pinned by ref in `mix.exs`). No `:bounded_authority` (runtime); no `:replicant` /
+The adapter's only runtime dependency is the Hex package
+`bounded_authority_protocol`. No `:bounded_authority` (runtime); no `:replicant` /
 `:capstan` (transports). The adapter consumes **only** the public
 `BoundedAuthorityProtocol.*` surface — never the `BoundedAuthority.*` /
 `BoundedAuthorityWeb.*` runtime internals.

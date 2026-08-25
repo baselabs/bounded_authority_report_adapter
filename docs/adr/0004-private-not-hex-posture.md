@@ -15,17 +15,17 @@ since the scaffold until superseded above.
 
 ## Context
 
-The adapter is a new library whose API is still tuning against its first
-consumers (verifier application's report path first). Publishing to hex signals a
+The adapter began as a new library whose API was still tuning against its first
+consumers. Publishing to Hex signals a
 stability contract — a public semver surface, a deprecation cadence, an
 expectation of backwards compatibility — that does not yet hold. The rationale
-matches the sibling repos: BAP is private because its API is still tuning against
-the first real consumers; the runtime is private because it is a service, not a
-library.
+matched the original portfolio posture. That posture changed when the public
+protocol and conformance corpus established an external contract. The separate
+runtime remains private because it is a commercial application, not a library.
 
 ## Decision
 
-The adapter is a **private BaseLabs GitHub repo**, consumed via private git dep,
+The adapter was a **private source repository**, consumed through a source dependency,
 **not published to hex**. `package/0` metadata (`maintainers`, `licenses`,
 `links`, `files`) is carried in `mix.exs` — it documents the package shape and
 keeps a future flip cheap — but `mix hex.publish` is not the posture. "Public" in
@@ -38,7 +38,7 @@ registry (strategy §2).
   the BaseLabs projects that need it, (b) the conformance round-trip is stable,
   and (c) the API has survived at least one external (non-Elixir) consumer's
   re-implementation against the documented format.
-- Flipping private → public later costs nothing structurally (the git dep stays
+- Flipping private → public later costs nothing structurally (the dependency stays
   valid); publishing-then-revoking costs reputation + semver.
 - `package/0` metadata is not a contradiction with this posture — carrying it is
   normal and documents intent; it is the publication *act* that is deferred.

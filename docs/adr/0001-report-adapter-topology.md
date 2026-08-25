@@ -32,7 +32,7 @@ The holder role cannot collapse into either existing party:
   produces signing *inputs* only.
 - Not the issuer (runtime) — the whole point is the reporter proves possession
   *locally on the edge*, without a round-trip to the authority.
-- Not the verifier (verifier application) — verifier application's dependency-direction wall
+- Not a verifier application — a verifier's dependency-direction wall
   forbids it from depending on anything that signs (so a compromised app cannot
   forge authority; see ADR 0003).
 
@@ -45,7 +45,8 @@ a separate composable library. The adapter is the **HOLDER**:
 - It signs a **holder proof** binding that grant to the report's request fields.
 - It returns `{grant, proof}` — the grant untouched, the proof freshly signed.
 
-It is neither issuer (the runtime) nor verifier (BAP, called by the verifier). The three roles map to three repos:
+It is neither issuer (the runtime) nor verifier (BAP, called by the consuming
+application). The three roles map to independent components:
 
 | Role | Repo | Signs? | Verifies? |
 |---|---|---|---|
@@ -53,15 +54,15 @@ It is neither issuer (the runtime) nor verifier (BAP, called by the verifier). T
 | **Holder** | **this adapter** | holder proofs on reports | — |
 | Verifier | `bounded_authority_protocol` | — | grants, proofs, envelopes |
 
-The verifier (verifier application) verifies via BAP's `check_envelope/2` and never
+The verifier application verifies via BAP's `check_envelope/2` and never
 depends on this adapter (ADR 0003).
 
 ## Consequences
 
 - The holder key is held at the edge, never in the verifier or the
   protocol package. Only the public key + signatures cross the boundary.
-- A captured api_key alone cannot forge a report; a captured transport cannot
-  re-purpose one. S1 closed transport identity; B2 closes capability authority.
+- A captured transport credential alone cannot forge a report or re-purpose a
+  holder proof as authority for a different request.
 - This ADR is the local counterpart to BAP's ADR 0001 (which fixed the
   verifier/issuer placement). The separate-repo *rationale* and the
   private-not-hex *posture* are recorded in ADR 0005 and ADR 0004.

@@ -50,7 +50,7 @@ exists for.
 
 - Convention, not mandate: these bind `examples/edge_agent/` only. The library
   stays transport-free (ADR-0003/0011), and `docs/consumer-integration.md`
-  remains transport-agnostic — verifier application's report path (instance #1) and any
+  remains transport-agnostic — consumer's report path (instance #1) and any
   consumer pick their own stack.
 - The option-shape gotcha is recorded here once, in the receiver's comment, and
   in AGENTS.md — three places, one truth.

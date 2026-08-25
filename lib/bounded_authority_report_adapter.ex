@@ -1,6 +1,6 @@
 defmodule BoundedAuthorityReportAdapter do
   @moduledoc """
-  Universal companion signer to `BoundedAuthorityProtocol` (ROADMAP B2).
+  Universal companion signer to `BoundedAuthorityProtocol`.
 
   BAP produces the deterministic signing input for each protocol object (proof,
   grant, boundary anchor, key transition) but refuses to sign — it is a pure

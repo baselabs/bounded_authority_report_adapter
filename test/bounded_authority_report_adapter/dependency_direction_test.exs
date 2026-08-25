@@ -5,10 +5,8 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   The adapter depends ONLY on the public `bounded_authority_protocol` package on the edge
   path — no private runtime dependency (the `:bounded_authority` runtime app), no transport
   lib (`:replicant` / `:capstan`), and no reference to the runtime's internal
-  `BoundedAuthority.` / `BoundedAuthorityWeb.` namespaces. This is the wall B1 built in
-  verifier application (`test/verifier application/dependency_direction_test.exs`) adapted to THIS repo's surface:
-  the adapter ADDS the transport prohibition verifier application does not carry (charter §3 "not a
-  transport"; strategy §3 "no transport libs") because the adapter is the holder/signer that
+  `BoundedAuthority.` / `BoundedAuthorityWeb.` namespaces. The adapter adds a
+  transport prohibition because it is the holder/signer that
   lives outside the verifier precisely so it can sign — a transport dep here would
   collapse the invariant that transports stay protocol-free (charter §6 invariant 4).
 
@@ -33,7 +31,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   `test_handles.ex` implements `@behaviour BoundedAuthorityReportAdapter`). A
   `BoundedAuthority.` reference landing in `test/support/` would COMPILE and RUN while a
   `lib/`-only scan stayed green — the exact silent failure the wall exists to prevent. NEVER
-  `deps/` (the protocol package is allowed its own dep tree; verifier application line 81) or `docs/`
+  `deps/` (the protocol package is allowed its own dep tree; consumer line 81) or `docs/`
   (prose naming the wall is not a coupling).
 
   ## RED-capable (BA-09)
@@ -41,13 +39,13 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   Every banned token + the deletion of the protocol dep is mutation-proven: the proof plants
   the token / deletes the dep and asserts the wall fires. A wall that scans a malformed glob
   silently returning `[]` passes green while scanning nothing — so each glob AND the positive
-  clause are mutation-proven (design §1.2, verifier application line 219).
+  clause are mutation-proven (design §1.2, consumer line 219).
   """
 
   # async: false: the mutation proofs plant probe files in the real lib/ and test/support/
-  # trees and a concurrent run could observe them (verifier application line 32). The declaration tests
+  # trees and a concurrent run could observe them (consumer line 32). The declaration tests
   # read stable files and are fast; serializing the whole module is simpler than splitting
-  # it across two modules and matches verifier application's posture.
+  # it across two modules and matches consumer's posture.
   use ExUnit.Case, async: false
 
   # The ALLOWED public protocol package the adapter MUST declare (the trust root for the
@@ -94,7 +92,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # The terminator stops `{:bounded_authority_protocol` (the ALLOWED dep — "_" is a word char
   # so `\b` finds no boundary; and the quoted form ends with `_protocol"`, past the alternation)
   # and stops `{:ash_replicant` (absent here, but the wall future-proofs against the estate
-  # wedge verifier application documents).
+  # wedge consumer documents).
   @mix_exs_forbidden ~r/\{\s*:(?:["']|)(bounded_authority|replicant|capstan)(?:["']|\b)/
   @mix_lock_forbidden ~r/"(bounded_authority|replicant|capstan)"\s*:/
 
@@ -127,7 +125,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # compiles test/support/ into the test env alongside lib/. NEVER deps/ or docs/.
   @scan_dirs ~w(lib test/support)
 
-  # TOCTOU-safe file read (verifier application lines 89-94): a concurrent mutation-proof's
+  # TOCTOU-safe file read (consumer lines 89-94): a concurrent mutation-proof's
   # try/after-File.rm can remove a probe file between the wildcard snapshot + the read.
   # Returns nil ONLY on :enoent (the file vanished — the TOCTOU case the design §1.8 scopes
   # this to) instead of raising File.Error (which would flake the wall). gate-integrity F1:
@@ -289,7 +287,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # --------------------------------------------------- the wall is mutation-proven
 
   describe "the wall is mutation-proven (each banned token + the positive clause fires)" do
-    # BA-09's lesson (verifier application line 219): a wall that scans a malformed glob silently returning
+    # BA-09's lesson (consumer line 219): a wall that scans a malformed glob silently returning
     # [] passes green while scanning nothing. Each proof plants the banned token in a real
     # file / synthesizes the offending form, invokes the real scan, and asserts the wall
     # fires. Probe filenames are unique per-run so a concurrent test can't collide; on_exit /
@@ -359,7 +357,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     end
 
     test "the real adapter module path is scanned (a planted token in the real .ex fires)" do
-      # verifier application's Task-8 pattern (lines 296-326): mutate the REAL lib/bounded_authority_report_adapter.ex
+      # consumer's Task-8 pattern (lines 296-326): mutate the REAL lib/bounded_authority_report_adapter.ex
       # — the module the wall exists to guard. A glob that silently skipped the real module
       # (a malformed recursion, a path case the probe files did not exercise) would let a
       # BoundedAuthority.* ref land in the adapter and pass the wall. Mutating the real file
@@ -541,9 +539,9 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     end
 
     test "the mix.lock entry form is caught for each forbidden atom, not the protocol" do
-      # design-adversarial C5: verifier application's reference (lines 362-369) synthesizes the offending
+      # design-adversarial C5: consumer's reference (lines 362-369) synthesizes the offending
       # lock-entry form AND the allowed form at the STRING level. The three-atom alternation
-      # is a generalization beyond verifier application's single-atom lock regex, so each atom gets a
+      # is a generalization beyond consumer's single-atom lock regex, so each atom gets a
       # synthesized-string proof.
       assert Regex.match?(@mix_lock_forbidden, ~s("bounded_authority": {:git, ...}))
       assert Regex.match?(@mix_lock_forbidden, ~s("replicant": {:hex, ...}))

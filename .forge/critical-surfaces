@@ -8,7 +8,7 @@
 # This manifest is FORCE-TRACKED (git add -f) past the broad `.forge/` ignore:
 # a manifest lost to `git clean -fdx` is a silent gate no-op. The hook itself
 # is NOT installed in this repo yet (the manifest ships as documentation; the
-# install is an ops follow-on, mirroring verifier application's posture).
+# install is an ops follow-on; this file records the critical signing surface only).
 #
 # Globs match the full repo-relative path. `*` matches any chars including `/`.
 
@@ -25,7 +25,7 @@ lib/bounded_authority_report_adapter.ex
 # RA3 — the dependency-direction wall. The "adapter depends ONLY on the public
 # protocol package" invariant (charter §6, strategy §3) is structural; a regression
 # here silently re-introduces a private runtime dep and collapses the wall B1
-# built in verifier application. The gate that proves it lives here.
+# built in consumer. The gate that proves it lives here.
 test/**/dependency_direction_test.exs
 
 # RA2 — the conformance harness. The harness's value IS its verdict: a wrong

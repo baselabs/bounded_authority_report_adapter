@@ -5,29 +5,26 @@
 `docs/ROADMAP.md` (the build order). This doc carries the *how* and *why* of the
 engineering + release posture.
 
-## 1. Release posture: public package, private source repository
+## 1. Release posture: public package and public source
 
 The owner superseded the original private-not-Hex posture on 2026-08-20 (ADR
 0004). `bounded_authority_report_adapter` 0.2.1 is public on Hex and consumes the
-public `bounded_authority_protocol` Hex package. The adapter is pre-1.0 and every
+public `bounded_authority_protocol` Hex package. Its GitHub source is public and
+the release tags are the durable source identities. The adapter is pre-1.0 and every
 release remains responsible for its own compatibility, conformance, provenance,
 security, and clean-consumer evidence.
 
-The GitHub source repository is still private even though the package metadata
-points to it. That is an explicit incomplete source/registry alignment state, not
-a public-source claim: anonymous source, tag, changelog, and documentation links
-must be verified together before the repository is described as public. The
-alignment work belongs to its own owner row and visibility/rule confirmation.
-The `bounded_authority` runtime remains private/commercial and is not a library
-dependency.
+The `bounded_authority` runtime is a separate private commercial application. It
+is not published on public Hex, is not currently published through a private Hex
+organization, and is never a library dependency of BARA. A future private runtime
+distribution would require a paid private-package channel and a new owner-approved
+release; it cannot be inferred from BARA or BAP publication.
 
 ## 2. "Public" terminology
 
-"Public" now means the actual registry and portable-contract boundary: BAP and
-BARA are available from Hex. It does not mean their APIs are 1.0-stable, and it
-does not make the private BA runtime public. Statements about public source must
-remain separate until the source repository's visibility and immutable release
-identities are aligned.
+"Public" means the registry, source, and portable-contract boundary for BAP and
+BARA. It does not mean their APIs are 1.0-stable, and it does not make the private
+BA runtime public or publishable.
 
 ## 3. Dependencies — the edge-path constraint
 
@@ -40,36 +37,35 @@ bounded_authority_report_adapter
 ```
 
 - **The adapter depends only on the public protocol package.** This is the
-  ROADMAP B2 acceptance clause ("the adapter depends only on the public protocol
-  package on the edge path — no private runtime dependency"). The
-  dependency-direction wall in verifier application (`dependency_direction_test.exs`) forbids
-  verifier application from depending on anything that signs; this adapter is the thing that
-  signs, so it lives outside verifier application and depends only on BAP.
+  governing acceptance clause: the adapter depends only on the public protocol
+  package and has no private-runtime dependency. A verifier application consumes
+  BAP directly and never needs this signer as a dependency.
 - **The runtime (`bounded_authority`) is NOT a dependency.** The adapter signs
   with a holder key it already holds; it does not call the runtime at sign time.
-  Grant issuance + revocation are out of band (the runtime talks to the verifier, not to this adapter).
+  Grant issuance + revocation are out of band (the runtime talks to the consuming
+  application, not to this adapter).
 - **No transport libs.** `replicant`/`capstan` stay free of protocol code; this
   adapter is called by the edge agent, not embedded in the transport.
 
-A dependency-direction test in this repo's suite will prove the "only BAP"
-constraint structurally (mirroring verifier application's wall).
+A dependency-direction test in this repo's suite proves the "only BAP"
+constraint structurally.
 
-## 4. Why a separate repo (not a module in verifier application or in BAP)
+## 4. Why a separate signer library
 
 This is the most-asked design question, so stated plainly:
 
-- **Not in verifier application:** verifier application must never sign (the dependency-direction wall).
-  Putting the signer in the verifier app puts the holder key in the app's
+- **Not in a verifier:** a verifier must never gain a signing path.
+  Putting the signer in a verifier app puts the holder key in the app's
   memory, collapsing the invariant that a compromised app cannot forge
-  authority. B1 codified this; B2 honors it by living outside verifier application.
+  authority.
 - **Not in BAP:** BAP is a pure verifier — it produces signing inputs but
   refuses to hold keys or sign (its charter). Folding signing into BAP would
   force every verifier (including third parties) to carry signing code.
 - **Not in the runtime:** the runtime is a server; the whole point is the
   reporter signs *locally* on the edge, without a round-trip to the authority.
-- **Therefore: a new composable lib.** Its single job is "BAP produces the
+- **Therefore: a composable signer library.** Its single job is "BAP produces the
   bytes, this adapter signs them, hands back the envelope." Small, single-purpose,
-  reusable by any BaseLabs edge agent that needs to sign application reports.
+  reusable by any holder that needs to sign protocol objects.
 
 The cost (a repo for a small amount of code) buys the invariant. The invariant
 is load-bearing: once the signing key is in the app, extracting it is a
