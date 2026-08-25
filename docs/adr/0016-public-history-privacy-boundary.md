@@ -27,9 +27,11 @@ BARA dependency.
 2. All public branches, tags, commit messages, paths, and tracked blobs are rewritten to
    satisfy that boundary. Release tags retain their version names but point to rewritten
    source identities.
-3. A hash-based privacy gate scans tracked files and all reachable history. Hashes keep
-   the prohibited private identifiers out of the public tree while retaining an
-   executable tripwire.
+3. A public hash-based gate scans tracked files and all reachable history for generic
+   deployment-topology phrases. Its committed canaries prove multi-word and joined-form
+   matching red-capable. Exact private identifiers live only in the ignored local manifest
+   consumed by the commit guard; their public hashes would create a confirmation oracle for
+   guessed names.
 4. BARA and BAP publication does not imply BA publication. BA remains private and may be
    distributed privately only after a separately authorized commercial release channel
    exists.
