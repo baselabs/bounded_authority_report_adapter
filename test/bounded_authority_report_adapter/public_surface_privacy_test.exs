@@ -1,15 +1,17 @@
 defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
   use ExUnit.Case, async: false
 
+  @moduletag timeout: 180_000
+
   # These hashes represent generic deployment-topology phrases, not private names.
   # Exact private identifiers live only in the ignored .kimosabe manifest consumed
   # by the commit guard; publishing their unhashed or unkeyed hashes would create a
   # confirmation oracle for guessed names.
   @forbidden_topology_hashes MapSet.new([
                                "44abe4ace21b534dfb1eef35741807ec85dd1766486a86fd7d6b5a822f58e470",
-                               "4e8c2d200b4a4538da9dc9d04c618a1e10117629799f690113f7caf1e4a29a15",
-                               "6f7b03460ad6bbbf99ac00c89f3939e825c846d38da079f0e920b3d0347bcae6",
-                               "a32b176c56bea1f4e551e76e17d60bb6acac7822850dc3673b944ae8f3db8dce"
+                               "3909646b8c708c0ca1dbe6ae42246b1ca1f0962dd921dd77d5dfc445c3e12f9d",
+                               "8ba856db7af39ad490c3c482ffe3e6a07c77cc65f22249da21e98790d9746770",
+                               "aedf9140c8923575ea004557e6ba9c2ceabe2b63d2c99a164aa1501547d5bc6a"
                              ])
 
   @three_word_canary_hash "8e67e6fc7f5e336d9f4e58162eae53641a1426acb9f82767cebde52f68f65a5b"
@@ -22,38 +24,121 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
   ]
 
   test "tracked files and reachable history contain no consumer-specific topology" do
-    {tracked_output, 0} = System.cmd("git", ["ls-files", "-z"])
-
-    tracked_findings =
-      tracked_output
-      |> String.split(<<0>>, trim: true)
-      |> Enum.count(fn path -> forbidden?(path <> "\n" <> File.read!(path)) end)
-
-    {messages, 0} = System.cmd("git", ["log", "--all", "--format=fuller"])
-
-    {patches, 0} =
-      System.cmd(
-        "git",
-        ["log", "--all", "--format=", "--name-status", "-p", "--no-ext-diff", "--text"]
-      )
-
-    assert {tracked_findings, forbidden?(messages), forbidden?(patches)} == {0, false, false},
+    assert scan_repo(".") == {0, false, false, false, false},
            "public-surface privacy gate found forbidden generic topology"
   end
 
-  test "candidate normalization is red-capable for three-word and joined variants" do
+  test "candidate normalization and every production rule are red-capable" do
     assert forbidden?("Public privacy canary", MapSet.new([@three_word_canary_hash]))
     assert forbidden?("Public privacy canary", MapSet.new([@concatenated_canary_hash]))
-  end
 
-  test "every production topology digest is red-capable" do
     Enum.each(@production_canaries, fn codepoints ->
-      assert forbidden?(List.to_string(codepoints))
+      parts = codepoints |> List.to_string() |> String.split(["-", "_", " "], trim: true)
+
+      for separator <- ["", " ", "_", "-"] do
+        assert forbidden?(Enum.join(parts, separator))
+      end
     end)
   end
 
   test "invalid UTF-8 is handled deterministically" do
     refute forbidden?(<<255, 254, 0, 1>>)
+  end
+
+  test "Git plumbing detects tracked, historical, merge, and annotated-tag violations" do
+    repo =
+      Path.join(System.tmp_dir!(), "bara-public-privacy-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(repo)
+    on_exit(fn -> File.rm_rf!(repo) end)
+
+    git!(repo, ["init", "--initial-branch=master"])
+    git!(repo, ["config", "user.email", "privacy-gate@example.invalid"])
+    git!(repo, ["config", "user.name", "Privacy Gate"])
+
+    File.write!(Path.join(repo, "README.md"), "public adapter\n")
+    git!(repo, ["add", "README.md"])
+    git!(repo, ["commit", "-m", "clean root"])
+    assert scan_repo(repo) == {0, false, false, false, false}
+
+    canary =
+      @production_canaries
+      |> Enum.at(1)
+      |> List.to_string()
+      |> String.split(["-", "_", " "], trim: true)
+      |> Enum.join()
+
+    git!(repo, ["tag", "-a", "v-canary", "-m", canary])
+    assert scan_repo(repo) == {0, false, false, false, true}
+    git!(repo, ["tag", "-d", "v-canary"])
+
+    git!(repo, ["switch", "-c", "side"])
+    File.write!(Path.join(repo, "side.txt"), "side\n")
+    git!(repo, ["add", "side.txt"])
+    git!(repo, ["commit", "-m", "side"])
+    git!(repo, ["switch", "master"])
+    File.write!(Path.join(repo, "master.txt"), "master\n")
+    git!(repo, ["add", "master.txt"])
+    git!(repo, ["commit", "-m", "master"])
+    git!(repo, ["merge", "--no-commit", "side"])
+    File.write!(Path.join(repo, "merge-only.txt"), canary <> "\n")
+    git!(repo, ["add", "merge-only.txt"])
+    git!(repo, ["commit", "-m", "merge"])
+
+    merge_patch = git!(repo, ["show", "--format=", "--diff-merges=on", "HEAD"])
+    assert forbidden?(merge_patch)
+    assert scan_repo(repo) == {1, false, false, true, false}
+
+    git!(repo, ["rm", "merge-only.txt"])
+    git!(repo, ["commit", "-m", "remove merge-only file"])
+    assert scan_repo(repo) == {0, false, false, true, false}
+  end
+
+  defp scan_repo(repo) do
+    tracked_findings =
+      repo
+      |> git!(["ls-files", "-z"])
+      |> String.split(<<0>>, trim: true)
+      |> Enum.count(fn path -> forbidden?(path <> "\n" <> File.read!(Path.join(repo, path))) end)
+
+    messages = git!(repo, ["log", "--all", "--format=fuller"])
+
+    historical_paths =
+      git!(repo, ["log", "--all", "--format=", "--name-only", "--diff-merges=on"])
+
+    tag_messages = git!(repo, ["for-each-ref", "--format=%(contents)", "refs/tags"])
+
+    {tracked_findings, forbidden?(messages), forbidden?(historical_paths),
+     historical_content_forbidden?(repo), forbidden?(tag_messages)}
+  end
+
+  defp historical_content_forbidden?(repo) do
+    commits =
+      repo
+      |> git!(["rev-list", "--all"])
+      |> String.split("\n", trim: true)
+
+    patterns =
+      Enum.map(@production_canaries, fn codepoints ->
+        parts = codepoints |> List.to_string() |> String.split(["-", "_", " "], trim: true)
+        body = Enum.map_join(parts, "[-_ ]?", &Regex.escape/1)
+        "(?i)(?<![[:alnum:]_])#{body}(?![[:alnum:]_])"
+      end)
+
+    args =
+      ["-C", repo, "grep", "--quiet", "-I", "-P"] ++
+        Enum.flat_map(patterns, &["-e", &1]) ++ commits ++ ["--"]
+
+    case System.cmd("git", args, stderr_to_stdout: true) do
+      {_output, 0} -> true
+      {_output, 1} -> false
+      {output, status} -> raise "git grep failed with #{status}: #{output}"
+    end
+  end
+
+  defp git!(repo, args) do
+    {output, 0} = System.cmd("git", ["-C", repo | args], stderr_to_stdout: true)
+    output
   end
 
   defp forbidden?(content, forbidden_hashes \\ @forbidden_topology_hashes) do

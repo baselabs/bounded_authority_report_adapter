@@ -17,7 +17,8 @@ tags.
 
 The separate `bounded_authority` runtime is also easy to conflate with the public
 libraries. It is a private commercial application, not a public Hex package and not a
-BARA dependency.
+BARA dependency. No paid private-package subscription currently exists, so it is not privately
+Hex-distributed either.
 
 ## Decision
 
@@ -32,9 +33,9 @@ BARA dependency.
    matching red-capable. Exact private identifiers live only in the ignored local manifest
    consumed by the commit guard; their public hashes would create a confirmation oracle for
    guessed names.
-4. BARA and BAP publication does not imply BA publication. BA remains private and may be
-   distributed privately only after a separately authorized commercial release channel
-   exists.
+4. BARA and BAP publication does not imply BA publication. BA is never a public Hex package.
+   Any future private Hex release requires an active paid private-package subscription and fresh
+   approval for that exact release and destination.
 
 ## Consequences
 

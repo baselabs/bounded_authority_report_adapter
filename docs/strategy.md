@@ -16,9 +16,10 @@ security, and clean-consumer evidence.
 
 The `bounded_authority` runtime is a separate private commercial application. It
 is not published on public Hex, is not currently published through a private Hex
-organization, and is never a library dependency of BARA. A future private runtime
-distribution would require a paid private-package channel and a new owner-approved
-release; it cannot be inferred from BARA or BAP publication.
+organization because no paid private-package subscription exists, and is never a
+library dependency of BARA. A future private Hex release requires an active
+subscription and fresh approval for that exact release and destination; it cannot be
+inferred from BARA or BAP publication.
 
 ## 2. "Public" terminology
 

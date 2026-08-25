@@ -83,7 +83,9 @@ These negatives are load-bearing — each maps to a different repo's job:
   and its source is public. It is still only a signer and gains no verifier,
   runtime, transport, persistence, or custody authority from publication. The
   separate BA runtime remains a private commercial application and is not
-  distributed from Hex (see `docs/strategy.md`).
+  distributed from Hex because no paid private-package subscription exists. Any
+  future private Hex release requires the subscription and fresh approval for that
+  exact release and destination (see `docs/strategy.md`).
 
 ## 4. The authority model
 
