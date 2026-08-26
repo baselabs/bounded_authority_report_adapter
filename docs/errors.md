@@ -23,16 +23,27 @@ The four error sets are identical except for their per-object input atom:
 
 ## The per-object input atoms
 
+The adapter's input validation is SHAPE-only (required fields present, right basic
+types). SEMANTIC constraints — digest sizes, time-window ordering, thumbprint width,
+selector shapes — are enforced by the protocol's producer and surface as
+`{:producer_error, :invalid}` (see that row above). Do not debug a wrong-size or
+semantically-invalid field against these rows.
+
 | Atom | Meaning | What to check | Recovery |
 |---|---|---|---|
-| `:invalid_report` | A required `report` field is missing or malformed (`grant_compact`, `operation`, `method`, `target_uri`, `invocation_id`, `cast_arguments`, `nonce`), or `cast_arguments` is `nil`. | The map against `report()` in the moduledoc; `cast_arguments` is BAP's tagged form, never a raw map. | Fix the report fields. |
-| `:invalid_anchor` | An `anchor_input` content field is missing, or `chain_hash` is not 32 bytes (the zero hash only fits `sequence == 0`). | `anchor_id`, `chain_id`, `sequence`, `chain_hash`. | Fix the anchor fields. |
-| `:invalid_grant` | A `grant_input` field is missing/malformed, the time window is inverted, `holder_thumbprint` is not a raw 32-byte thumbprint, or `operations` is empty. | `issuer`, `grant_id`, `audiences`, `issued_at`/`not_before`/`expires_at`, `holder_thumbprint` (raw, from `V1.Jwk.public_key_thumbprint_raw/2`), `operations`. | Fix the grant fields. |
-| `:invalid_transition` | A `transition_input` field is missing, or `next_public_key` is not a 32-byte Ed25519 key. | `transition_id`, `chain_id`, `effective_at`, `next_key_id`, `next_public_key`. | Fix the transition fields. |
+| `:invalid_report` | A required `report` field is missing or of the wrong basic type (`grant_compact`, `operation`, `method`, `target_uri`, `invocation_id`, `cast_arguments`, `nonce`), or `cast_arguments` is `nil`. | The map against `report()` in the moduledoc. | Fix the report fields. |
+| `:invalid_anchor` | An `anchor_input` content field is missing, or `chain_hash` is not a binary. | `anchor_id`, `chain_id`, `sequence`, `chain_hash` presence and basic types. | Fix the anchor fields. |
+| `:invalid_grant` | A `grant_input` field is missing or of the wrong basic type. | `issuer`, `grant_id`, `audiences`, `issued_at`/`not_before`/`expires_at` presence and types. | Fix the grant fields. |
+| `:invalid_transition` | A `transition_input` field is missing, or `next_public_key` is not a 32-byte Ed25519 key (adapter-checked). | `transition_id`, `chain_id`, `effective_at`, `next_key_id`, `next_public_key`. | Fix the transition fields. |
+
+The `{:producer_error, :invalid}` row covers, among others: a `chain_hash` that is not
+32 bytes or a zero hash at a nonzero `sequence`; an inverted grant time window; a
+`holder_thumbprint` that is not a raw 32-byte thumbprint; a non-tagged
+`cast_arguments`. All pass the adapter's shape checks and are rejected by the protocol
+producer.
 
 ## Where the atoms live
 
 Each set is a `@type` on `BoundedAuthorityReportAdapter`
 (`sign_error/0`, `anchor_sign_error/0`, `grant_sign_error/0`, `transition_sign_error/0`)
-— dialyze your caller against them. A doc-currency test (this file ↔ the `@type`s) runs
-in the library's suite, so a table row and a type cannot drift apart silently.
+— dialyze your caller against them; this table is authored against those types.

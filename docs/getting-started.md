@@ -105,9 +105,11 @@ alias BoundedAuthorityProtocol.V1
 ```
 
 If that comes back `{:ok, _}`, you have signed a proof the protocol's verifier accepts.
-If it comes back `{:error, :invalid}`, check [Errors](errors.md) — the signing side
-returned `{:ok, _}` with your grant intact, so the mismatch is in the expected-request
-fields (times, nonce, audience, arguments), not in the signature.
+If it comes back `{:error, :invalid}`: the adapter verified only the PROOF it just
+signed and passed your grant through untouched, so a rejection can be an
+expected-request field mismatch (times, nonce, audience, arguments) OR the verifier
+rejecting the GRANT itself (issuer signature, window, thumbprint binding). The
+adapter-side signing errors are a different surface — [Errors](errors.md) covers those.
 
 ## The path to a production handle
 
@@ -127,7 +129,7 @@ separation (Usage rules #3).
 
 ## Where to next
 
-- [Usage rules](../usage-rules.md) — the fifteen-line version of everything above.
+- [Usage rules](../usage-rules.md) — the twelve-rule version of everything above.
 - [Errors](errors.md) — every closed atom, what it means, what to check.
 - [Telemetry](telemetry.md) — the value-free sign events and the custody alarm.
 - [Consumer integration](consumer-integration.md) — the verifier side: raw bytes,
