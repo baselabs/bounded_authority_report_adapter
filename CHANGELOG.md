@@ -28,6 +28,15 @@ breaking changes (SemVer §4).
   (`mix hex.audit` + `mix deps.audit` via mix_audit, both dev/test-only). Each gate is
   mutation-proven red-capable, and the CI advisory parity test now pins the full battery
   step order in both orchestration surfaces — dropping any one battery step reds parity.
+- CI compatibility matrix: both workflow jobs now run a three-cell Elixir/OTP matrix
+  (1.18.4/27.3.4.14, 1.19.5/28.5.0.3, 1.20.2/29.0.3 — the protocol sibling's proven
+  lanes, `fail-fast: false`), with every cell running the identical battery. `mix ci`
+  stays pinned to the local asdf lane and is documented as such in the workflow. The
+  parity test pins the exact cells per job and that setup-beam consumes the matrix
+  variables — a dropped lane reds (a lane that never runs looks green by absence).
+  Validated with actionlint only (Actions billing-blocked; the limitation is stated in
+  the commit). The dead git-pin-era "configure git for private deps" steps were already
+  removed with the gate battery.
 - `scripts/check_package.exs` — the shipped-artifact gate (pattern: the protocol sibling's
   package check, adapted): builds the exact Hex archive, unpacks it, asserts the payload
   census against the expected file set exactly in BOTH directions (a stale `files:`

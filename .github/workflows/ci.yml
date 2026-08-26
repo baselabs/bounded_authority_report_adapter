@@ -10,8 +10,23 @@ permissions:
 
 jobs:
   gate:
-    name: Format · Compile · Credo · Test · Cover · Dialyzer · Docs · Audits
+    name: Gate battery (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-latest
+
+    # Local parity: `mix ci` reproduces these steps step-for-step on the
+    # PINNED lane only (asdf .tool-versions — the local floor). The matrix is
+    # CI-side breadth across supported Elixir/OTP pairs; every cell runs the
+    # identical battery.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - elixir: "1.18.4"
+            otp: "27.3.4.14"
+          - elixir: "1.19.5"
+            otp: "28.5.0.3"
+          - elixir: "1.20.2"
+            otp: "29.0.3"
 
     env:
       MIX_ENV: test
@@ -23,8 +38,8 @@ jobs:
 
       - uses: erlef/setup-beam@v1
         with:
-          elixir-version: '1.20.2'
-          otp-version: '29'
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
 
       - name: Install deps
         run: mix deps.get
@@ -62,8 +77,21 @@ jobs:
         run: mix run --no-start scripts/check_package.exs
 
   example:
-    name: examples/edge_agent (Audit · Format · Compile · Credo · Test)
+    name: examples/edge_agent (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-latest
+
+    # Same three-cell matrix as the gate job: the example app is part of the
+    # supported surface (its Bandit/Req pins must hold on every lane).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - elixir: "1.18.4"
+            otp: "27.3.4.14"
+          - elixir: "1.19.5"
+            otp: "28.5.0.3"
+          - elixir: "1.20.2"
+            otp: "29.0.3"
 
     env:
       MIX_ENV: test
@@ -77,8 +105,8 @@ jobs:
 
       - uses: erlef/setup-beam@v1
         with:
-          elixir-version: '1.20.2'
-          otp-version: '29'
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
 
       - name: Install deps
         run: mix deps.get
