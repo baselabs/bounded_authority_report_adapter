@@ -20,6 +20,16 @@ breaking changes (SemVer §4).
 
 ### Added
 
+- Supply-chain parity: a tag-push supply-chain workflow (exact archive built through
+  the full gate battery, SHA256SUMS, SLSA provenance + CycloneDX SBOM attestations via
+  actions/attest with id-token scoped to the attest steps; artifact names derived from
+  mix.exs @version, never hardcoded) and the release-candidate reproducibility gate
+  (`scripts/check_reproducible.exs`, the protocol sibling's pattern read first-hand: two
+  fresh source-tree copies, independent deps.get + hex.build, byte-identical SHA-256
+  required) wired as a mix ci + CI battery step. RED-proven: a packaged source tampered
+  between the two builds reds the gate (digests diverge, exit 1). SECURITY.md gains the
+  consumer verification procedure (SHA256SUMS, gh attestation verify, hex.pm
+  cross-check).
 - `mix bounded_authority_report_adapter.doctor --handle MyApp.HolderKey [--ref term]
   [--live]` — the handle-contract preflight (read/probe only, no side effects):
   FATAL on an unloaded module, a missing required callback (`sign/2`,

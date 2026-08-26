@@ -39,6 +39,33 @@ A report should include:
 - a minimal, VALUE-FREE reproduction (no real keys, no production report content);
 - the expected security outcome.
 
+## Verifying a release (supply-chain provenance)
+
+Every `v*` tag push runs the supply-chain workflow: it builds the exact Hex
+archive through the full gate battery, records its SHA-256 in `SHA256SUMS`, and
+attests build provenance (SLSA) plus a CycloneDX SBOM via GitHub attestations.
+To verify a published release against that evidence:
+
+```sh
+# 1. Download the release evidence artifact (the workflow run for the tag)
+#    and the tarball, then compare checksums:
+sha256sum -c SHA256SUMS
+
+# 2. Verify the attestations against the subject digest (requires the
+#    gh CLI and the workflow run's artifact):
+gh attestation verify <tarball> --repo baselabs/bounded_authority_report_adapter
+
+# 3. Cross-check against hex.pm's published checksum for the release
+#    (hex.pm shows the archive checksum on the version page — it must
+#    equal the SHA-256 in SHA256SUMS for the same bytes).
+```
+
+Locally, before any release, `mix ci` runs the same reproducibility gate the
+workflow uses: two cache-isolated builds of the exact archive must agree byte
+for byte.
+
+## Acknowledgment
+
 We will acknowledge reports within 7 days and send status updates at least weekly until
 resolution, coordinating disclosure through the private advisory. This is a best-effort
 cadence from a small maintainer team, not a contractual SLA — urgent disclosures are

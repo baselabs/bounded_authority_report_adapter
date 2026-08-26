@@ -78,6 +78,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         # census/metadata, and compiles + smoke-runs a consumer against the
         # UNPACKED package (scripts/check_package.exs; scratch-cleaned).
         "cmd env MIX_ENV=test mix run --no-start scripts/check_package.exs",
+        # Two cache-isolated builds of the exact archive must agree byte for
+        # byte (the release-candidate reproducibility gate).
+        "cmd env MIX_ENV=test mix run --no-start scripts/check_reproducible.exs",
         # job: example (the workflow's working-directory: examples/edge_agent)
         "cmd --cd examples/edge_agent env MIX_ENV=test mix deps.get",
         "cmd --cd examples/edge_agent env MIX_ENV=test mix hex.audit",
@@ -116,7 +119,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       {:igniter, "~> 0.8", optional: true},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      # CycloneDX SBOM generation for the tag-push supply-chain workflow.
+      {:sbom, "~> 0.10", only: [:dev, :test], runtime: false}
     ]
   end
 

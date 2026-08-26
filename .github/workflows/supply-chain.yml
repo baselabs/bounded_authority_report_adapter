@@ -1,0 +1,80 @@
+name: Supply chain
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Build and attest release package
+    runs-on: ubuntu-latest
+
+    # The id-token + attestations permissions exist for THIS job's attest steps
+    # only (the tag-push build is the provenance subject).
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.20.2"
+          otp-version: "29.0.3"
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Run the full gate battery
+        run: mix ci
+
+      # Artifact names derive from mix.exs @version — never hardcoded (a stale
+      # name after a version bump silently attests nothing).
+      - name: Derive artifact version
+        run: echo "VERSION=$(mix run -e 'IO.puts(Mix.Project.config()[:version])')" >> "$GITHUB_ENV"
+
+      - name: Build exact release archive
+        run: |
+          mkdir -p artifacts
+          mix hex.build --output "artifacts/bounded_authority_report_adapter-${VERSION}.tar"
+
+      - name: Record archive checksum
+        working-directory: artifacts
+        run: sha256sum "bounded_authority_report_adapter-${VERSION}.tar" > SHA256SUMS
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          mix sbom.cyclonedx --only prod --exclude-system-dependencies \
+            --classification library --schema 1.6 --format json \
+            --output artifacts/release.cdx.json --force
+
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
+
+      - name: Attest release SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
+          sbom-path: artifacts/release.cdx.json
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: bounded-authority-report-adapter-${{ github.sha }}
+          path: |
+            artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
+            artifacts/release.cdx.json
+            artifacts/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30

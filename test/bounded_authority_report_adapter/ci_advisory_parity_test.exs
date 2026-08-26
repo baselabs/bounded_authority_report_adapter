@@ -27,7 +27,8 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     {"docs warnings", "mix docs --warnings-as-errors"},
     {"hex retirement audit", "mix hex.audit"},
     {"dependency advisory audit", "mix deps.audit"},
-    {"package boundary check", "mix run --no-start scripts/check_package.exs"}
+    {"package boundary check", "mix run --no-start scripts/check_package.exs"},
+    {"release reproducibility", "mix run --no-start scripts/check_reproducible.exs"}
   ]
 
   test "mix ci audits the edge example immediately after resolving its dependencies" do
