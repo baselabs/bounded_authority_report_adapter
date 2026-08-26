@@ -74,7 +74,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   # ADR 0003). BAP is consumed from its Hex release.
   defp deps do
     [
-      {:bounded_authority_protocol, "~> 0.1.1"},
+      {:bounded_authority_protocol, "~> 0.1.2"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false}
     ]
