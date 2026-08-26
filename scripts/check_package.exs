@@ -37,6 +37,8 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
                     "docs/consumer-integration.md",
                     "docs/errors.md",
                     "docs/getting-started.md",
+                    "docs/recipes.md",
+                    "docs/security.md",
                     "docs/telemetry.md",
                     "lib/bounded_authority_report_adapter.ex",
                     "lib/bounded_authority_report_adapter/telemetry.ex",
