@@ -20,6 +20,15 @@ breaking changes (SemVer §4).
 
 ### Added
 
+- Igniter installer: `mix bounded_authority_report_adapter.install --module MyApp.HolderKey`
+  scaffolds a starter key-handle (all five callbacks present so the behaviour compiles
+  clean; every body raises until you wire your custody store — nothing key-shaped is
+  ever uncommented FOR you), imports the dep into the consumer's `.formatter.exs`, and
+  carries the which-callback-matters-for-which-operation contract as comments.
+  `:igniter` (~> 0.8) is an OPTIONAL dependency (unscoped, so consumer builds order it
+  before this package and the real task compiles; without it the file compiles to a
+  fallback task that raises with the one-line remedy). Smoke-verified end-to-end in a
+  scratch consumer: install → wire a dev key → sign_report → check_envelope green.
 - Governance surface: [CONTRIBUTING.md](CONTRIBUTING.md) (the per-file floor, the
   surgical-pathspec discipline, red-first + mutation-proof expectations, the bump
   policy pointer), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) (Contributor Covenant v2.1,
