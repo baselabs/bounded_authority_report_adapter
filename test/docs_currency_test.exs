@@ -52,8 +52,8 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
            "the producer tuple's fixed shape must be documented verbatim"
   end
 
-  test "every backticked fun/arity in usage-rules.md resolves" do
-    doc = File.read!("usage-rules.md")
+  test "every backticked fun/arity in usage-rules.md and docs/recipes.md resolves" do
+    doc = File.read!("usage-rules.md") <> "\n" <> File.read!("docs/recipes.md")
 
     # `Module.Sub.fun/arity` or bare `fun/arity` in backticks.
     identifiers =

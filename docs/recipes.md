@@ -26,8 +26,10 @@ defmodule MyApp.HsmHandle do
 
       config :my_app, :hsm_client, MyApp.HsmClient  # implements sign_ed25519/2
 
-  A client timeout (a GenServer.call exit) propagates into the adapter's
-  safe_callback exit-catch and surfaces as :invalid_key_handle — never a crash.
+  A client timeout (a GenServer.call exit) never crashes your caller — the adapter's
+  safe_callback exit-catch contains it. WHERE it surfaces depends on the callback: a
+  sign/2 timeout maps to :signing_failed; a public_key/key_identity/signing_identity
+  timeout maps to :invalid_key_handle.
   """
 
   @behaviour BoundedAuthorityReportAdapter
@@ -151,14 +153,17 @@ defmodule MyApp.ReportPlug do
       {:ok, raw_body, conn} ->
         with {:ok, grant} <- header(conn, "x-ba-grant"),
              {:ok, proof} <- header(conn, "x-ba-proof"),
+             {:ok, nonce} <- header(conn, "x-ba-nonce"),
              {:ok, cast_arguments} <- V1.Json.decode(raw_body, %{}),
              {:ok, facts} <-
                V1.check_envelope(
                  %V1.Credentials{grant: grant, proof: proof},
-                 expected_request(conn, cast_arguments)
+                 expected_request(conn, cast_arguments, nonce)
                ),
              :ok <- bind_identity(conn, facts),
-             :ok <- MyApp.NonceLedger.spend(facts.nonce) do
+             # The ledger spends the HEADER nonce (the value the proof bound) —
+             # the facts struct carries no nonce field of its own.
+             :ok <- MyApp.NonceLedger.spend(nonce) do
           send_resp(conn, 200, "accepted")
         else
           _ -> send_resp(conn, 401, "invalid")
@@ -169,11 +174,15 @@ defmodule MyApp.ReportPlug do
     end
   end
 
-  # Your consumer obligations — consumer-integration.md §8/§9 are canonical:
-  # bind_identity/2 ties the verified holder to the authenticated reporter;
-  # the nonce ledger makes replays within the window one-shot.
-  defp bind_identity(_conn, _facts), do: :ok
-  defp expected_request(_conn, _cast_arguments), do: raise("see consumer-integration §4")
+  # Your consumer obligations — consumer-integration.md §8/§9 are canonical.
+  # BOTH stubs raise until filled: an integrator who skips identity binding must
+  # crash in dev, not silently accept — a fail-open stub here IS the
+  # cross-identity-replay misuse security.md names.
+  defp bind_identity(_conn, _facts),
+    do: raise("bind the verified holder to the authenticated reporter — consumer-integration §8")
+
+  defp expected_request(_conn, _cast_arguments, _nonce),
+    do: raise("build your ExpectedRequest — consumer-integration §4")
 
   defp read_body(conn) do
     case Plug.Conn.read_body(conn) do

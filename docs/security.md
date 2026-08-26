@@ -7,9 +7,12 @@ flows from that narrowness.
 
 ## Trust boundaries
 
-- **The private key never enters the library.** All custody lives behind the
-  `{module, term}` key-handle behaviour; the adapter sees messages, signatures, and
-  public material only.
+- **The library never solicits, processes, or retains private key material.** All
+  custody lives behind the `{module, term}` key-handle behaviour; the adapter sees
+  messages, signatures, and public material only. The guarantee is the CONTRACT — the
+  callbacks are its only channel to key operations — not an inspection of your handle
+  term (a handle that embeds key bytes in its term, like the repo's test-only reference,
+  has chosen that posture itself; production handles front an HSM/KMS/key server).
 - **Handle-sourced identity.** `key_id` and `public_key` on anchors and transitions come
   from ONE atomic `key_identity/1` (or `signing_identity/1`) snapshot — caller-supplied
   key ids are ignored. A caller cannot make an anchor assert a kid it was not signed
