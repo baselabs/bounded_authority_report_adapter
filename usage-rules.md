@@ -24,7 +24,7 @@
    offline flows against a pinned `evaluation_time` need the explicit option, or the
    proof falls outside `proof_max_age`.
 6. `cast_arguments` must be BAP's tagged `Json.value()` form, produced by
-   `BoundedAuthorityProtocol.V1.Json.decode/1` of the SAME raw bytes on BOTH sides. A
+   `BoundedAuthorityProtocol.V1.Json.decode/2` of the SAME raw bytes on BOTH sides. A
    raw map is rejected; feeding the two sides DIFFERENT bytes (or a re-encoding, instead
    of the original bytes) is the divergence this rule prevents — same bytes + same
    deterministic decode is byte-agreement by construction

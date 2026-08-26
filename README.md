@@ -94,6 +94,7 @@ No handler is attached by default. The event/class tables, alerting guidance
 - [Telemetry](docs/telemetry.md) — the value-free sign events and the custody alarm.
 - [Consumer integration](docs/consumer-integration.md) — the verifier side: raw bytes,
   identity binding, the nonce ledger.
+- [Changelog](CHANGELOG.md) — release by release.
 
 ## Security
 

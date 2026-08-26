@@ -20,6 +20,16 @@ breaking changes (SemVer §4).
 
 ### Added
 
+- Doc-currency tripwires (`test/docs_currency_test.exs`) + the regression-pinned
+  Livebook: the round-trip notebook now commits its expected cell outputs
+  (`persist_outputs`; verdicts and counts pinned — volatile bytes like thumbprints
+  and sizes deliberately excluded and annotated). The tripwire suite diffs
+  docs/errors.md's atoms against the lib's error `@type`s both directions, resolves
+  every backticked `fun/arity` in usage-rules.md against the adapter's exports and
+  behaviour callbacks (it caught a real drift on landing: `V1.Json.decode/1` → /2),
+  checks the README index against the ex_doc extras, and pins the getting-started dep
+  requirement to the current version. Mutation-proven: a deleted atom row and a renamed
+  function each red the suite.
 - Core DX guides, shipped in the package and indexed from the README:
   [usage-rules.md](usage-rules.md) (12 flat rules, exact identifiers, reasons folded
   in — the C1-gate-is-declaration-rejection rule leads), [docs/errors.md](docs/errors.md)
