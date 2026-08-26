@@ -1,3 +1,7 @@
+---
+livebook: {"persist_outputs": true}
+---
+
 # Bounded Authority Report Adapter — see it work, in one notebook
 
 ## Section
@@ -51,6 +55,8 @@ box — nothing more. The other two boxes are played below only so you can see t
 
 ## Setup
 
+<!-- livebook:{"output":true} -->
+
 ```elixir
 # Pulls this repo (the adapter) + its one dependency, bounded_authority_protocol (the public
 # format/verifier package). First run fetches BAP from its private git remote (needs access).
@@ -63,11 +69,17 @@ Mix.install([
 alias BoundedAuthorityProtocol.V1
 ```
 
+```
+BoundedAuthorityProtocol.V1
+```
+
 ## The key-handle contract — how the adapter signs *without ever seeing the private key*
 
 The adapter never receives a private key. You hand it a `{module, term}` **handle**: a module with
 `sign/2` + `public_key/1` callbacks, and an opaque term (the key reference) that only the module
 understands. In production that module fronts an HSM / KMS / key server. Here it's four lines:
+
+<!-- livebook:{"output":true} -->
 
 ```elixir
 defmodule Demo.Handle do
@@ -79,7 +91,13 @@ defmodule Demo.Handle do
 end
 ```
 
+```
+:ok
+```
+
 ## Two keypairs (one per role that holds a key)
+
+<!-- livebook:{"output":true} -->
 
 ```elixir
 # ISSUER keypair — lives in the authority runtime in production, NOT in this adapter.
@@ -93,10 +111,16 @@ now = System.system_time(:second)
 "issuer + holder keypairs generated. (In production these live in separate places.)"
 ```
 
+```
+issuer + holder keypairs generated. (In production these live in separate places.)
+```
+
 ## Role 1 — ISSUER: mint a grant  ⚠️ NOT the adapter's job
 
 The authority signs a *grant* authorizing a holder (identified by the holder key's thumbprint) to
 perform an operation. We do it here **only** so the demo has a real grant to sign a proof over.
+
+<!-- livebook:{"output":true} -->
 
 ```elixir
 {:ok, holder_thumbprint} = V1.Jwk.public_key_thumbprint_raw(holder_pub, %{})
@@ -117,9 +141,14 @@ grant = %V1.Grant{
 grant_sig = :crypto.sign(:eddsa, :ed25519, grant_input.message, [issuer_priv, :ed25519])
 {:ok, grant_compact} = V1.assemble_compact(grant_input, grant_sig)
 
-"🎟️ issuer-signed grant minted (#{byte_size(grant_compact)} bytes). " <>
-  "It authorizes holder-thumbprint #{String.slice(Base.url_encode64(holder_thumbprint, padding: false), 0, 8)}… " <>
-  "to perform operation \"report_demo\"."
+# (Output pinned WITHOUT the byte size / thumbprint slice — those are volatile
+# across versions; the pinned verdict is that the grant minted and what it authorizes.)
+"🎟️ issuer-signed grant minted. " <>
+  "It authorizes the holder (by raw thumbprint) to perform operation \"report_demo\"."
+```
+
+```
+🎟️ issuer-signed grant minted. It authorizes the holder (by raw thumbprint) to perform operation "report_demo".
 ```
 
 ## Role 2 — HOLDER: **the adapter signs the proof**  ✅ THIS is the adapter's one job
@@ -127,6 +156,8 @@ grant_sig = :crypto.sign(:eddsa, :ed25519, grant_input.message, [issuer_priv, :e
 The edge calls `sign_report/3` with the grant + the report fields + the holder key-handle. The
 adapter builds the proof, signs it through the handle, double-checks the signature against the
 holder's public key, and returns `{grant, proof}`. **It signs the proof only — never the grant.**
+
+<!-- livebook:{"output":true} -->
 
 ```elixir
 report = %{
@@ -144,8 +175,14 @@ report = %{
 {:ok, %{grant: ^grant_compact, proof: proof}} =
   BoundedAuthorityReportAdapter.sign_report(report, holder, %{issued_at: now - 10})
 
-"✍️ adapter signed the PROOF (#{byte_size(proof)} bytes), binding the grant to this report. " <>
+# (Output pinned WITHOUT the proof byte size — volatile; the pinned verdict is
+# proof-signed-grant-untouched.)
+"✍️ adapter signed the PROOF, binding the grant to this report. " <>
   "The grant passed through untouched."
+```
+
+```
+✍️ adapter signed the PROOF, binding the grant to this report. The grant passed through untouched.
 ```
 
 ## Role 3 — VERIFIER: check the envelope  (any party with the public protocol package)
@@ -153,6 +190,8 @@ report = %{
 The verifier (or any third party) verifies grant + proof against **published keys only**,
 fully offline. It reconstructs what it expects the proof to bind; `check_envelope` checks both
 signatures and every binding.
+
+<!-- livebook:{"output":true} -->
 
 ```elixir
 expected = %V1.ExpectedRequest{
@@ -180,7 +219,13 @@ case V1.check_envelope(%V1.Credentials{grant: grant_compact, proof: proof}, expe
 end
 ```
 
+```
+✅ VERIFIED — the grant is genuine, the proof matches this report, the holder is the one the grant was issued to.
+```
+
 ## Now prove the crypto is real — flip one byte of the proof
+
+<!-- livebook:{"output":true} -->
 
 ```elixir
 [protected, payload, sig_b64] = String.split(proof, ".")
@@ -194,10 +239,16 @@ case V1.check_envelope(%V1.Credentials{grant: grant_compact, proof: tampered_pro
 end
 ```
 
+```
+✅ tampered proof REJECTED — one flipped byte breaks the signature
+```
+
 ## And prove the binding is real — a proof from a *different* holder key
 
 The grant was issued to the original holder's thumbprint. A proof signed by a completely different
 key must be rejected (otherwise anyone could forge a proof for someone else's grant).
+
+<!-- livebook:{"output":true} -->
 
 ```elixir
 {wrong_pub, wrong_priv} = :crypto.generate_key(:eddsa, :ed25519, <<9::256>>)
@@ -212,6 +263,10 @@ case V1.check_envelope(%V1.Credentials{grant: grant_compact, proof: wrong_proof}
   {:ok, _} -> "❌ UNEXPECTED — a stranger's proof verified (that would be a bug)"
   {:error, :invalid} -> "✅ stranger's proof REJECTED — the proof must come from the holder the grant was issued to"
 end
+```
+
+```
+✅ stranger's proof REJECTED — the proof must come from the holder the grant was issued to
 ```
 
 ## What just happened
