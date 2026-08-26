@@ -347,6 +347,12 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
 
   ## plumbing
 
+  # The runtime-dep NAME allowlist — the supply-chain half of the pin: adding a
+  # runtime dependency to mix.exs reds the census here (an intentional addition
+  # updates this set in the same commit). Requirement VALUES stay live-derived
+  # so version bumps never drift.
+  @runtime_dep_allowlist MapSet.new([:bounded_authority_protocol, :telemetry])
+
   defp prod_requirements!(config) do
     config
     |> Keyword.fetch!(:deps)
@@ -362,9 +368,11 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     end)
     |> Enum.map(fn
       {name, requirement} when is_binary(requirement) ->
+        assert_runtime_dep_allowed!(name)
         requirement_entry(name, requirement)
 
       {name, requirement, _opts} when is_binary(requirement) ->
+        assert_runtime_dep_allowed!(name)
         requirement_entry(name, requirement)
 
       _ ->
@@ -373,6 +381,16 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
             "(2-tuple or 3-tuple with a binary requirement)"
         )
     end)
+  end
+
+  defp assert_runtime_dep_allowed!(name) do
+    unless MapSet.member?(@runtime_dep_allowlist, name) do
+      fail!(
+        "unexpected runtime dependency #{inspect(name)} — the shipped artifact's " <>
+          "dependency set is a deliberate, reviewed surface; extend " <>
+          "@runtime_dep_allowlist in the same commit that adds the dep"
+      )
+    end
   end
 
   defp requirement_entry(name, requirement) do
