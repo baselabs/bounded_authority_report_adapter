@@ -91,6 +91,9 @@ No handler is attached by default. The event/class tables, alerting guidance
   production key handle.
 - [Usage rules](usage-rules.md) — the flat imperative list of the integration contract.
 - [Errors](docs/errors.md) — every closed-atom error, its meaning, and what to check.
+- [Recipes](docs/recipes.md) — HSM/KMS key handles, a Plug consumer, porting the
+  signing side beyond Elixir.
+- [Security model](docs/security.md) — trust boundaries and the named misuses.
 - [Telemetry](docs/telemetry.md) — the value-free sign events and the custody alarm.
 - [Consumer integration](docs/consumer-integration.md) — the verifier side: raw bytes,
   identity binding, the nonce ledger.

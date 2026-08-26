@@ -20,6 +20,16 @@ breaking changes (SemVer §4).
 
 ### Added
 
+- [Recipes](docs/recipes.md) and a [security model](docs/security.md), shipped in the
+  package and indexed: compile-paste-verified integration shapes for a network-HSM handle
+  (with the timeout-to-safe_callback exit-catch posture), a KMS handle (why
+  `key_identity/1` must be ONE atomic version snapshot), and a condensed Plug consumer;
+  plus the porting note for non-Elixir holders (the spec's signing-input and compact
+  sections by durable identity, the conformance corpus as the oracle — closes the
+  "signing beyond Elixir" residual as documentation, not a second-language SDK). The
+  security doc's named misuses each state the consequence: caller-supplied key ids,
+  skipped identity binding, no nonce ledger, trusting the C1 declaration as role
+  separation, value-carrying telemetry, and shipping the test-support handle.
 - Doc-currency tripwires (`test/docs_currency_test.exs`) + the regression-pinned
   Livebook: the round-trip notebook now commits its expected cell outputs
   (`persist_outputs`; verdicts and counts pinned — volatile bytes like thumbprints
