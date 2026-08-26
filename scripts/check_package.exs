@@ -45,6 +45,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
                     "docs/upgrading.md",
                     "lib/bounded_authority_report_adapter.ex",
                     "lib/bounded_authority_report_adapter/telemetry.ex",
+                    "lib/mix/tasks/bounded_authority_report_adapter.install.ex",
                     "mix.exs"
                   ])
 
@@ -359,7 +360,9 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   # runtime dependency to mix.exs reds the census here (an intentional addition
   # updates this set in the same commit). Requirement VALUES stay live-derived
   # so version bumps never drift.
-  @runtime_dep_allowlist MapSet.new([:bounded_authority_protocol, :telemetry])
+  # :igniter ships as an OPTIONAL requirement (the install task; absent deps of
+  # the consumer resolve without it — the hex metadata carries optional: true).
+  @runtime_dep_allowlist MapSet.new([:bounded_authority_protocol, :telemetry, :igniter])
 
   defp prod_requirements!(config) do
     config
@@ -377,11 +380,11 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     |> Enum.map(fn
       {name, requirement} when is_binary(requirement) ->
         assert_runtime_dep_allowed!(name)
-        requirement_entry(name, requirement)
+        requirement_entry(name, requirement, false)
 
-      {name, requirement, _opts} when is_binary(requirement) ->
+      {name, requirement, opts} when is_binary(requirement) and is_list(opts) ->
         assert_runtime_dep_allowed!(name)
-        requirement_entry(name, requirement)
+        requirement_entry(name, requirement, Keyword.get(opts, :optional, false))
 
       _ ->
         fail!(
@@ -401,11 +404,11 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     end
   end
 
-  defp requirement_entry(name, requirement) do
+  defp requirement_entry(name, requirement, optional?) do
     [
       {"name", to_string(name)},
       {"app", to_string(name)},
-      {"optional", false},
+      {"optional", optional?},
       {"requirement", requirement},
       {"repository", "hexpm"}
     ]

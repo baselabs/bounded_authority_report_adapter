@@ -8,6 +8,16 @@ runs 1.18/27, 1.19/28, 1.20/29). The package is published on
 {:bounded_authority_report_adapter, "~> 0.2"}
 ```
 
+Or scaffold the starter key-handle with [Igniter](https://hexdocs.pm/igniter)
+(add `{:igniter, "~> 0.8"}` to your dev deps first):
+
+```sh
+mix bounded_authority_report_adapter.install --module MyApp.HolderKey
+```
+
+The scaffold compiles clean and raises on every callback until you wire your
+custody store — it signs nothing by accident.
+
 ## The shape of the thing
 
 This library is a HOLDER-side signer. It never sees your private key: you hand it a

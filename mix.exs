@@ -17,7 +17,14 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # for display, so an exact display-value pin can flake).
       test_coverage: [summary: [threshold: 77.5]],
       # PLT lives under _build (gitignored, cache-friendly) — the BAP sibling's shape.
-      dialyzer: [plt_core_path: "_build/plts", plt_local_path: "_build/plts"],
+      dialyzer: [
+        plt_core_path: "_build/plts",
+        plt_local_path: "_build/plts",
+        # :mix so the install task's Mix.Task behaviour callbacks resolve in the
+        # PLT (the conditional-def pattern dialyzes clean with it — the
+        # ash_onetime posture).
+        plt_add_apps: [:mix]
+      ],
       deps: deps(),
       package: package(),
       docs: docs(),
@@ -101,6 +108,12 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       {:telemetry, "~> 1.3"},
       {:bounded_authority_protocol, "~> 0.1.2"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      # The install task (lib/mix/tasks) uses Igniter when present; the file
+      # compiles to a Mix.raise fallback without it.
+      # No `only:` — the optional edge must order igniter BEFORE this package
+      # in consumer builds, or lib/mix/tasks compiles its no-igniter fallback
+      # (the ash_onetime posture, read first-hand).
+      {:igniter, "~> 0.8", optional: true},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
