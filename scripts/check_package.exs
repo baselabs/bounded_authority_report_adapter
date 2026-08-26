@@ -29,6 +29,8 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   @expected_files MapSet.new([
                     ".formatter.exs",
                     "CHANGELOG.md",
+                    "CODE_OF_CONDUCT.md",
+                    "CONTRIBUTING.md",
                     "LICENSE",
                     "NOTICE",
                     "README.md",
@@ -40,6 +42,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
                     "docs/recipes.md",
                     "docs/security.md",
                     "docs/telemetry.md",
+                    "docs/upgrading.md",
                     "lib/bounded_authority_report_adapter.ex",
                     "lib/bounded_authority_report_adapter/telemetry.ex",
                     "mix.exs"

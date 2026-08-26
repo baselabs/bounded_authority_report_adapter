@@ -20,6 +20,19 @@ breaking changes (SemVer §4).
 
 ### Added
 
+- Governance surface: [CONTRIBUTING.md](CONTRIBUTING.md) (the per-file floor, the
+  surgical-pathspec discipline, red-first + mutation-proof expectations, the bump
+  policy pointer), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) (Contributor Covenant v2.1,
+  the canonical text with the reporting contact substituted),
+  [docs/upgrading.md](docs/upgrading.md) (per-version notes newest-first + the **1.0
+  stability contract**: the public surface enumerated — the four signing functions and
+  their return shapes, the four closed error sets, the key-handle behaviour, the
+  telemetry surface, the dependency posture — with reserved break-rights and the
+  frozen-wire-formats statement), and an enriched
+  [SECURITY.md](SECURITY.md) (security invariants restated from the charter for
+  reporting, a report-content checklist, acknowledgment ≤7 days + weekly status as a
+  best-effort cadence, not an SLA). All four shipped in the package and extras.
+
 - [Recipes](docs/recipes.md) and a [security model](docs/security.md), shipped in the
   package and indexed: compile-paste-verified integration shapes for a network-HSM handle
   (with the timeout-to-safe_callback exit-catch posture), a KMS handle (why
