@@ -71,6 +71,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "cmd env MIX_ENV=test mix docs --warnings-as-errors",
         "cmd env MIX_ENV=test mix hex.audit",
         "cmd env MIX_ENV=test mix deps.audit",
+        # The shipped-artifact gate: builds the exact Hex archive, proves its
+        # census/metadata, and compiles + smoke-runs a consumer against the
+        # UNPACKED package (scripts/check_package.exs; scratch-cleaned).
+        "cmd env MIX_ENV=test mix run --no-start scripts/check_package.exs",
         # job: example (the workflow's working-directory: examples/edge_agent)
         "cmd --cd examples/edge_agent env MIX_ENV=test mix deps.get",
         "cmd --cd examples/edge_agent env MIX_ENV=test mix hex.audit",
