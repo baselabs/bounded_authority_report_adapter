@@ -77,7 +77,7 @@ adding them to the library's `mix.exs` trips the wall red.
 
 ## Protocol version discipline + the drift probe
 
-BAP is consumed from **Hex** (`~> 0.1.1`). A protocol version bump is a
+BAP is consumed from **Hex** (`~> 0.1.2`). A protocol version bump is a
 deliberate, reviewed change — the wall test pins the LOCKED version
 (`@protocol_locked_version`) and the requirement in the same commit, so a bare
 `mix deps.update bounded_authority_protocol` (which reconciles lock + deps in

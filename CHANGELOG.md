@@ -21,7 +21,7 @@ breaking changes (SemVer §4).
 ### Added
 
 - Guard against silent protocol-version drift: the dependency-direction wall now pins the
-  resolved `mix.lock` version (mutation-proven, including the `0.1.10` prefix-extension
+  resolved `mix.lock` version (mutation-proven, including the `0.1.20` prefix-extension
   case), an exact identity invariant ties the wall's requirement floor to its locked-version
   attribute, and the edge-agent example asserts its lock resolves the protocol at the
   same version as the library's (a split between them would put the two CI jobs on
@@ -33,6 +33,14 @@ breaking changes (SemVer §4).
 
 ### Changed
 
+- Re-align the protocol dependency to `bounded_authority_protocol` 0.1.2 (`~> 0.1.2`),
+  the authority runtime's pin (ADR-0010 Decision 3 re-alignment, not a BARA-ahead bump).
+  The release span's `lib/` delta is conformance tooling only
+  (`conformance/{cli,report}.ex` — zero `V1.*` change to the consumed surface),
+  `priv/conformance` is unchanged, and the protocol package's own `mix.exs` carries a
+  version-line-only change. The wall's requirement + locked-version attributes, both
+  project locks, and the drift-guard mutation fixtures (plain drift `0.1.3`, prefix
+  extension `0.1.20`) moved in the same commit.
 - ADR-0010 amended with a Hex-era mapping (Decision 6): the substrate moved to Hex
   consumption on 2026-08-20; the decision records how each policy term (BA's pin, the
   `lib/`-empty gate, the same-commit bump discipline, RA2-at-version) maps onto release
