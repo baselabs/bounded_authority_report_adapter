@@ -122,35 +122,42 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
 
   # --- the run/1 CLI wrapper (exit discipline + shell output) ---
 
-  @tag :capture_shell
-  test "run/1 exits 1 and prints the fatal on a bad handle" do
+  # Capture the shell for the run/1 tests, restoring whatever was set before
+  # (never a hardcoded shell — a CI wrapper may run the suite under another one).
+  defp with_process_shell(fun) do
+    prior = Mix.shell()
     Mix.shell(Mix.Shell.Process)
 
-    assert catch_exit(Doctor.run(["--handle", "NoSuchHandleModule"])) == {:shutdown, 1}
+    try do
+      fun.()
+    after
+      Mix.shell(prior)
+    end
+  end
 
-    assert_received {:mix_shell, :error, ["[FATAL] " <> fatal]}
-    assert fatal =~ "not loaded / does not exist"
-  after
-    Mix.shell(Mix.Shell.IO)
+  @tag :capture_shell
+  test "run/1 exits 1 and prints the fatal on a bad handle" do
+    with_process_shell(fn ->
+      assert catch_exit(Doctor.run(["--handle", "NoSuchHandleModule"])) == {:shutdown, 1}
+
+      assert_received {:mix_shell, :error, ["[FATAL] " <> fatal]}
+      assert fatal =~ "not loaded / does not exist"
+    end)
   end
 
   @tag :capture_shell
   test "run/1 without --handle exits 1 with the usage fatal" do
-    Mix.shell(Mix.Shell.Process)
-
-    assert catch_exit(Doctor.run([])) == {:shutdown, 1}
-    assert_received {:mix_shell, :error, ["[FATAL] --handle <Module> is required"]}
-  after
-    Mix.shell(Mix.Shell.IO)
+    with_process_shell(fn ->
+      assert catch_exit(Doctor.run([])) == {:shutdown, 1}
+      assert_received {:mix_shell, :error, ["[FATAL] --handle <Module> is required"]}
+    end)
   end
 
   @tag :capture_shell
   test "run/1 on a clean handle prints clean and does not exit" do
-    Mix.shell(Mix.Shell.Process)
-
-    Doctor.run(["--handle", "BoundedAuthorityReportAdapter.DoctorTaskTest.FullHandle"])
-    assert_received {:mix_shell, :info, ["doctor: clean"]}
-  after
-    Mix.shell(Mix.Shell.IO)
+    with_process_shell(fn ->
+      Doctor.run(["--handle", "BoundedAuthorityReportAdapter.DoctorTaskTest.FullHandle"])
+      assert_received {:mix_shell, :info, ["doctor: clean"]}
+    end)
   end
 end

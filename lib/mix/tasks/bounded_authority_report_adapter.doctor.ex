@@ -120,9 +120,18 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
           []
 
         {:ok, other} ->
+          # Redacted by shape, never by value: the misconfiguration class here
+          # is a handle wired to the wrong custody slot, and the value could be
+          # private-key material destined for CI logs.
           [
             "public_key/1 must return a 32-byte Ed25519 public key for the supplied " <>
-              "ref, got #{inspect(other)}"
+              "ref, got #{redact(other)}"
+          ]
+
+        normal when not is_tuple(normal) or elem(normal, 0) != :ok ->
+          [
+            "public_key/1 returned #{redact(normal)} — the contract is " <>
+              "{:ok, public_key}, and the adapter rejects unwrapped returns"
           ]
 
         _error ->
@@ -152,14 +161,11 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   # the signature against public_key/1's key — the adapter's own guard, checked
   # before the first real signing call ever happens.
   defp live_probe_advisory(module, ref) do
-    with {:ok, public_key} <- safe_call(module, :public_key, [ref]),
-         {:ok, signature} <- safe_call(module, :sign, [@synthetic_probe_message, ref]),
-         true <- is_binary(signature) and byte_size(signature) == 64,
-         true <-
-           :crypto.verify(:eddsa, :none, @synthetic_probe_message, signature, [
-             public_key,
-             :ed25519
-           ]) do
+    with {:ok, public_key} when is_binary(public_key) and byte_size(public_key) == 32 <-
+           safe_call(module, :public_key, [ref]),
+         {:ok, signature} when is_binary(signature) and byte_size(signature) == 64 <-
+           safe_call(module, :sign, [@synthetic_probe_message, ref]),
+         :ok <- verify_probe(public_key, signature) do
       []
     else
       _ ->
@@ -169,6 +175,33 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
         ]
     end
   end
+
+  # Contained like the callback calls: a stateful handle that changes shape
+  # BETWEEN the two probe calls would otherwise crash the doctor out of
+  # :crypto.verify with a raw badarg instead of a finding.
+  defp verify_probe(public_key, signature) do
+    if :crypto.verify(:eddsa, :none, @synthetic_probe_message, signature, [
+         public_key,
+         :ed25519
+       ]) do
+      :ok
+    else
+      {:error, :wrong_key}
+    end
+  rescue
+    _exception -> {:error, :verify_raised}
+  catch
+    _kind, _reason -> {:error, :verify_exited}
+  end
+
+  # Shape-only redaction for fatal messages: never print the value a
+  # misconfigured handle returned — it may be key material.
+  defp redact(value) when is_binary(value), do: "a #{byte_size(value)}-byte binary"
+  defp redact(value) when is_list(value), do: "a list"
+  defp redact(value) when is_map(value), do: "a map"
+  defp redact(value) when is_atom(value), do: "the atom #{inspect(value)}"
+  defp redact(value) when is_integer(value), do: "the integer #{value}"
+  defp redact(_value), do: "an unprintable term"
 
   defp safe_call(module, fun, args) do
     apply(module, fun, args)

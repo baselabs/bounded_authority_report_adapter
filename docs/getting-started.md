@@ -130,7 +130,7 @@ consequences that bite in practice:
 - A malformed id (uppercase, undashed, wrong version nibbles) is rejected far
   from the cause — your proof verifies fine byte-wise, but the verifier's
   expected-request comparison fails as a bare `{:error, :invalid}`. Use
-  `Ecto.UUID.generate/1`, a UUIDv4 library, or the shape in the examples.
+  `Ecto.UUID.generate/0`, a UUIDv4 library, or the shape in the examples.
 - It is part of what the proof BINDS: the verifier reconstructs it from the
   request line. Same grant, same key, different invocation id = rejected. That
   is the point (per-invocation binding); it just means you cannot reuse a
