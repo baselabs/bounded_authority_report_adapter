@@ -72,6 +72,19 @@ GitHub entry points.
 Requires Elixir 1.18+ (developed on 1.20 / OTP 29). The runnable `examples/edge_agent` app is a
 separate mix project with its own deps and CI job — develop it from inside that directory.
 
+## Telemetry
+
+The four signing entry points emit a closed, value-free telemetry surface (two events,
+atoms-only metadata — never key material, message bytes, or report content):
+
+- `[:bounded_authority_report_adapter, :sign, :start]` — `%{count: 1}`, `%{object: o}`
+- `[:bounded_authority_report_adapter, :sign, :stop]` — `%{duration: d}`,
+  `%{object: o, result_class: c}`
+
+No handler is attached by default. The event/class tables, alerting guidance
+(`:signing_failed` rate = custody misconfiguration), and an attach example live in
+[`docs/telemetry.md`](docs/telemetry.md).
+
 ## Security
 
 See [`SECURITY.md`](SECURITY.md) for the vulnerability-reporting process.

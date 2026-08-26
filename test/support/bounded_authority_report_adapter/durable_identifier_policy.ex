@@ -26,6 +26,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "test/bounded_authority_report_adapter/sign_grant_test.exs",
                        "test/bounded_authority_report_adapter/sign_key_transition_test.exs",
                        "test/bounded_authority_report_adapter/sign_report_test.exs",
+                       "test/bounded_authority_report_adapter/telemetry_test.exs",
                        "test/bounded_authority_report_adapter_test.exs",
                        "test/support/bounded_authority_report_adapter/conformance/vector_case.ex",
                        "test/support/bounded_authority_report_adapter/durable_identifier_policy.ex",
