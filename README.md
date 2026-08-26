@@ -85,6 +85,16 @@ No handler is attached by default. The event/class tables, alerting guidance
 (`:signing_failed` rate = custody misconfiguration), and an attach example live in
 [`docs/telemetry.md`](docs/telemetry.md).
 
+## Documentation
+
+- [Getting started](docs/getting-started.md) — first sign in minutes, then the path to a
+  production key handle.
+- [Usage rules](usage-rules.md) — the flat imperative list of the integration contract.
+- [Errors](docs/errors.md) — every closed-atom error, its meaning, and what to check.
+- [Telemetry](docs/telemetry.md) — the value-free sign events and the custody alarm.
+- [Consumer integration](docs/consumer-integration.md) — the verifier side: raw bytes,
+  identity binding, the nonce ledger.
+
 ## Security
 
 See [`SECURITY.md`](SECURITY.md) for the vulnerability-reporting process.
