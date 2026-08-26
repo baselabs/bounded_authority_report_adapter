@@ -22,7 +22,9 @@ breaking changes (SemVer §4).
 
 - Supply-chain parity: a tag-push supply-chain workflow (exact archive built through
   the full gate battery, SHA256SUMS, SLSA provenance + CycloneDX SBOM attestations via
-  actions/attest with id-token scoped to the attest steps; artifact names derived from
+  actions/attest, in the SLSA build/attest split — the build job holds NO signing
+  permissions (it runs third-party code); the attest job is minimal-permission and
+  runs no project code; artifact names derived from
   mix.exs @version, never hardcoded) and the release-candidate reproducibility gate
   (`scripts/check_reproducible.exs`, the protocol sibling's pattern read first-hand: two
   fresh source-tree copies, independent deps.get + hex.build, byte-identical SHA-256
