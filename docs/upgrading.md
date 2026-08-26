@@ -5,12 +5,12 @@ CHANGELOG; this page covers THIS library's releases.
 
 ## Unreleased → (next)
 
-- Telemetry: the four signing entry points now emit a value-free two-event surface. If
-  your application attaches handlers to `[:telemetry, ...]` events broadly (for example
-  a wildcard or telemetry_metrics setup), you will start seeing the new
-  `[:bounded_authority_report_adapter, :sign, :start|:stop]` events. No handler is
-  attached by the library. A new runtime dependency (`:telemetry ~> 1.3`, zero transitive
-  deps) entered the package's requirements.
+- Telemetry: the four signing entry points now emit a value-free two-event surface —
+  `[:bounded_authority_report_adapter, :sign, :start|:stop]`. You will observe the new
+  events only after attaching a handler to those exact event names (`:telemetry`
+  dispatches by exact name; there is no wildcard attach). No handler is attached by the
+  library. A new runtime dependency (`:telemetry ~> 1.3`, zero transitive deps) entered
+  the package's requirements.
 - CI/gates (no API change): coverage floor, dialyzer, doc warnings, dependency audits,
   and the package boundary check run in `mix ci`; the workflow runs a three-cell
   Elixir/OTP matrix.
@@ -44,7 +44,7 @@ version (SemVer §4's pre-1.0 carve-out ends):
 - The key-handle behaviour: `sign/2`, `public_key/1`, `thumbprint/1`, `key_identity/1`,
   `signing_identity/1` and their `{:ok, _} | {:error, _}` contracts.
 - The telemetry surface: `BoundedAuthorityReportAdapter.Telemetry`'s public functions
-  (`sign_span/2`, `emit_start/1`, `emit_stop/3`, `objects/0`, `classes/0`), the two event
+  (`Telemetry.sign_span/2`, `Telemetry.emit_start/1`, `Telemetry.emit_stop/3`, `Telemetry.objects/0`, `Telemetry.classes/0` — the `BoundedAuthorityReportAdapter.Telemetry` module), the two event
   names, and the value-free metadata contract (adding a metadata KEY is breaking by
   definition — the closed shape IS the contract).
 - The dependency posture: the library depends only on the public protocol package (plus
