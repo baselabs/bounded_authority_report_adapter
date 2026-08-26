@@ -5,11 +5,12 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
   full class × object coverage driven through the REAL signing entry points,
   and the docs/telemetry.md table parity (the acceptance tie).
 
-  The value-free tripwire (the ticket's named mutation): planting a
-  value-carrying key into the emitter's metadata must make the stop event
-  VANISH (the validator refuses) — demonstrated in the
-  "a planted value-carrying key cannot ride the emission" test by driving the
-  validator directly with the planted shape.
+  The value-free tripwire (the ticket's named mutation) is a SLICE red-proof,
+  quoted in the closeout rather than shipped: planting a value-carrying key
+  into the emitter's metadata makes the validator refuse the emission — the
+  stop event vanishes and every shape assertion here reds. What ships is the
+  mechanical half: exact-key assertions on real emissions + the validator's
+  refusal tests below.
   """
 
   # async: false — the capture handler observes EVERY emission in the VM, so
@@ -255,11 +256,22 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
   # --- the shape validator refuses everything outside the closed surface ------------
 
   test "the emitters refuse unknown objects, unknown classes, and bad durations — emitting nothing" do
-    assert Telemetry.emit_start(:bogus) == {:error, :telemetry_invalid}
-    assert Telemetry.emit_stop(:report, -1, :ok) == {:error, :telemetry_invalid}
-    assert Telemetry.emit_stop(:report, 1, :bogus_class) == {:error, :telemetry_invalid}
+    # The refusal calls run INSIDE the captured fun: a mutation that makes a
+    # refused emission both return the error tuple AND emit would be caught
+    # here (the capture would see the event), not vacuously green.
+    {results, events} =
+      capture_events(fn ->
+        {
+          Telemetry.emit_start(:bogus),
+          Telemetry.emit_stop(:report, -1, :ok),
+          Telemetry.emit_stop(:report, 1, :bogus_class)
+        }
+      end)
 
-    {_, events} = capture_events(fn -> :ok end)
+    assert results ==
+             {{:error, :telemetry_invalid}, {:error, :telemetry_invalid},
+              {:error, :telemetry_invalid}}
+
     assert events == []
   end
 
@@ -270,7 +282,7 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
   # refuse the emission — the :stop event vanishes and every shape assertion
   # above reds. The demonstration is quoted in the slice's closeout. What ships
   # is the mechanical half: the module's own API cannot express an off-shape
-  # emission (covered by the exact-key assertions above + the refusals below).
+  # emission (covered by the exact-key assertions above + the refusals above).
 
   # --- docs parity (the acceptance tie) ---------------------------------------------
 
@@ -287,16 +299,29 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
              "docs/telemetry.md must enumerate the object :#{object}"
     end
 
-    # Vice versa: every class row in the doc's result-class table exists in the
-    # module (no documented phantom classes).
-    doc_classes =
-      Regex.scan(
-        ~r/\|\s*`:(ok|invalid_input|invalid_key_handle|signing_failed|producer_error)`\s*\|/,
-        doc
-      )
-      |> Enum.map(fn [_, class] -> String.to_atom(class) end)
-      |> Enum.uniq()
+    # Vice versa, BOTH tables, phantom-capable: the reverse scans enumerate
+    # EVERY `` | `:atom` | `` row in each table (not just the known atoms), so
+    # a documented phantom row reds here instead of passing silent.
+    doc_classes = section_atoms(doc, "Result classes (the classified outcome of a span):")
+    doc_objects = section_atoms(doc, "Objects (one per signing entry point):")
 
-    assert Enum.sort(doc_classes) == Enum.sort(Telemetry.classes())
+    assert Enum.sort(doc_classes) == Enum.sort(Telemetry.classes()),
+           "phantom or missing classes in docs/telemetry.md: #{inspect(doc_classes)}"
+
+    assert Enum.sort(doc_objects) == Enum.sort(Telemetry.objects()),
+           "phantom or missing objects in docs/telemetry.md: #{inspect(doc_objects)}"
+  end
+
+  # The doc segment from `marker` to the next paragraph break — one table's
+  # scope. (Both tables live under a single heading, so the split anchors on
+  # each table's lead-in sentence; the first \n\n is the gap between lead-in
+  # and table, the second ends the table.)
+  defp section_atoms(doc, marker) do
+    [_, rest] = String.split(doc, marker <> "\n\n", parts: 2)
+    [table, _rest] = String.split(rest, "\n\n", parts: 2)
+
+    Regex.scan(~r/^\|\s*`:(\w+)`\s*\|/m, table)
+    |> Enum.map(fn [_, atom] -> String.to_atom(atom) end)
+    |> Enum.uniq()
   end
 end

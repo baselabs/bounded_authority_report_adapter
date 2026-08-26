@@ -10,7 +10,7 @@ application sees nothing until it attaches one.
 | Event | Measurements | Metadata |
 |---|---|---|
 | `[:bounded_authority_report_adapter, :sign, :start]` | `%{count: 1}` | `%{object: object}` |
-| `[:bounded_authority_report_adapter, :sign, :stop]` | `%{duration: native_ms_delta}` | `%{object: object, result_class: result_class}` |
+| `[:bounded_authority_report_adapter, :sign, :stop]` | `%{duration: native_monotonic_delta}` | `%{object: object, result_class: result_class}` |
 
 `duration` is the monotonic time delta of the WHOLE signing span (entry point
 to closed-atom return), in `:erlang.monotonic_time/0` units — aggregate only,
@@ -102,6 +102,19 @@ error term into telemetry.
 `Telemetry.sign_span/2` returns the signer's result unchanged. A failure
 inside an emission is swallowed (`{:error, :telemetry_invalid}`); a raise
 inside the SIGNER propagates — only the emission is guarded, never the crypto.
-A raising HANDLER is the host's discipline (`:telemetry.execute` runs handlers
-inline; an exception in a handler propagates to the emit call site, where the
-adapter's rescue contains it to `{:error, :telemetry_invalid}`).
+(Consequence for counters: a crashing signer leaves an unpaired `:start` — no
+`:stop` is emitted after a raise. Treat `start − stop` accumulation as a
+crash-rate signal, not a bug; the classes cannot classify a call that never
+returned.)
+
+## If your handler raises
+
+The `:telemetry` library (not the adapter) contains handler failures: `:telemetry.execute/3`
+catches a raising handler, **permanently detaches it**, emits
+`[:telemetry, :handler, :failure]`, logs, and returns — the exception does NOT
+reach the adapter's emitters. Operational consequence: a handler that raises
+once silently stops receiving ALL subsequent sign telemetry — including the
+`:signing_failed` custody-misconfiguration alarm this doc calls the
+highest-priority signal. Monitor `[:telemetry, :handler, :failure]` wherever
+you consume this surface, and make handlers total (never let report/label
+formatting raise).
