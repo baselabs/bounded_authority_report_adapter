@@ -52,8 +52,13 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
            "the producer tuple's fixed shape must be documented verbatim"
   end
 
-  test "every backticked fun/arity in usage-rules.md and docs/recipes.md resolves" do
-    doc = File.read!("usage-rules.md") <> "\n" <> File.read!("docs/recipes.md")
+  test "every backticked fun/arity in usage-rules.md, docs/recipes.md, and docs/upgrading.md resolves" do
+    doc =
+      File.read!("usage-rules.md") <>
+        "\n" <>
+        File.read!("docs/recipes.md") <>
+        "\n" <>
+        File.read!("docs/upgrading.md")
 
     # `Module.Sub.fun/arity` or bare `fun/arity` in backticks.
     identifiers =
@@ -65,9 +70,14 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
          end, String.to_atom(fun), String.to_integer(arity)}
       end)
 
+    identifiers = Enum.reject(identifiers, &match?({_m, _f, 0}, &1))
+
     assert identifiers != [], "no identifiers found — the scan itself is broken"
 
-    # Arity-exact: {fun, arity} pairs, not bare names.
+    # Arity-exact: {fun, arity} pairs, not bare names. Arity-0 tokens are
+    # excluded: in these docs they are TYPE names (`sign_error/0`, ...), not
+    # functions — the errors.md atom tripwire covers those; the telemetry
+    # arity-0 functions are module-qualified so they survive the filter.
     callbacks = @adapter.behaviour_info(:callbacks)
 
     for {module_prefix, fun, arity} <- identifiers do
@@ -175,6 +185,8 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     case prefix do
       nil -> @adapter
       "" -> @adapter
+      # The docs' short form for the adapter's own submodule.
+      "Telemetry" -> Module.concat(@adapter, Telemetry)
       dotted -> dotted |> String.split(".") |> Module.concat()
     end
   end
