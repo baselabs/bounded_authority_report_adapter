@@ -4,7 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0, `0.x` minor bumps may carry
 breaking changes (SemVer §4).
 
-## [Unreleased]
+## [1.0.0] — 2026-08-26
+
+The 1.0 stability contract ([upgrading.md](docs/upgrading.md)) is operative from
+this release: the public surface enumerated there is frozen, with the reserved
+break-rights and frozen wire formats it declares. Cut under strategy §6's 1.0
+acceptance contract — public API (the stability contract, pinned by the
+doc-currency tripwire), consumer evidence (the package-boundary consumer smoke,
+the edge-agent example, the verified guides), source identity (public repo under
+the privacy gate), and release operations (the gate battery, the reproducibility
+gate, the supply-chain workflow, the publish runbook).
 
 ### Documentation
 
