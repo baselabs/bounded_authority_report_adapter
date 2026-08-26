@@ -72,28 +72,46 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   end
 
   test "each battery step is independently pinned (dropping any one step reds parity)" do
-    # Non-vacuity: the battery pattern is not a loose blob — each step is
-    # asserted ABSENT when removed from an in-memory copy of the workflow's
-    # GATE job (scoped so the example job's own hex.audit step cannot satisfy
-    # the refute for a dropped gate step).
-    workflow = File.read!(".github/workflows/ci.yml")
+    # Non-vacuity, PATTERN-level: each battery step, dropped from an in-memory
+    # copy of EACH orchestration surface, must make that surface's PRODUCTION
+    # parity pattern fail to match. Asserting the raw command string absent
+    # proves only that the fixture edits text; asserting the pattern reds is
+    # what proves the gate (a pattern later loosened into vacuity reds HERE,
+    # not just in production).
+    workflow = File.read!(".github/workflows/ci.yml") |> strip_comments()
     [gate_job, example_job] = String.split(workflow, "\n  example:", parts: 2)
+    root_mix = File.read!("mix.exs") |> strip_comments()
 
     for {_name, command} <- @battery do
+      # The workflow surface: swap the step's command out, then the production
+      # battery pattern must no longer match the gate job.
       mutated_gate =
         String.replace(gate_job, "run: #{command}\n", "run: mix test\n", global: false)
 
       refute mutated_gate == gate_job,
-             "the mutation fixture for #{command} did not change the gate job — the " <>
-               "mutation proof is not exercising the red path"
+             "the workflow mutation fixture for #{command} did not change the gate job — " <>
+               "the mutation proof is not exercising the red path"
 
-      refute String.contains?(mutated_gate, "run: #{command}\n"),
-             "dropping the #{command} step left it present in the gate job — the parity " <>
-               "pattern would stay green over a missing gate step"
+      refute mutated_gate =~ Regex.compile!(workflow_battery_pattern()),
+             "the parity pattern still matches the gate job with #{command} dropped — " <>
+               "the gate would stay green over a missing step"
+
+      # The mix ci alias surface: drop the quoted alias entry, then the
+      # production alias pattern must no longer match mix.exs.
+      mutated_alias =
+        String.replace(root_mix, ~s{"cmd env MIX_ENV=test #{command}",}, "", global: false)
+
+      refute mutated_alias == root_mix,
+             "the alias mutation fixture for #{command} did not change mix.exs — " <>
+               "the mutation proof is not exercising the red path"
+
+      refute mutated_alias =~ Regex.compile!(battery_pattern()),
+             "the alias parity pattern still matches mix.exs with #{command} dropped — " <>
+               "the gate would stay green over a missing step"
     end
 
-    # The example job slice is reattached so the refute above provably scoped
-    # to the gate job (the example's own hex.audit survives untouched).
+    # The example job slice is untouched by the gate-job mutations above (its
+    # own hex.audit survives) — the scoping the two-surface split relies on.
     assert String.contains?(example_job, "run: #{@audit_command}\n")
   end
 

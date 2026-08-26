@@ -11,10 +11,15 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      # The coverage floor is the MEASURED total, pinned the first time the gate ran
-      # (76.79% on the 0.1.2-aligned tree) — never an aspirational number. Raise it
-      # only with the test additions that actually move the measured number.
-      test_coverage: [summary: [threshold: 76]],
+      # The coverage floor is the MEASURED total the first time the gate ran —
+      # never an aspirational number, and never rounded DOWN beyond one
+      # display-hundredth: the measured total displays as 76.79% but Mix
+      # compares the RAW ratio (whose hidden third decimal rounds up for
+      # display), so the floor is 76.78 — the tightest pin that cannot
+      # flake on the rounding, with at most a hundredth of a point of slack.
+      # Raise it only with the test additions that actually move the measured
+      # number.
+      test_coverage: [summary: [threshold: 76.78]],
       # PLT lives under _build (gitignored, cache-friendly) — the BAP sibling's shape.
       dialyzer: [plt_core_path: "_build/plts", plt_local_path: "_build/plts"],
       deps: deps(),
