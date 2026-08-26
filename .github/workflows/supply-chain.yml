@@ -39,7 +39,9 @@ jobs:
       # Artifact names derive from mix.exs @version — never hardcoded (a stale
       # name after a version bump silently attests nothing).
       - name: Derive artifact version
-        run: echo "VERSION=$(mix run -e 'IO.puts(Mix.Project.config()[:version])')" >> "$GITHUB_ENV"
+        # Read @version straight from mix.exs — a `mix run` here boots :dev and
+        # its compile progress would pollute the captured value.
+        run: echo "VERSION=$(grep -m1 '@version "' mix.exs | sed 's/.*"\(.*\)".*/\1/')" >> "$GITHUB_ENV"
 
       - name: Build exact release archive
         run: |
