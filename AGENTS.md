@@ -116,7 +116,7 @@ after dependency resolution, every step forced under
 `MIX_ENV=test` (the workflow's job-level env; a bare local `:dev` boot would skip
 `test/support` at compile — the RA7 trap). It aborts at the first red step, like a
 failed CI job. It is the zero-spend stand-in while Actions can't run
-(billing-blocked/usage-capped as of 2026-08-18) and doubles as the one-command
+(Actions live again as of 2026-08-26 — the full matrix + supply-chain runs green) and doubles as the one-command
 pre-push check; workflow steps NOT reproduced locally: checkout/setup-beam (asdf
 here).
 
