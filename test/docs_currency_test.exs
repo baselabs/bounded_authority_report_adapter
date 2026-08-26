@@ -67,7 +67,8 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
 
     assert identifiers != [], "no identifiers found — the scan itself is broken"
 
-    callbacks = Keyword.keys(@adapter.behaviour_info(:callbacks))
+    # Arity-exact: {fun, arity} pairs, not bare names.
+    callbacks = @adapter.behaviour_info(:callbacks)
 
     for {module_prefix, fun, arity} <- identifiers do
       module = resolve_module(module_prefix, fun)
@@ -75,7 +76,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
       Code.ensure_loaded!(module)
 
       cond do
-        module == @adapter and fun in callbacks ->
+        module == @adapter and {fun, arity} in callbacks ->
           # A behaviour callback (the handle's contract), declared not defined.
           :ok
 
@@ -91,7 +92,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     end
   end
 
-  test "the README Documentation index matches the ex_doc extras" do
+  test "the README Documentation index matches the ex_doc extras, both directions" do
     readme = File.read!("README.md")
     mix_exs = File.read!("mix.exs")
 
@@ -105,23 +106,40 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
       |> Enum.map(fn [_, path] -> path end)
       |> MapSet.new()
 
+    # Scoped to the README's Documentation SECTION (index entries only), and
+    # bidirectional: an extras entry absent from the index reds, AND an index
+    # entry that is not an extra reds (a broken-on-hexdocs link).
+    [_, index_section] = String.split(readme, "## Documentation", parts: 2)
+    [index_section, _] = String.split(index_section, "\n## ", parts: 2)
+
+    index_links =
+      Regex.scan(~r/\]\(([\w\/.-]+\.md)\)/, index_section)
+      |> Enum.map(fn [_, path] -> path end)
+      |> MapSet.new()
+
+    # Two directions, honestly scoped: every INDEX link must be an extra (an
+    # index-only link is broken on hexdocs), and every extra must be linked
+    # SOMEWHERE in the README (boilerplate extras like SECURITY.md legitimately
+    # live under their own sections, not the index).
     readme_links =
       Regex.scan(~r/\]\(([\w\/.-]+\.md)\)/, readme)
       |> Enum.map(fn [_, path] -> path end)
       |> MapSet.new()
 
-    # Every extras entry must be reachable from the README (possibly via
-    # ../usage-rules.md style relative links).
-    missing =
+    index_only = MapSet.difference(index_links, extras)
+
+    assert MapSet.to_list(index_only) == [],
+           "README Documentation index links that are not ex_doc extras " <>
+             "(broken on hexdocs): #{inspect(MapSet.to_list(index_only))}"
+
+    unlinked =
       for extra <- MapSet.to_list(extras),
           extra != "README.md",
-          normalized = String.replace(extra, ~r{^usage-rules\.md$}, "../usage-rules.md"),
-          normalized = String.replace(normalized, ~r{^(docs/[\w.-]+\.md)$}, "\\1"),
-          extra not in readme_links and normalized not in readme_links,
+          extra not in readme_links,
           do: extra
 
-    assert missing == [],
-           "ex_doc extras not linked from the README Documentation index: #{inspect(missing)}"
+    assert unlinked == [],
+           "ex_doc extras not linked anywhere in the README: #{inspect(unlinked)}"
   end
 
   test "the dep requirement in getting-started accepts the current version" do
@@ -136,12 +154,17 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
 
   ## helpers
 
-  # The atoms of one @type error set, from the lib source (the source of truth).
+  # The atoms of one @type error set, from the lib source (the source of
+  # truth). GENERIC — every :atom in the body is extracted, so a future error
+  # atom the docs don't cover reds (an allowlisted scan would pass it silent).
+  # :invalid is excluded: it is the shape tag of the fixed
+  # {:producer_error, :invalid} tuple, not an error atom of its own.
   defp type_atoms(source, type) do
     case Regex.run(~r/@type #{type} ::(.*?)\n\s*\n/s, source) do
       [_, body] ->
-        Regex.scan(~r/:(invalid_\w+|invalid_key_handle|signing_failed|producer_error)/, body)
+        Regex.scan(~r/:([a-z_]\w*)/i, body)
         |> Enum.map(fn [_, atom] -> String.to_atom(atom) end)
+        |> Enum.reject(&(&1 == :invalid))
 
       nil ->
         flunk("could not locate @type #{type} in the lib source — the scan is broken")
