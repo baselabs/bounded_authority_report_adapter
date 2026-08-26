@@ -247,7 +247,9 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
       @moduledoc false
       @behaviour BoundedAuthorityReportAdapter
 
-      @holder_seed <<2::256>>
+      # Interpolated from the script's single @holder_seed — the minted grant
+      # binds THIS holder's thumbprint, so the constant has exactly one source.
+      @holder_seed #{inspect(@holder_seed)}
 
       defp keypair, do: :crypto.generate_key(:eddsa, :ed25519, @holder_seed)
 
@@ -349,15 +351,29 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   ## plumbing
 
   defp protocol_requirement!(config) do
+    # Match BOTH dep-tuple shapes: the bare 2-tuple and the 3-tuple with
+    # options — a shape miss must not degrade into "the dep is missing".
     config
     |> Keyword.fetch!(:deps)
     |> Enum.find_value(:missing, fn
-      {:bounded_authority_protocol, requirement} -> requirement
-      _ -> nil
+      {:bounded_authority_protocol, requirement} when is_binary(requirement) ->
+        requirement
+
+      {:bounded_authority_protocol, requirement, _options} when is_binary(requirement) ->
+        requirement
+
+      _ ->
+        nil
     end)
     |> case do
-      :missing -> fail!("mix.exs must declare the bounded_authority_protocol dep")
-      requirement -> requirement
+      :missing ->
+        fail!(
+          "mix.exs must declare the bounded_authority_protocol dep in a form the " <>
+            "package check recognizes (2-tuple or 3-tuple with a binary requirement)"
+        )
+
+      requirement ->
+        requirement
     end
   end
 
