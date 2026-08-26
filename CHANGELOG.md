@@ -21,7 +21,8 @@ breaking changes (SemVer §4).
 ### Added
 
 - Library gate battery, parity-pinned between `mix ci` and the CI workflow's gate job:
-  a coverage floor (`mix test --cover`, threshold pinned at the measured 76.79%), dialyzer
+  a coverage floor (`mix test --cover`, threshold pinned one display-hundredth under the
+  measured 76.79% — Mix compares the raw ratio, so 76.78 is the tightest flake-free pin), dialyzer
   (PLT + analysis under `:test` so `test/support/` is analyzed), doc warnings
   (`mix docs --warnings-as-errors`), and the library's own dependency audits
   (`mix hex.audit` + `mix deps.audit` via mix_audit, both dev/test-only). Each gate is
