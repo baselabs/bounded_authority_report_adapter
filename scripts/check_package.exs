@@ -45,6 +45,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
                     "docs/upgrading.md",
                     "lib/bounded_authority_report_adapter.ex",
                     "lib/bounded_authority_report_adapter/telemetry.ex",
+                    "lib/mix/tasks/bounded_authority_report_adapter.doctor.ex",
                     "lib/mix/tasks/bounded_authority_report_adapter.install.ex",
                     "mix.exs"
                   ])

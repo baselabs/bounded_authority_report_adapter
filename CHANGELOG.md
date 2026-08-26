@@ -20,6 +20,18 @@ breaking changes (SemVer §4).
 
 ### Added
 
+- `mix bounded_authority_report_adapter.doctor --handle MyApp.HolderKey [--ref term]
+  [--live]` — the handle-contract preflight (read/probe only, no side effects):
+  FATAL on an unloaded module, a missing required callback (`sign/2`,
+  `public_key/1`, `thumbprint/1`), or a `public_key/1` that does not return a
+  32-byte key for the ref; ADVISORY on the operation-blocking optional callbacks
+  (`key_identity/1` absent blocks anchors/transitions, `signing_identity/1`
+  absent blocks grants) and, with `--live`, a wrong-key probe that signs a
+  DOCTOR-GENERATED synthetic message and runs the adapter's own verify guard
+  before the first real signing call. Every fatal check is RED-proven by a
+  scratch module missing exactly that thing. Plus an invocation-id guidance
+  section in getting-started (the UUID grammar gate and the
+  fails-far-from-the-cause trap).
 - Igniter installer: `mix bounded_authority_report_adapter.install --module MyApp.HolderKey`
   scaffolds a starter key-handle (all five callbacks present so the behaviour compiles
   clean; every body raises until you wire your custody store — nothing key-shaped is

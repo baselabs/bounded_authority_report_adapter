@@ -121,6 +121,21 @@ expected-request field mismatch (times, nonce, audience, arguments) OR the verif
 rejecting the GRANT itself (issuer signature, window, thumbprint binding). The
 adapter-side signing errors are a different surface — [Errors](errors.md) covers those.
 
+## The invocation-id trap (read this before your first 401)
+
+`invocation_id` is caller-supplied and gated by the protocol's UUID grammar
+(`valid_uuid?` — canonical dashed lowercase hex, version + variant nibbles). Two
+consequences that bite in practice:
+
+- A malformed id (uppercase, undashed, wrong version nibbles) is rejected far
+  from the cause — your proof verifies fine byte-wise, but the verifier's
+  expected-request comparison fails as a bare `{:error, :invalid}`. Use
+  `Ecto.UUID.generate/1`, a UUIDv4 library, or the shape in the examples.
+- It is part of what the proof BINDS: the verifier reconstructs it from the
+  request line. Same grant, same key, different invocation id = rejected. That
+  is the point (per-invocation binding); it just means you cannot reuse a
+  signed envelope for a retried request with a fresh id.
+
 ## The path to a production handle
 
 Swap `MyApp.DevHandle` for one whose `sign/2` calls your HSM/KMS and whose
