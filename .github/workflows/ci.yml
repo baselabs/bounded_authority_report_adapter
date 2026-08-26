@@ -76,6 +76,9 @@ jobs:
       - name: Package boundary (build + unpack + consumer smoke)
         run: mix run --no-start scripts/check_package.exs
 
+      - name: Release reproducibility (two independent builds agree)
+        run: mix run --no-start scripts/check_reproducible.exs
+
   example:
     name: examples/edge_agent (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-latest
