@@ -55,7 +55,7 @@ defmodule BoundedAuthorityReportAdapter.TestKeys do
     {:ok, signing_input} = V1.grant_signing_input(grant, %{})
 
     signature =
-      :crypto.sign(:eddsa, :ed25519, signing_input.message, [issuer_priv, :ed25519])
+      :crypto.sign(:eddsa, :none, signing_input.message, [issuer_priv, :ed25519])
 
     {:ok, compact} = V1.assemble_compact(signing_input, signature)
     {compact, issuer_pub}

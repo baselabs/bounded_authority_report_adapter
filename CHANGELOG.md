@@ -20,6 +20,13 @@ breaking changes (SemVer §4).
 
 ### Added
 
+- Library gate battery, parity-pinned between `mix ci` and the CI workflow's gate job:
+  a coverage floor (`mix test --cover`, threshold pinned at the measured 76.79%), dialyzer
+  (PLT + analysis under `:test` so `test/support/` is analyzed), doc warnings
+  (`mix docs --warnings-as-errors`), and the library's own dependency audits
+  (`mix hex.audit` + `mix deps.audit` via mix_audit, both dev/test-only). Each gate is
+  mutation-proven red-capable, and the CI advisory parity test now pins the full battery
+  step order in both orchestration surfaces — dropping any one battery step reds parity.
 - Guard against silent protocol-version drift: the dependency-direction wall now pins the
   resolved `mix.lock` version (mutation-proven, including the `0.1.20` prefix-extension
   case), an exact identity invariant ties the wall's requirement floor to its locked-version
@@ -33,6 +40,17 @@ breaking changes (SemVer §4).
 
 ### Changed
 
+- Fixed every Ed25519 signing call site to `:crypto.sign/4`'s documented contract —
+  `:eddsa` with digest `:none` and the curve in the key list. The previous form passed
+  the curve (`:ed25519`) in the digest slot, which the runtime tolerates but OTP 29's
+  typespec rejects — the new dialyzer gate surfaced it as 35 findings across the
+  test-support fixtures and the edge example (zero in `lib/`). Signatures are
+  byte-identical under both forms (probed first: both verify), and the full suite is
+  green after the sweep. The one intentional contract-violating fixture keeps its
+  violation under a narrowly-scoped `@dialyzer` annotation.
+- Removed the vestigial "configure git for private deps" CI steps and comments from both
+  workflow jobs: the protocol package has been consumed from public Hex since 0.2.0 and
+  neither project lock carries a git dependency.
 - Re-align the protocol dependency to `bounded_authority_protocol` 0.1.2 (`~> 0.1.2`),
   the authority runtime's pin (ADR-0010 Decision 3 re-alignment, not a BARA-ahead bump).
   The release span's `lib/` delta is conformance tooling only
