@@ -53,7 +53,11 @@ if Code.ensure_loaded?(Igniter) do
         server). The adapter calls THESE functions and never sees the private key.
 
         Which callback matters for which operation:
-          sign_report/3         -> sign/2, public_key/1, thumbprint/1
+          sign_report/3         -> sign/2, public_key/1 (thumbprint/1 is NOT
+                                   called by the adapter — the proof's thumbprint
+                                   is computed internally from the resolved public
+                                   key; your thumbprint/1 exists for caller-side
+                                   self-checking)
           sign_anchor/3         -> sign/2, key_identity/1 (atomic kid+pub snapshot)
           sign_grant/3          -> sign/2, signing_identity/1 (must declare :issuer)
           sign_key_transition/3 -> sign/2, key_identity/1
@@ -63,11 +67,14 @@ if Code.ensure_loaded?(Igniter) do
 
         # The handle term is whatever YOUR callbacks understand — a key reference,
         # never key bytes (see docs/security.md: the contract is the guarantee).
+        #
+        # The params are underscored below (the raising bodies use nothing); when
+        # you wire a real implementation, rename _handle -> handle.
 
         @impl true
         def sign(message, _handle) when is_binary(message) do
           # Real shape (Ed25519 via your custody stack):
-          #   {:ok, signature} = MyHsm.sign_ed25519(handle, message)
+          #   {:ok, signature} = MyHsm.sign_ed25519(_handle, message)
           #   {:ok, signature}
           raise "wire #{inspect(module)}.sign/2 to your custody store — see docs/recipes.md"
         end
@@ -76,14 +83,14 @@ if Code.ensure_loaded?(Igniter) do
 
         @impl true
         def public_key(_handle) do
-          # Real shape: {:ok, public_key} = MyHsm.public_key(handle)
+          # Real shape: {:ok, public_key} = MyHsm.public_key(_handle)
           raise "wire #{inspect(module)}.public_key/1 to your custody store"
         end
 
         @impl true
         def thumbprint(_handle) do
           # Real shape (after public_key/1 is wired):
-          #   {:ok, pub} = public_key(handle)
+          #   {:ok, pub} = public_key(_handle)
           #   BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(pub, %{})
           raise "wire #{inspect(module)}.thumbprint/1 (delegate to public_key/1)"
         end
@@ -92,7 +99,7 @@ if Code.ensure_loaded?(Igniter) do
         def key_identity(_handle) do
           # ONE atomic {key_id, public_key} snapshot — a split snapshot can sign
           # the wrong kid into an anchor header (docs/recipes.md, the KMS recipe).
-          #   {:ok, {key_id, public_key}} = MyKms.current_version(handle)
+          #   {:ok, {key_id, public_key}} = MyKms.current_version(_handle)
           raise "wire #{inspect(module)}.key_identity/1 as ONE atomic snapshot"
         end
 

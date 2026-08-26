@@ -40,4 +40,38 @@ defmodule BoundedAuthorityReportAdapter.InstallTaskTest do
     # the planned diff rather than a creation.
     assert IT.diff(run_install()) =~ "import_deps: [:bounded_authority_report_adapter]"
   end
+
+  test "the no-igniter fallback branch compiles and raises with the remedy" do
+    source = File.read!("lib/mix/tasks/bounded_authority_report_adapter.install.ex")
+
+    [_real, fallback] = String.split(source, "else\n", parts: 2)
+    # Drop the trailing `end` that closes the outer `if` in the task file.
+    {fallback, _closing_end} = String.split_at(fallback, String.length(fallback) - 4)
+    fallback = String.trim_trailing(fallback)
+
+    # Compile under a PROBE name: compiling the real name would redefine the
+    # loaded task module for the rest of the VM (order-dependent poisoning of
+    # the other tests in this module).
+    probe = "Mix.Tasks.BoundedAuthorityReportAdapter.InstallFallbackProbe"
+
+    fallback =
+      String.replace(
+        fallback,
+        "defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Install do",
+        "defmodule #{probe} do"
+      )
+
+    {result, diagnostics} = Code.with_diagnostics(fn -> Code.compile_string(fallback) end)
+
+    assert is_list(result),
+           "the no-igniter fallback branch no longer compiles: #{inspect(diagnostics)}"
+
+    for diagnostic <- diagnostics do
+      refute diagnostic.severity == :error, inspect(diagnostic)
+    end
+
+    assert_raise Mix.Error, ~r/requires the optional :igniter dependency/, fn ->
+      String.to_atom("Elixir." <> probe).run([])
+    end
+  end
 end
