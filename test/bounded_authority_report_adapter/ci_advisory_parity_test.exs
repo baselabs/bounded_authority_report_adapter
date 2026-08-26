@@ -116,6 +116,38 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     assert String.contains?(example_job, "run: #{@audit_command}\n")
   end
 
+  test "both jobs run the full three-cell compatibility matrix" do
+    # A dropped matrix cell narrows CI coverage silently (a lane that never
+    # runs looks green by absence) — pin the exact three cells per job and
+    # that setup-beam actually consumes the matrix variables.
+    workflow = File.read!(".github/workflows/ci.yml")
+    [gate_job, example_job] = String.split(workflow, "\n  example:", parts: 2)
+
+    lanes = [{"1.18.4", "27.3.4.14"}, {"1.19.5", "28.5.0.3"}, {"1.20.2", "29.0.3"}]
+
+    for {job_name, job} <- [{"gate", gate_job}, {"example", example_job}] do
+      assert job =~ ~r/strategy:\s+fail-fast:\s*false\s+matrix:\s*include:/m,
+             "the #{job_name} job must declare the fail-fast: false matrix"
+
+      for {elixir, otp} <- lanes do
+        cell = "- elixir: \"#{elixir}\"\n            otp: \"#{otp}\"\n"
+
+        assert job =~ cell,
+               "the #{job_name} job must include the #{elixir}/#{otp} matrix cell"
+
+        # Non-vacuity: the cell string removed in-memory must break the match
+        # (a loosened assertion that passes over a dropped lane reds here).
+        mutated = String.replace(job, cell, "", global: false)
+        refute mutated == job, "the #{job_name} mutation fixture for #{elixir} changed nothing"
+        refute String.contains?(mutated, cell), "dropping #{elixir}/#{otp} left it present"
+      end
+
+      assert job =~
+               ~r/elixir-version: \$\{\{ matrix\.elixir \}\}\s+otp-version: \$\{\{ matrix\.otp \}\}/,
+             "the #{job_name} job's setup-beam must consume the matrix variables, not a pin"
+    end
+  end
+
   # Full-line comments (the alias's step annotations, the workflow's battery
   # comment) must not weaken step-adjacency matching — strip them so the
   # pattern pins ACTUAL adjacency of the commands.
