@@ -5,7 +5,7 @@ runs 1.18/27, 1.19/28, 1.20/29). The package is published on
 [Hex](https://hex.pm/packages/bounded_authority_report_adapter).
 
 ```elixir
-{:bounded_authority_report_adapter, "~> 1.0"}
+{:bounded_authority_report_adapter, "~> 0.3"}
 ```
 
 Or scaffold the starter key-handle with [Igniter](https://hexdocs.pm/igniter)

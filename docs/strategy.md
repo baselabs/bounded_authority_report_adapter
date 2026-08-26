@@ -97,7 +97,9 @@ re-architecture, not a refactor.
 - **0.2.x is public** — pre-1.0; compatibility follows the package's declared
   pre-1.0 policy and every change must retain conformance and release evidence.
 - **1.0.0** — cut only when the public API, consumer evidence, source identity,
-  and release operations meet the owner repository's 1.0 acceptance contract.
+  and release operations meet the owner repository's 1.0 acceptance contract, AND
+  the release line has seen real consumer use with the surface settled (owner
+  direction, 2026-08-26 — the 0.3.0 cut deliberately defers 1.0).
 - Package publication and source-repository visibility are separate operations;
   neither may be inferred from the other.
 

@@ -4,16 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0, `0.x` minor bumps may carry
 breaking changes (SemVer §4).
 
-## [1.0.0] — 2026-08-26
+## [0.3.0] — 2026-08-26
 
-The 1.0 stability contract ([upgrading.md](docs/upgrading.md)) is operative from
-this release: the public surface enumerated there is frozen, with the reserved
-break-rights and frozen wire formats it declares. Cut under strategy §6's 1.0
-acceptance contract — public API (the stability contract, pinned by the
-doc-currency tripwire), consumer evidence (the package-boundary consumer smoke,
-the edge-agent example, the verified guides), source identity (public repo under
-the privacy gate), and release operations (the gate battery, the reproducibility
-gate, the supply-chain workflow, the publish runbook).
+Pre-1.0 feature release. The 1.0 cut is DELIBERATELY DEFERRED (owner direction,
+2026-08-26) until the release sees real consumer use and the surface settles;
+the stability contract in [upgrading.md](docs/upgrading.md) stands as the
+PROPOSED freeze that 1.0 will publish, not an operative one. Everything the
+contract enumerates is in this release and pinned by the doc-currency tripwire:
+the four signing functions, the closed error sets, the key-handle behaviour, the
+value-free telemetry surface, the dependency posture — plus the gate battery,
+the package-boundary and reproducibility gates, the CI matrix, the guide set,
+the Igniter installer, the doctor preflight, and the supply-chain workflow.
 
 ### Documentation
 
