@@ -63,9 +63,13 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
   end
 
   # What a reproducible build starts from: source only — no build artifacts,
-  # fetched deps, tool/state dirs, or generated output.
+  # fetched deps, tool/state dirs, or generated output. `.env` and friends are
+  # CREDENTIALS (never copied into temp trees); `examples/` is a separate mix
+  # project the root archive build does not touch (and its nested deps/_build
+  # would double the copy for nothing).
   @copy_excludes ~w(_build deps .git .forge .zcode .kimosabe artifacts cover doc
-                    graphify-out erl_crash.dump)
+                    graphify-out erl_crash.dump .env .claude .expert .serena
+                    .elixir_ls .lexical examples)
 
   defp copy_source_tree!(source, dest) do
     File.mkdir_p!(dest)

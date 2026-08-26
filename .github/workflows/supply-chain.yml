@@ -7,20 +7,19 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
 
 concurrency:
   group: supply-chain-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  package:
-    name: Build and attest release package
+  build:
+    name: Build release package evidence
     runs-on: ubuntu-latest
-
-    # The id-token + attestations permissions exist for THIS job's attest steps
-    # only (the tag-push build is the provenance subject).
+    # Deliberately NO id-token/attestations here: this job compiles and runs
+    # ~40 third-party packages' code — it must not hold OIDC identity. The
+    # attest job below is the only one that can mint attestations, and it
+    # runs no project code.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,24 +56,43 @@ jobs:
             --classification library --schema 1.6 --format json \
             --output artifacts/release.cdx.json --force
 
-      - name: Attest build provenance
-        uses: actions/attest@v4
-        with:
-          subject-path: artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
-
-      - name: Attest release SBOM
-        uses: actions/attest@v4
-        with:
-          subject-path: artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
-          sbom-path: artifacts/release.cdx.json
-
-      - name: Upload release evidence
+      - name: Upload release evidence for attestation
         uses: actions/upload-artifact@v4
         with:
-          name: bounded-authority-report-adapter-${{ github.sha }}
+          name: release-evidence-${{ github.sha }}
           path: |
             artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
             artifacts/release.cdx.json
             artifacts/SHA256SUMS
           if-no-files-found: error
           retention-days: 30
+
+  attest:
+    name: Attest provenance and SBOM
+    needs: build
+    runs-on: ubuntu-latest
+    # The ONLY job with signing permissions (SLSA's build/attest split): the
+    # artifact-metadata permission is on actions/attest@v4's documented
+    # required set alongside id-token + attestations.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Download release evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: release-evidence-${{ github.sha }}
+          path: artifacts
+
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/bounded_authority_report_adapter-*.tar
+
+      - name: Attest release SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/bounded_authority_report_adapter-*.tar
+          sbom-path: artifacts/release.cdx.json
