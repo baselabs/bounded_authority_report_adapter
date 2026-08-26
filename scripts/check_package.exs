@@ -34,7 +34,9 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
                     "README.md",
                     "SECURITY.md",
                     "docs/consumer-integration.md",
+                    "docs/telemetry.md",
                     "lib/bounded_authority_report_adapter.ex",
+                    "lib/bounded_authority_report_adapter/telemetry.ex",
                     "mix.exs"
                   ])
 
@@ -57,7 +59,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     source_root = Path.expand("..", __DIR__)
     config = Mix.Project.config()
     version = config[:version]
-    protocol_requirement = protocol_requirement!(config)
+    requirements = prod_requirements!(config)
 
     scratch_root = unique_tmp_root!()
 
@@ -76,7 +78,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
       extract_tar!(Path.join(outer_root, "contents.tar.gz"), package_root)
 
       check_exact_files!(package_root)
-      check_metadata!(Path.join(outer_root, "metadata.config"), version, protocol_requirement)
+      check_metadata!(Path.join(outer_root, "metadata.config"), version, requirements)
       compile_package!(package_root)
       compile_consumer!(consumer_root, package_root)
 
@@ -140,7 +142,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     end
   end
 
-  defp check_metadata!(path, version, protocol_requirement) do
+  defp check_metadata!(path, version, requirements) do
     metadata =
       case :file.consult(String.to_charlist(path)) do
         {:ok, terms} -> Map.new(terms)
@@ -152,15 +154,10 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
       "build_tools" => ["mix"],
       "licenses" => ["Apache-2.0"],
       "name" => "bounded_authority_report_adapter",
-      "requirements" => [
-        [
-          {"name", "bounded_authority_protocol"},
-          {"app", "bounded_authority_protocol"},
-          {"optional", false},
-          {"requirement", protocol_requirement},
-          {"repository", "hexpm"}
-        ]
-      ],
+      # Derived from the LIVE project config's prod deps (no `only:`), in
+      # declaration order — the pin covers exactly what ships, whatever the
+      # runtime dep set grows to.
+      "requirements" => requirements,
       "version" => version
     }
 
@@ -350,31 +347,42 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
 
   ## plumbing
 
-  defp protocol_requirement!(config) do
-    # Match BOTH dep-tuple shapes: the bare 2-tuple and the 3-tuple with
-    # options — a shape miss must not degrade into "the dep is missing".
+  defp prod_requirements!(config) do
     config
     |> Keyword.fetch!(:deps)
-    |> Enum.find_value(:missing, fn
-      {:bounded_authority_protocol, requirement} when is_binary(requirement) ->
-        requirement
+    |> Enum.filter(fn
+      {_name, _requirement, opts} when is_list(opts) ->
+        not Keyword.has_key?(opts, :only)
 
-      {:bounded_authority_protocol, requirement, _options} when is_binary(requirement) ->
-        requirement
+      {_name, _requirement} ->
+        true
 
       _ ->
-        nil
+        false
     end)
-    |> case do
-      :missing ->
-        fail!(
-          "mix.exs must declare the bounded_authority_protocol dep in a form the " <>
-            "package check recognizes (2-tuple or 3-tuple with a binary requirement)"
-        )
+    |> Enum.map(fn
+      {name, requirement} when is_binary(requirement) ->
+        requirement_entry(name, requirement)
 
-      requirement ->
-        requirement
-    end
+      {name, requirement, _opts} when is_binary(requirement) ->
+        requirement_entry(name, requirement)
+
+      _ ->
+        fail!(
+          "mix.exs must declare runtime deps in a form the package check recognizes " <>
+            "(2-tuple or 3-tuple with a binary requirement)"
+        )
+    end)
+  end
+
+  defp requirement_entry(name, requirement) do
+    [
+      {"name", to_string(name)},
+      {"app", to_string(name)},
+      {"optional", false},
+      {"requirement", requirement},
+      {"repository", "hexpm"}
+    ]
   end
 
   defp extract_tar!(archive, target) do

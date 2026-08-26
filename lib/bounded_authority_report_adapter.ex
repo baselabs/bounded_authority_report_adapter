@@ -68,6 +68,7 @@ defmodule BoundedAuthorityReportAdapter do
   """
 
   alias BoundedAuthorityProtocol.V1.Json
+  alias BoundedAuthorityReportAdapter.Telemetry
 
   @type key_handle :: {module(), term()}
 
@@ -200,6 +201,10 @@ defmodule BoundedAuthorityReportAdapter do
   @spec sign_report(report(), key_handle(), opts()) ::
           {:ok, envelope()} | {:error, sign_error()}
   def sign_report(report, key_handle, opts \\ %{}) do
+    Telemetry.sign_span(:report, fn -> do_sign_report(report, key_handle, opts) end)
+  end
+
+  defp do_sign_report(report, key_handle, opts) do
     opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
     issued_at = Map.get(opts, :issued_at, System.system_time(:second))
@@ -269,6 +274,10 @@ defmodule BoundedAuthorityReportAdapter do
   @spec sign_anchor(anchor_input(), key_handle(), anchor_opts()) ::
           {:ok, anchor_compact()} | {:error, anchor_sign_error()}
   def sign_anchor(anchor_input, key_handle, opts \\ %{}) do
+    Telemetry.sign_span(:anchor, fn -> do_sign_anchor(anchor_input, key_handle, opts) end)
+  end
+
+  defp do_sign_anchor(anchor_input, key_handle, opts) do
     opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
     anchored_at = Map.get(opts, :anchored_at, System.system_time(:second))
@@ -331,6 +340,10 @@ defmodule BoundedAuthorityReportAdapter do
   @spec sign_grant(grant_input(), key_handle(), grant_opts()) ::
           {:ok, grant_compact()} | {:error, grant_sign_error()}
   def sign_grant(grant_input, key_handle, opts \\ %{}) do
+    Telemetry.sign_span(:grant, fn -> do_sign_grant(grant_input, key_handle, opts) end)
+  end
+
+  defp do_sign_grant(grant_input, key_handle, opts) do
     opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
 
@@ -388,6 +401,12 @@ defmodule BoundedAuthorityReportAdapter do
   @spec sign_key_transition(transition_input(), key_handle(), transition_opts()) ::
           {:ok, transition_compact()} | {:error, transition_sign_error()}
   def sign_key_transition(transition_input, key_handle, opts \\ %{}) do
+    Telemetry.sign_span(:key_transition, fn ->
+      do_sign_key_transition(transition_input, key_handle, opts)
+    end)
+  end
+
+  defp do_sign_key_transition(transition_input, key_handle, opts) do
     opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
 

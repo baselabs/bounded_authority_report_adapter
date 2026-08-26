@@ -11,15 +11,11 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      # The coverage floor is the MEASURED total the first time the gate ran —
-      # never an aspirational number, and never rounded DOWN beyond one
-      # display-hundredth: the measured total displays as 76.79% but Mix
-      # compares the RAW ratio (whose hidden third decimal rounds up for
-      # display), so the floor is 76.78 — the tightest pin that cannot
-      # flake on the rounding, with at most a hundredth of a point of slack.
-      # Raise it only with the test additions that actually move the measured
-      # number.
-      test_coverage: [summary: [threshold: 76.78]],
+      # The coverage floor is the MEASURED total, re-pinned at every slice
+      # that moves it (never aspirational; pinned just under the measured
+      # number — Mix compares the RAW ratio, whose hidden decimals round up
+      # for display, so an exact display-value pin can flake).
+      test_coverage: [summary: [threshold: 77.5]],
       # PLT lives under _build (gitignored, cache-friendly) — the BAP sibling's shape.
       dialyzer: [plt_core_path: "_build/plts", plt_local_path: "_build/plts"],
       deps: deps(),
@@ -99,6 +95,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   # ADR 0003). BAP is consumed from its Hex release.
   defp deps do
     [
+      # Runtime: the telemetry event surface (:telemetry.execute). Zero transitive
+      # deps; the emitter is shape-validated and value-free
+      # (lib/bounded_authority_report_adapter/telemetry.ex).
+      {:telemetry, "~> 1.3"},
       {:bounded_authority_protocol, "~> 0.1.2"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
@@ -119,7 +119,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "LICENSE",
         "NOTICE",
         "SECURITY.md",
-        "docs/consumer-integration.md"
+        "docs/consumer-integration.md",
+        "docs/telemetry.md"
       ],
       licenses: ["Apache-2.0"],
       links: %{
@@ -140,7 +141,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "LICENSE",
         "NOTICE",
         "SECURITY.md",
-        "docs/consumer-integration.md"
+        "docs/consumer-integration.md",
+        "docs/telemetry.md"
       ]
     ]
   end

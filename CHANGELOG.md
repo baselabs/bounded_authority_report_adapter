@@ -20,6 +20,19 @@ breaking changes (SemVer §4).
 
 ### Added
 
+- Value-free sign telemetry: the four signing entry points now emit a closed two-event
+  surface (`[:bounded_authority_report_adapter, :sign, :start|:stop]`) with monotonic
+  duration and atoms-only metadata (`object` in `[:report, :anchor, :grant,
+  :key_transition]`; `result_class` in `[:ok, :invalid_input, :invalid_key_handle,
+  :signing_failed, :producer_error]` — never key ids, message bytes, report content, or
+  error values). The emitters are shape-validated (off-shape emissions are refused with
+  `{:error, :telemetry_invalid}` instead of emitted — the mechanical value-free
+  guarantee, tripwire-proven by planting a key id into the metadata and watching the
+  stop event vanish), telemetry never alters a signer's return, and a raise inside the
+  signer still propagates. `docs/telemetry.md` documents the event/class tables, the
+  alerting guidance, and the attach example; a docs-parity test diffs the tables
+  against the emitter's closed sets. Adds `:telemetry` (~> 1.3, zero transitive deps)
+  as the first runtime dependency besides the protocol package itself.
 - Library gate battery, parity-pinned between `mix ci` and the CI workflow's gate job:
   a coverage floor (`mix test --cover`, threshold pinned one display-hundredth under the
   measured 76.79% — Mix compares the raw ratio, so 76.78 is the tightest flake-free pin), dialyzer
