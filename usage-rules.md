@@ -24,9 +24,11 @@
    offline flows against a pinned `evaluation_time` need the explicit option, or the
    proof falls outside `proof_max_age`.
 6. `cast_arguments` must be BAP's tagged `Json.value()` form, produced by
-   `BoundedAuthorityProtocol.V1.Json.decode/1` of the SAME raw bytes on BOTH sides. A raw
-   map is rejected by the digest; independently-decoded bytes are a mismatch by
-   construction ([consumer integration §3–§4](docs/consumer-integration.md)).
+   `BoundedAuthorityProtocol.V1.Json.decode/1` of the SAME raw bytes on BOTH sides. A
+   raw map is rejected; feeding the two sides DIFFERENT bytes (or a re-encoding, instead
+   of the original bytes) is the divergence this rule prevents — same bytes + same
+   deterministic decode is byte-agreement by construction
+   ([consumer integration §3–§4](docs/consumer-integration.md)).
 7. Consumer-side identity binding and nonce-ledger replay protection are obligations, not
    options. This library signs; the consuming verifier must bind the holder thumbprint to
    its own identity source and dedupe nonces ([consumer integration
