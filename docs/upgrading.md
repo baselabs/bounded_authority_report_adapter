@@ -3,14 +3,16 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
-## 1.0.0
+## 0.3.0
 
-The release this page's [stability contract](#the-10-stability-contract) becomes
-operative for: the value-free telemetry surface, the gate battery (coverage
-floor, dialyzer, doc warnings, dependency audits), the package boundary check,
-the three-cell CI matrix, the full guide set, the Igniter installer, the doctor
-preflight, and the supply-chain workflow. From here, breaking changes to the
-enumerated public surface require a major version.
+Pre-1.0 feature release carrying everything the proposed
+[stability contract](#the-10-stability-contract) enumerates: the value-free
+telemetry surface, the gate battery (coverage floor, dialyzer, doc warnings,
+dependency audits), the package boundary check, the three-cell CI matrix, the
+full guide set, the Igniter installer, the doctor preflight, and the
+supply-chain workflow. The contract itself is NOT yet operative — 1.0 is
+deferred until the release sees real consumer use (owner direction, 2026-08-26);
+until then the pre-1.0 SemVer §4 policy applies.
 
 ## Unreleased → (next)
 
@@ -35,10 +37,12 @@ enumerated public surface require a major version.
   (`~> 0.1.1` at the time). Lockfiles that referenced the private git remote should
   `mix deps.get` fresh.
 
-## The 1.0 stability contract
+## The (proposed) 1.0 stability contract
 
-From 1.0, the following is the PUBLIC SURFACE — breaking changes to it require a major
-version (SemVer §4's pre-1.0 carve-out ends):
+PROPOSED, not yet operative — 1.0 is deferred until this release line sees real
+consumer use and the surface settles (owner direction, 2026-08-26). When 1.0 is
+cut, the following becomes the PUBLIC SURFACE — breaking changes to it then
+require a major version (SemVer §4's pre-1.0 carve-out ends):
 
 - The four signing functions and their return shapes:
   `sign_report/3` → `{:ok, %{grant: binary, proof: binary}}`,
