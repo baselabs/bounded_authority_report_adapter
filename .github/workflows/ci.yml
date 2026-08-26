@@ -58,6 +58,9 @@ jobs:
       - name: Audit dependencies (security advisories)
         run: mix deps.audit
 
+      - name: Package boundary (build + unpack + consumer smoke)
+        run: mix run --no-start scripts/check_package.exs
+
   example:
     name: examples/edge_agent (Audit · Format · Compile · Credo · Test)
     runs-on: ubuntu-latest

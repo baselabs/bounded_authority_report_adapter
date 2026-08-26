@@ -16,6 +16,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "examples/edge_agent/lib/edge_agent/receiver/nonce_ledger.ex",
                        "examples/edge_agent/test/edge_agent_test.exs",
                        "lib/bounded_authority_report_adapter.ex",
+                       "scripts/check_package.exs",
                        "test/bounded_authority_report_adapter/bounds_aware_assembly_test.exs",
                        "test/bounded_authority_report_adapter/conformance/tag_test.exs",
                        "test/bounded_authority_report_adapter/conformance_roundtrip_test.exs",

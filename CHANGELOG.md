@@ -28,6 +28,16 @@ breaking changes (SemVer §4).
   (`mix hex.audit` + `mix deps.audit` via mix_audit, both dev/test-only). Each gate is
   mutation-proven red-capable, and the CI advisory parity test now pins the full battery
   step order in both orchestration surfaces — dropping any one battery step reds parity.
+- `scripts/check_package.exs` — the shipped-artifact gate (pattern: the protocol sibling's
+  package check, adapted): builds the exact Hex archive, unpacks it, asserts the payload
+  census against the expected file set exactly in BOTH directions (a stale `files:`
+  allowlist and an accidental inclusion both red), pins the outer metadata (version and
+  requirement read from the live project config, so the pin never drifts on a bump),
+  compiles the unpacked package in :prod, and compiles + smoke-runs a minimal consumer
+  against the UNPACKED artifact — a self-implemented key handle, a
+  sign_report → check_envelope positive, and a tampered-request negative. Mutation-proven:
+  dropping a shipped file from the allowlist reds the census; a corrupted consumer reds
+  its compile. Runs as a `mix ci` + workflow gate step; scratch-cleaned per run.
 - Guard against silent protocol-version drift: the dependency-direction wall now pins the
   resolved `mix.lock` version (mutation-proven, including the `0.1.20` prefix-extension
   case), an exact identity invariant ties the wall's requirement floor to its locked-version
