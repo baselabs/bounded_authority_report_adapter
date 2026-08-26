@@ -20,6 +20,13 @@ breaking changes (SemVer §4).
 
 ### Added
 
+- Core DX guides, shipped in the package and indexed from the README:
+  [usage-rules.md](usage-rules.md) (12 flat rules, exact identifiers, reasons folded
+  in — the C1-gate-is-declaration-rejection rule leads), [docs/errors.md](docs/errors.md)
+  (all four closed-atom error sets as atom → meaning → what to check → recovery, authored
+  to be mechanically checkable against the `@type`s), and
+  [docs/getting-started.md](docs/getting-started.md) (first sign in minutes with a
+  self-contained dev handle, then the path to a production handle).
 - Value-free sign telemetry: the four signing entry points now emit a closed two-event
   surface (`[:bounded_authority_report_adapter, :sign, :start|:stop]`) with monotonic
   duration and atoms-only metadata (`object` in `[:report, :anchor, :grant,

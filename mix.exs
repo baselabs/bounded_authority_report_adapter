@@ -119,7 +119,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "LICENSE",
         "NOTICE",
         "SECURITY.md",
+        "usage-rules.md",
         "docs/consumer-integration.md",
+        "docs/errors.md",
+        "docs/getting-started.md",
         "docs/telemetry.md"
       ],
       licenses: ["Apache-2.0"],
@@ -137,11 +140,14 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       source_url: @source_url,
       extras: [
         "README.md",
+        "usage-rules.md",
         "CHANGELOG.md",
         "LICENSE",
         "NOTICE",
         "SECURITY.md",
         "docs/consumer-integration.md",
+        "docs/errors.md",
+        "docs/getting-started.md",
         "docs/telemetry.md"
       ]
     ]
