@@ -25,7 +25,7 @@ defmodule CountingKeyHandle do
   @impl true
   def sign(message, {_public_key, private_key}) do
     Process.put(@key, (Process.get(@key) || 0) + 1)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
   end
 
   @impl true
@@ -50,7 +50,7 @@ defmodule CapturingKeyHandle do
   @impl true
   def sign(message, {_public_key, private_key}) do
     Process.put(@key, message)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
   end
 
   @impl true
@@ -92,6 +92,11 @@ defmodule BadContractHandle do
   return raised CaseClauseError. The catch-all now maps it to :signing_failed.
   """
   @behaviour BoundedAuthorityReportAdapter
+
+  # The contract violation IS this fixture's purpose — suppress the dialyzer
+  # callback mismatch for this one module, narrowly, so the dialyzer gate
+  # stays zero-warning without weakening the fixture.
+  @dialyzer {:nowarn_function, sign: 2}
 
   @impl true
   def sign(_message, _handle), do: :ok
@@ -162,7 +167,7 @@ defmodule WrongKeyHandle do
   @impl true
   def sign(message, _handle) do
     {_other_pub, other_priv} = :crypto.generate_key(:eddsa, :ed25519, <<99::256>>)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [other_priv, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [other_priv, :ed25519])}
   end
 
   @impl true
@@ -189,7 +194,7 @@ defmodule AnchorCapturingKeyHandle do
 
   def sign(message, {_public_key, private_key}) do
     Process.put(@key, message)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
   end
 
   def public_key({public_key, _private_key}), do: {:ok, public_key}
@@ -216,7 +221,7 @@ defmodule AnchorWrongKeyHandle do
 
   def sign(message, _handle) do
     {_other_pub, other_priv} = :crypto.generate_key(:eddsa, :ed25519, <<77::256>>)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [other_priv, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [other_priv, :ed25519])}
   end
 
   def thumbprint({public_key, _private_key}) do
@@ -275,7 +280,7 @@ defmodule RacingKeyIdentityHandle do
 
   def sign(message, pid) do
     priv = Agent.get(pid, fn s -> if s.rotated, do: s.priv_b, else: s.priv_a end)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [priv, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [priv, :ed25519])}
   end
 
   def public_key(_pid), do: {:ok, <<0::256>>}
@@ -303,7 +308,7 @@ defmodule TransitionCapturingKeyHandle do
 
   def sign(message, {_public_key, private_key}) do
     Process.put(@key, message)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
   end
 
   def public_key({public_key, _private_key}), do: {:ok, public_key}
@@ -329,7 +334,7 @@ defmodule TransitionWrongKeyHandle do
 
   def sign(message, _handle) do
     {_other_pub, other_priv} = :crypto.generate_key(:eddsa, :ed25519, <<88::256>>)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [other_priv, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [other_priv, :ed25519])}
   end
 
   def key_identity({public_key, _private_key}), do: {:ok, {"test-anchor-key-001", public_key}}
@@ -364,7 +369,7 @@ defmodule TransitionRacingKeyIdentityHandle do
 
   def sign(message, pid) do
     priv = Agent.get(pid, fn s -> if s.rotated, do: s.priv_b, else: s.priv_a end)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [priv, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [priv, :ed25519])}
   end
 
   def public_key(_pid), do: {:ok, <<0::256>>}
@@ -393,7 +398,7 @@ defmodule GrantIssuerHandle do
 
   @impl true
   def sign(message, {_public_key, private_key}) do
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
   end
 
   @impl true
@@ -427,7 +432,7 @@ defmodule GrantHolderCountingHandle do
   @impl true
   def sign(message, {_public_key, private_key}) do
     Process.put(@key, (Process.get(@key) || 0) + 1)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
   end
 
   @impl true
@@ -456,7 +461,7 @@ defmodule GrantRolelessHandle do
 
   @impl true
   def sign(message, {_public_key, private_key}) do
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
   end
 
   @impl true
@@ -487,7 +492,7 @@ defmodule GrantCapturingKeyHandle do
   @impl true
   def sign(message, {_public_key, private_key}) do
     Process.put(@key, message)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
   end
 
   @impl true
@@ -519,7 +524,7 @@ defmodule GrantWrongKeyHandle do
   @impl true
   def sign(message, _handle) do
     {_other_pub, other_priv} = :crypto.generate_key(:eddsa, :ed25519, <<99::256>>)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [other_priv, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [other_priv, :ed25519])}
   end
 
   @impl true
@@ -547,7 +552,7 @@ defmodule GrantRacingIdentityHandle do
 
   def sign(message, pid) do
     priv = Agent.get(pid, fn s -> if s.rotated, do: s.priv_b, else: s.priv_a end)
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [priv, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [priv, :ed25519])}
   end
 
   def public_key(_pid), do: {:ok, <<0::256>>}

@@ -11,6 +11,12 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      # The coverage floor is the MEASURED total, pinned the first time the gate ran
+      # (76.79% on the 0.1.2-aligned tree) — never an aspirational number. Raise it
+      # only with the test additions that actually move the measured number.
+      test_coverage: [summary: [threshold: 76]],
+      # PLT lives under _build (gitignored, cache-friendly) — the BAP sibling's shape.
+      dialyzer: [plt_core_path: "_build/plts", plt_local_path: "_build/plts"],
       deps: deps(),
       package: package(),
       docs: docs(),
@@ -50,6 +56,16 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "cmd env MIX_ENV=test mix compile --warnings-as-errors",
         "cmd env MIX_ENV=test mix credo --strict",
         "cmd env MIX_ENV=test mix test",
+        # The gate battery (parity with the sibling-standard batteries): coverage
+        # floor, dialyzer (PLT + analysis under :test so test/support/ is in the
+        # paths — the RA7 lesson), doc warnings, and the LIBRARY's own advisory
+        # audits (the example job has always audited its own lock; the library's
+        # lock is now audited too).
+        "cmd env MIX_ENV=test mix test --cover",
+        "cmd env MIX_ENV=test mix dialyzer",
+        "cmd env MIX_ENV=test mix docs --warnings-as-errors",
+        "cmd env MIX_ENV=test mix hex.audit",
+        "cmd env MIX_ENV=test mix deps.audit",
         # job: example (the workflow's working-directory: examples/edge_agent)
         "cmd --cd examples/edge_agent env MIX_ENV=test mix deps.get",
         "cmd --cd examples/edge_agent env MIX_ENV=test mix hex.audit",
@@ -76,7 +92,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
     [
       {:bounded_authority_protocol, "~> 0.1.2"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
     ]
   end
 

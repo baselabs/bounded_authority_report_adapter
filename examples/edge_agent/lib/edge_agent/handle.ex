@@ -27,7 +27,7 @@ defmodule EdgeAgent.Handle do
 
   @impl true
   def sign(message, {_public_key, private_key}) when is_binary(message) do
-    {:ok, :crypto.sign(:eddsa, :ed25519, message, [private_key, :ed25519])}
+    {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
   end
 
   def sign(_message, _handle), do: {:error, :invalid_handle}

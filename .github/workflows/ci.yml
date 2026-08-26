@@ -10,13 +10,10 @@ permissions:
 
 jobs:
   gate:
-    name: Format · Compile · Credo · Test
+    name: Format · Compile · Credo · Test · Cover · Dialyzer · Docs · Audits
     runs-on: ubuntu-latest
 
     env:
-      # Let mix deps.get clone the private bounded_authority_protocol dep via the
-      # action's GITHUB_TOKEN (same org, read access). For cross-org or external
-      # consumers, replace with a PAT or deploy key stored as a secret.
       MIX_ENV: test
 
     steps:
@@ -28,9 +25,6 @@ jobs:
         with:
           elixir-version: '1.20.2'
           otp-version: '29'
-
-      - name: Configure git for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install deps
         run: mix deps.get
@@ -47,13 +41,28 @@ jobs:
       - name: Test (includes the conformance round-trip)
         run: mix test
 
+      # The gate battery (parity with mix ci, which reproduces these steps
+      # step-for-step locally):
+      - name: Coverage floor
+        run: mix test --cover
+
+      - name: Dialyzer (PLT + analysis under :test so test/support is covered)
+        run: mix dialyzer
+
+      - name: Docs (warnings as errors)
+        run: mix docs --warnings-as-errors
+
+      - name: Audit dependencies (retirements)
+        run: mix hex.audit
+
+      - name: Audit dependencies (security advisories)
+        run: mix deps.audit
+
   example:
     name: examples/edge_agent (Audit · Format · Compile · Credo · Test)
     runs-on: ubuntu-latest
 
     env:
-      # Same private-dep posture as the gate job: the example app pulls BAP
-      # transitively through the path-relative adapter dep.
       MIX_ENV: test
 
     defaults:
@@ -67,9 +76,6 @@ jobs:
         with:
           elixir-version: '1.20.2'
           otp-version: '29'
-
-      - name: Configure git for private deps
-        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install deps
         run: mix deps.get
