@@ -98,6 +98,8 @@ No handler is attached by default. The event/class tables, alerting guidance
 - [Consumer integration](docs/consumer-integration.md) — the verifier side: raw bytes,
   identity binding, the nonce ledger.
 - [Changelog](CHANGELOG.md) — release by release.
+- [Upgrading](docs/upgrading.md) — per-version notes and the 1.0 stability contract.
+- [Contributing](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 

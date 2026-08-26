@@ -116,6 +116,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "mix.exs",
         "README.md",
         "CHANGELOG.md",
+        "CODE_OF_CONDUCT.md",
+        "CONTRIBUTING.md",
         "LICENSE",
         "NOTICE",
         "SECURITY.md",
@@ -125,7 +127,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "docs/getting-started.md",
         "docs/recipes.md",
         "docs/security.md",
-        "docs/telemetry.md"
+        "docs/telemetry.md",
+        "docs/upgrading.md"
       ],
       licenses: ["Apache-2.0"],
       links: %{
@@ -144,6 +147,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "README.md",
         "usage-rules.md",
         "CHANGELOG.md",
+        "CODE_OF_CONDUCT.md",
+        "CONTRIBUTING.md",
         "LICENSE",
         "NOTICE",
         "SECURITY.md",
@@ -152,7 +157,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "docs/getting-started.md",
         "docs/recipes.md",
         "docs/security.md",
-        "docs/telemetry.md"
+        "docs/telemetry.md",
+        "docs/upgrading.md"
       ]
     ]
   end
