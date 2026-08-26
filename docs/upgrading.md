@@ -3,6 +3,15 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 1.0.0
+
+The release this page's [stability contract](#the-10-stability-contract) becomes
+operative for: the value-free telemetry surface, the gate battery (coverage
+floor, dialyzer, doc warnings, dependency audits), the package boundary check,
+the three-cell CI matrix, the full guide set, the Igniter installer, the doctor
+preflight, and the supply-chain workflow. From here, breaking changes to the
+enumerated public surface require a major version.
+
 ## Unreleased → (next)
 
 - Telemetry: the four signing entry points now emit a value-free two-event surface —

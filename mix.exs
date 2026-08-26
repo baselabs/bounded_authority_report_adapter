@@ -1,7 +1,7 @@
 defmodule BoundedAuthorityReportAdapter.MixProject do
   use Mix.Project
 
-  @version "0.2.1"
+  @version "1.0.0"
   @source_url "https://github.com/baselabs/bounded_authority_report_adapter"
 
   def project do
