@@ -8,7 +8,7 @@ engineering + release posture.
 ## 1. Release posture: public package and public source
 
 The owner superseded the original private-not-Hex posture on 2026-08-20 (ADR
-0004). `bounded_authority_report_adapter` 0.2.1 is public on Hex and consumes the
+0004). `bounded_authority_report_adapter` 0.4.0 is public on Hex and consumes the
 public `bounded_authority_protocol` Hex package. Its GitHub source is public and
 the release tags are the durable source identities. The adapter is pre-1.0 and every
 release remains responsible for its own compatibility, conformance, provenance,
@@ -94,7 +94,7 @@ re-architecture, not a refactor.
 
 ## 6. Release cadence
 
-- **0.2.x is public** — pre-1.0; compatibility follows the package's declared
+- **0.x is public** — pre-1.0; compatibility follows the package's declared
   pre-1.0 policy and every change must retain conformance and release evidence.
 - **1.0.0** — cut only when the public API, consumer evidence, source identity,
   and release operations meet the owner repository's 1.0 acceptance contract, AND

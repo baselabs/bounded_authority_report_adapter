@@ -55,6 +55,27 @@ defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
     refute output =~ "BA:      pins aaaaaaaaaaaa"
   end
 
+  test "the BA pin parser reports an exact Hex protocol dependency", context do
+    write_executable!(Path.join(context.bin, "curl"), "#!/bin/sh\nexit 1\n")
+
+    ba = Path.join(context.base, "bounded_authority")
+    File.mkdir_p!(ba)
+
+    File.write!(
+      Path.join(ba, "mix.exs"),
+      ~S|{:bounded_authority_protocol, "== 0.2.0"}|
+    )
+
+    File.write!(
+      Path.join(ba, "mix.lock"),
+      ~S|%{"bounded_authority_protocol" => {:hex, :bounded_authority_protocol, "0.2.0"}}|
+    )
+
+    {output, 0} = run_probe(context)
+
+    assert output =~ "BA:      pins bounded_authority_protocol 0.2.0 from Hex"
+  end
+
   defp run_probe(context) do
     path = context.bin <> ":" <> System.fetch_env!("PATH")
 

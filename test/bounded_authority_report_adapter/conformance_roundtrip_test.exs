@@ -457,6 +457,19 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     end
 
     @tag :conformance
+    test "a malformed proof signature goes RED", %{
+      grant: grant,
+      proof: proof,
+      expected: expected
+    } do
+      [protected, payload, _signature] = String.split(proof, ".")
+      malformed = Enum.join([protected, payload, "!not-base64url!"], ".")
+
+      assert {:error, :invalid} =
+               V1.check_envelope(%Credentials{grant: grant, proof: malformed}, expected)
+    end
+
+    @tag :conformance
     test "a tampered ba_req payload byte goes RED at the request-hash field binding",
          %{
            grant: grant,
@@ -519,6 +532,8 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
                    "tamper #{tamper_class} did not go RED through check_envelope"
 
           :error when tamper_class == "request_operation_drift" ->
+            # The verifier must not let a caller reinterpret the signed request
+            # as a broader operation than the proof binds.
             drifted = %{expected | operation: "write_record"}
 
             assert {:error, :invalid} =

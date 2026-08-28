@@ -58,19 +58,17 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # by docs/adr/0010-pin-bump-policy.md (a wire/verification change is a protocol
   # contract-major; an additive change is a minor).
   @protocol_app "bounded_authority_protocol"
-  @protocol_requirement "~> 0.1.2"
+  @protocol_requirement "== 0.2.0"
 
-  # The LOCKED version — the guard against silent lock drift. The requirement above admits
-  # later releases in the same pre-1.0 minor range, so a bare `mix deps.update
-  # bounded_authority_protocol` re-locks at the newest published release and crosses a
-  # protocol span nobody reviewed or chose (the 0.1.2 case: published with `lib/` changes
-  # before the authority runtime validated them). A version bump is a deliberate, reviewed
-  # change — the same commit raises the mix.exs requirement, BOTH wall attributes, and the
-  # lock; this attribute makes the lock half mechanically loud instead of trusted.
-  @protocol_locked_version "0.1.2"
+  # The LOCKED version — the guard against silent lock drift. The exact requirement above
+  # selects the authority suite's recertified protocol identity. A version bump is a
+  # deliberate, reviewed change — the same commit raises the mix.exs requirement, BOTH wall
+  # attributes, and the lock; this attribute makes the lock half mechanically loud instead
+  # of trusted.
+  @protocol_locked_version "0.2.0"
 
   defp requirement_tracks_locked_version?(requirement, locked_version) do
-    requirement == "~> #{locked_version}"
+    requirement == "== #{locked_version}"
   end
 
   defp protocol_lock_line(version) do
@@ -202,7 +200,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
       mix_lock = File.read!("mix.lock")
 
       # The predicate TERMINATES at the comma after the version: an unterminated
-      # prefix would match "0.1.2" inside "0.1.20"/"0.1.21"/… — reopening the exact
+      # prefix would match "0.2.0" inside "0.2.0-rc.1" — reopening the exact
       # silent-drift hole this clause closes.
       assert protocol_locked_at?(mix_lock, @protocol_locked_version),
              "mix.lock must resolve :#{@protocol_app} at exactly #{@protocol_locked_version} — " <>
@@ -221,8 +219,8 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
                "both wall attributes move together in the same deliberate-bump commit"
     end
 
-    test "a compatible patch advance is not accepted as same-commit requirement identity" do
-      refute requirement_tracks_locked_version?(@protocol_requirement, "0.1.3"),
+    test "a patch advance is not accepted as same-commit requirement identity" do
+      refute requirement_tracks_locked_version?(@protocol_requirement, "0.2.1"),
              "SemVer compatibility must not let the locked-version attribute advance while " <>
                "the requirement attribute and mix.exs stay unchanged"
     end
@@ -432,9 +430,9 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     end
 
     test "the lock-version clause reds on a drifted lock (plain bump + prefix extension)" do
-      # Two mutations, one per real hole. A plain drift (0.1.3 — what a future `mix
-      # deps.update` writes) exercises the obvious red. The PREFIX EXTENSION (0.1.20)
-      # exercises the one an unterminated predicate would still match: mutating to 0.1.3
+      # Two mutations, one per real hole. A plain drift (0.2.1 — what a future `mix
+      # deps.update` writes) exercises the obvious red. The PREFIX EXTENSION (0.2.0-rc.1)
+      # exercises the one an unterminated predicate would still match: mutating to 0.2.1
       # alone passes even while the prefix hole is open, so the proof would mask the very
       # defect the terminator in the clause above exists to prevent. Fixture discipline
       # follows the
@@ -448,7 +446,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
              "fixture setup: the real lock does not carry the locked-version line — the " <>
                "green clause above is red and must be fixed before this proof means anything"
 
-      for drifted <- ["0.1.3", "0.1.20"] do
+      for drifted <- ["0.2.1", "0.2.0-rc.1"] do
         drifted_line = "\"#{@protocol_app}\": {:hex, :#{@protocol_app}, \"#{drifted}\","
         mutated_lock = String.replace(real_lock, locked_line, drifted_line)
 

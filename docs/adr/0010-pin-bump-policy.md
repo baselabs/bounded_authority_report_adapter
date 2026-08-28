@@ -106,11 +106,12 @@ the repos, never cite them from prose.
    package; no git ref remains in `mix.exs`/`mix.lock`).** The policy's
    substance is unchanged — BA validates the contract surface, BARA follows;
    the mechanism maps, term by term:
-   - "BA's pin" is still the ref BA's `mix.exs` declares (BA consumes the git
-     pin). A Hex version maps to a commit via the protocol repo's release
-     tags (`v<version>`, peeled); `scripts/check-bap-drift.sh` performs the
-     comparison read-only (ls-remote + file reads — a sibling fetch is NOT
-     read-only and can be rejected on tag clobber).
+   - "BA's pin" is the exact BAP identity selected by BA's `mix.exs` and lock:
+     an exact Hex version when BA consumes Hex, or the declared commit when it
+     consumes a git ref. A Hex version maps to a commit via the protocol repo's
+     release tags (`v<version>`, peeled); `scripts/check-bap-drift.sh` parses
+     both forms and performs the comparison read-only (ls-remote + file reads —
+     a sibling fetch is NOT read-only and can be rejected on tag clobber).
    - Decision 2.1's `lib/`-EMPTY gate is the `lib/` diff between RELEASE-TAG
      commits (`v<locked>..v<candidate>`), evaluated in the protocol repo.
      Decisions 2.2/4's span, enumeration, and the three quoted commands ride

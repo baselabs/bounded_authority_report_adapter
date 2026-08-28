@@ -30,7 +30,7 @@ defmodule EdgeAgent.ProtocolLockParityTest do
              "protocol spans; re-lock BOTH in the same deliberate-bump commit"
   end
 
-  # The lock line shape: "bounded_authority_protocol": {:hex, :bounded_authority_protocol, "0.1.2", …
+  # The lock line shape: "bounded_authority_protocol": {:hex, :bounded_authority_protocol, "0.2.0", …
   # (terminated at the closing quote + comma so a version that merely PREFIX-matches
   # cannot satisfy it — the same terminator discipline as the library wall's clause).
   defp locked_version(lock) do

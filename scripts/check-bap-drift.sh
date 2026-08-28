@@ -98,9 +98,46 @@ if [ -n "$bap_main" ]; then
   fi
 fi
 
-# --- the authority runtime's pin (sibling file, AS CHECKED OUT — not fetched) --------
+# --- the authority runtime's pin (sibling files, AS CHECKED OUT — not fetched) -------
+ba_version=""
+ba_pin=""
+
 if [ -f "$BA_SIBLING/mix.exs" ]; then
-  ba_pin="$(python3 -c '
+  ba_version="$(python3 -c '
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+match = re.search(
+    r"\{\s*:bounded_authority_protocol\s*,\s*\"==\s*([^\"]+)\"\s*\}",
+    text,
+)
+print(match.group(1) if match else "")
+' "$BA_SIBLING/mix.exs" 2>/dev/null || true)"
+
+  if [ -n "$ba_version" ]; then
+    ba_locked="$(python3 -c '
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+match = re.search(
+    r"\"bounded_authority_protocol\"\s*(?::|=>)\s*\{:hex,\s*:bounded_authority_protocol,\s*\"([^\"]+)\"",
+    text,
+)
+print(match.group(1) if match else "")
+' "$BA_SIBLING/mix.lock" 2>/dev/null || true)"
+
+    if [ "$ba_locked" = "$ba_version" ]; then
+      say "BA:      pins bounded_authority_protocol $ba_version from Hex (sibling as checked out)"
+
+      ba_pin="$(
+        printf '%s\n' "$remote_refs" | awk -v t="refs/tags/v$ba_version^{}" '$2 == t {print $1}'
+      )"
+      [ -z "$ba_pin" ] &&
+        ba_pin="$(printf '%s\n' "$remote_refs" | awk -v t="refs/tags/v$ba_version" '$2 == t {print $1}')"
+    else
+      say "BA:      WITHHELD — mix.exs requires exact $ba_version but mix.lock selects ${ba_locked:-nothing}"
+      ba_version=""
+    fi
+  else
+    ba_pin="$(python3 -c '
 import re, sys
 text = open(sys.argv[1], encoding="utf-8").read()
 match = re.search(
@@ -110,15 +147,15 @@ match = re.search(
 )
 print(match.group(1) if match else "")
 ' "$BA_SIBLING/mix.exs" 2>/dev/null || true)"
-  if [ -n "$ba_pin" ]; then
-    say "BA:      pins ${ba_pin:0:12} (sibling as checked out — fetch BA before relying on this in an audit)"
-  else
-    say "BA:      sibling present but no git ref parsed — read $BA_SIBLING/mix.exs first-hand"
-    ba_pin=""
+
+    if [ -n "$ba_pin" ]; then
+      say "BA:      pins ${ba_pin:0:12} (sibling as checked out — fetch BA before relying on this in an audit)"
+    else
+      say "BA:      sibling present but no exact Hex or git ref parsed — read $BA_SIBLING/mix.exs first-hand"
+    fi
   fi
 else
   say "BA:      SKIP (sibling $BA_SIBLING absent) — alignment verdict withheld"
-  ba_pin=""
 fi
 
 if [ ! -d "$BAP_SIBLING" ]; then
@@ -170,7 +207,11 @@ fi
 # a silently-absent verdict reads as "no misalignment flagged" (cross-vendor
 # finding: the no-else form violated the script's own every-skip-printed
 # contract).
-if [ -z "$ba_pin" ]; then
+if [ -n "$ba_version" ] && [ "$ba_version" = "$locked" ]; then
+  say "ALIGNMENT: pins match ($locked) — ADR-0010 default posture holds."
+elif [ -n "$ba_version" ] && [ -z "$ba_pin" ]; then
+  say "ALIGNMENT: WITHHELD — BA's v$ba_version tag commit is unknown on the remote."
+elif [ -z "$ba_pin" ]; then
   : # the sibling-absent SKIP already printed above
 elif [ -z "$locked_commit" ]; then
   say "ALIGNMENT: WITHHELD — the locked version's tag commit is unknown on the remote."
