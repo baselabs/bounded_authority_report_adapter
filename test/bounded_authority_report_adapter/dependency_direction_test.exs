@@ -430,9 +430,10 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     end
 
     test "the lock-version clause reds on a drifted lock (plain bump + prefix extension)" do
-      # Two mutations, one per real hole. A plain drift (0.2.1 — what a future `mix
-      # deps.update` writes) exercises the obvious red. The PREFIX EXTENSION (0.2.0-rc.1)
-      # exercises the one an unterminated predicate would still match: mutating to 0.2.1
+      # Two mutations, one per real hole. A plain drift (0.2.1 — a stale or manually
+      # altered lock; the exact requirement makes `mix deps.update` refuse it) exercises
+      # the obvious red. The PREFIX EXTENSION (0.2.0-rc.1) exercises the one an
+      # unterminated predicate would still match: mutating to 0.2.1
       # alone passes even while the prefix hole is open, so the proof would mask the very
       # defect the terminator in the clause above exists to prevent. Fixture discipline
       # follows the

@@ -212,7 +212,7 @@ if [ -n "$ba_version" ] && [ "$ba_version" = "$locked" ]; then
 elif [ -n "$ba_version" ] && [ -z "$ba_pin" ]; then
   say "ALIGNMENT: WITHHELD — BA's v$ba_version tag commit is unknown on the remote."
 elif [ -z "$ba_pin" ]; then
-  : # the sibling-absent SKIP already printed above
+  : # the parser branch already printed its SKIP, WITHHELD, or read-first-hand verdict
 elif [ -z "$locked_commit" ]; then
   say "ALIGNMENT: WITHHELD — the locked version's tag commit is unknown on the remote."
 elif have_span "$ba_pin" "$locked_commit"; then
