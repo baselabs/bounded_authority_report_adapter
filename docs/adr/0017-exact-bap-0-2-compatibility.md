@@ -10,7 +10,9 @@ The authority suite's recertified runtime line selects BAP 0.2.0 exactly. A cons
 cannot solve BARA 0.3.0 together with exact BAP 0.2.0, even though BAP's 0.2.0 release
 does not change the V1 wire contract or public runtime API.
 
-The verified `v0.1.2..v0.2.0` BAP span has no `lib/` diff. BAP 0.2.0 records zero
+The verified `v0.1.2..v0.2.0` BAP span changes two `lib/` files confined to
+conformance-corpus tooling: the certified digest and the loader's revision-sidecar
+support. The consumed V1 signing/runtime modules do not change. BAP 0.2.0 records zero
 wire, bound, verdict, or SDK behavior change. Its conformance corpus remains revision 1
 with 283 cases; provenance/index digests rotate as part of the release tooling change.
 
@@ -19,7 +21,7 @@ with 283 cases; provenance/index digests rotate as part of the release tooling c
 1. BARA depends on `bounded_authority_protocol == 0.2.0`. Root, example, package,
    dependency-wall, and documentation identities move together. BARA does not vendor
    BAP, retain parallel BAP versions, or rely on a consumer override.
-2. BARA's public signing API remains unchanged: `sign_report/4`, `sign_anchor/3`,
+2. BARA's public signing API remains unchanged: `sign_report/3`, `sign_anchor/3`,
    `sign_grant/3`, and `sign_key_transition/3` continue to sign BAP-owned deterministic
    inputs through caller-owned, non-exporting key handles.
 3. BARA retains no issuer authority beyond the already explicit issuer-role grant
