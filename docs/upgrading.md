@@ -3,6 +3,17 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 0.4.0
+
+The protocol dependency now selects `bounded_authority_protocol == 0.2.0`
+exactly, matching the authority suite's recertified protocol identity. This is a
+pre-1.0 minor release because consumers retaining BAP 0.1.x cannot solve the new
+exact dependency line. BARA's four signing APIs, return shapes, key-handle
+contract, telemetry, and produced V1 wire forms are unchanged.
+
+Run `mix deps.get` and confirm your lock contains one BAP 0.2.0 entry. Do not
+override BARA back to BAP 0.1.x or retain parallel BAP lines.
+
 ## 0.3.0
 
 Pre-1.0 feature release carrying everything the proposed

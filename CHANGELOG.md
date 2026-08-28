@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0, `0.x` minor bumps may carry
 breaking changes (SemVer §4).
 
+## [0.4.0] — 2026-08-27
+
+### Changed
+
+- Select `bounded_authority_protocol == 0.2.0` exactly, matching the authority
+  suite's recertified protocol identity. Root/example locks and the dependency
+  wall move together to one BAP 0.2.0 line; no vendoring, dual protocol line,
+  or consumer override is used.
+- Preserve the public signing surface (`sign_report/3`, `sign_anchor/3`,
+  `sign_grant/3`, `sign_key_transition/3`) and caller-owned/non-exporting
+  key-handle boundary. The BAP release span changes conformance-corpus tooling,
+  not the consumed V1 signing/runtime surface, and records no wire, bound,
+  verdict, or SDK behavior change.
+- Advance the pre-1.0 minor version because the new exact BAP constraint is a
+  package-resolution compatibility break for consumers retaining BAP 0.1.x;
+  runtime and V1 wire compatibility remain unchanged.
+- Teach the ecosystem drift probe to read BA's exact Hex requirement and lock
+  as well as its legacy git-ref form, so exact BAP 0.2.0 alignment is reported
+  instead of withheld after BA's own Hex migration.
+
+### Verification
+
+- Prove the published 0.3.0 package cannot resolve with exact BAP 0.2.0, then
+  prove this release resolves one BAP 0.2.0 line.
+- Re-run the BAP grant-holder-proof conformance oracle and all four adapter
+  producer round-trips, including meaningful signature tamper, wrong holder,
+  widened request, malformed signature, and key-provider failure rejection.
+- Rebuild the shipped archive twice, compile an unpacked-package consumer, and
+  run the full library/example, static-analysis, dependency-audit, package,
+  reproducibility, installation/doctor, and supply-chain batteries.
+
 ## [0.3.0] — 2026-08-26
 
 Pre-1.0 feature release. The 1.0 cut is DELIBERATELY DEFERRED (owner direction,

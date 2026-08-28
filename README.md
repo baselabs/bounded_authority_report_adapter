@@ -17,7 +17,7 @@ verifier's side of the contract) is documented in
 ```elixir
 def deps do
   [
-    {:bounded_authority_report_adapter, "~> 0.2.0"}
+    {:bounded_authority_report_adapter, "~> 0.4.0"}
   ]
 end
 ```
