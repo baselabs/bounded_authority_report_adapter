@@ -97,12 +97,14 @@ defmodule EdgeAgent do
   `ba+loopback-proof` flow (`sign_local_loopback_report/3`) for a development
   listener on the literal loopback interface.
 
-  The `target_uri` is the receiver's own canonical URL (`:receiver_url` —
-  exactly `http://127.0.0.1:PORT/PATH` or `http://[::1]:PORT/PATH`), and the
-  receiver verifies it against the target derived from ITS OWN bound listener,
-  never from client-supplied headers. Local-loopback HTTP is plain HTTP — no
-  TLS confidentiality or server authentication, NOT equivalent to HTTPS — and
-  the nonce is mandatory: the receiver reserves and dedupes it.
+  The flow is challenge-first: GET the receiver's URL to obtain a
+  LISTENER-RESERVED nonce (the receiver mints it; the agent never chooses it),
+  sign the proof binding that challenge, then POST. The `target_uri` is the
+  receiver's own canonical URL (`:receiver_url` — exactly
+  `http://127.0.0.1:PORT/PATH` or `http://[::1]:PORT/PATH`), and the receiver
+  verifies against the target derived from ITS OWN bound listener, never from
+  client-supplied headers. Local-loopback HTTP is plain HTTP — no TLS
+  confidentiality or server authentication, NOT equivalent to HTTPS.
 
   A non-canonical or non-loopback `:receiver_url` fails closed at signing
   (`{:producer_error, :invalid}` — BAP's profile admission).
@@ -119,33 +121,28 @@ defmodule EdgeAgent do
     raw_body = cfg(:report_body)
     {:ok, cast_arguments} = V1.Json.decode(raw_body)
 
-    invocation_id = generate_invocation_id()
-    nonce = generate_nonce()
+    receiver_url = Keyword.get(opts, :receiver_url, cfg(:loopback_receiver_url))
 
-    report = %{
-      grant_compact: grant_compact,
-      operation: cfg(:operation),
-      method: "POST",
-      target_uri: Keyword.get(opts, :receiver_url, cfg(:loopback_receiver_url)),
-      invocation_id: invocation_id,
-      cast_arguments: cast_arguments,
-      nonce: nonce
-    }
-
-    with {:ok, %{grant: ^grant_compact, proof: proof}} <-
+    # The challenge is the LISTENER's: minted by the receiver (GET), consumed
+    # atomically at verification. The agent signs it; it never mints a nonce.
+    with {:ok, %{status: 200, body: nonce}} when is_binary(nonce) <- Req.get(receiver_url),
+         invocation_id = generate_invocation_id(),
+         report = %{
+           grant_compact: grant_compact,
+           operation: cfg(:operation),
+           method: "POST",
+           target_uri: receiver_url,
+           invocation_id: invocation_id,
+           cast_arguments: cast_arguments,
+           nonce: nonce
+         },
+         {:ok, %{grant: ^grant_compact, proof: proof}} <-
            BoundedAuthorityReportAdapter.sign_local_loopback_report(
              report,
              {EdgeAgent.Handle, holder},
              %{}
            ) do
-      post(
-        Keyword.get(opts, :receiver_url, cfg(:loopback_receiver_url)),
-        grant_compact,
-        proof,
-        raw_body,
-        invocation_id,
-        nonce
-      )
+      post(receiver_url, grant_compact, proof, raw_body, invocation_id, nonce)
     end
   end
 

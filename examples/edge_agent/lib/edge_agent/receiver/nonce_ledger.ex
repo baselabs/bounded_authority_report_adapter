@@ -23,8 +23,9 @@ defmodule EdgeAgent.Receiver.NonceLedger do
   use GenServer
 
   @table :edge_agent_nonce_ledger
+  @challenges :edge_agent_nonce_challenges
 
-  @doc "Starts the ledger GenServer (owns the ETS table)."
+  @doc "Starts the ledger GenServer (owns both ETS tables)."
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(_opts \\ []), do: GenServer.start_link(__MODULE__, [], name: __MODULE__)
 
@@ -39,12 +40,44 @@ defmodule EdgeAgent.Receiver.NonceLedger do
     if :ets.insert_new(@table, {{identity_id, nonce}, true}), do: :ok, else: {:error, :replay}
   end
 
+  @doc """
+  Mints a fresh server-reserved challenge (the local-loopback profile's nonce
+  reservation — the challenge is the VERIFIER's, minted here, never chosen by
+  the signer). Returns the challenge value the caller signs into the proof.
+  """
+  @spec reserve_challenge() :: binary()
+  def reserve_challenge do
+    challenge = :crypto.strong_rand_bytes(18) |> Base.url_encode64(padding: false)
+    true = :ets.insert_new(@challenges, {challenge, true})
+    challenge
+  end
+
+  @doc """
+  Atomically consumes a reserved challenge. `:ok` if `challenge` was minted by
+  `reserve_challenge/0` and is unconsumed; `{:error, :unknown_challenge}`
+  otherwise (never minted, or already used). `:ets.take/2` is the atomic
+  take: two concurrent requests presenting the same challenge cannot both
+  consume it — the first-use replay race on a no-TLS transport is what this
+  closes (a captured request cannot be replayed even once, because the
+  challenge it carries was consumed by the legitimate arrival).
+  """
+  @spec consume_challenge(binary()) :: :ok | {:error, :unknown_challenge}
+  def consume_challenge(challenge) when is_binary(challenge) do
+    case :ets.take(@challenges, challenge) do
+      [{^challenge, true}] -> :ok
+      [] -> {:error, :unknown_challenge}
+    end
+  end
+
   @impl true
   def init([]) do
     # write_concurrency (not read_concurrency): claim/2 only ever inserts_new —
     # the table is write-only in the hot path (no lookups), so the write-optimized
-    # mode is the apt choice for a concurrent-request dedup ledger.
+    # mode is the apt choice for a concurrent-request dedup ledger. The
+    # challenges table additionally takes (consume_challenge/1) in the hot path.
     :ets.new(@table, [:set, :public, :named_table, write_concurrency: true])
+
+    :ets.new(@challenges, [:set, :public, :named_table, write_concurrency: true])
     {:ok, %{}}
   end
 end

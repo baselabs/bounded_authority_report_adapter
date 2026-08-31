@@ -206,15 +206,22 @@ Everything in §§2–9 applies unchanged (raw-body retention, the request-field
 contract, one `with` that fails closed to a uniform 401, identity binding, the
 nonce ledger), with three profile-specific obligations:
 
-1. **The nonce is mandatory.** Reserve a fresh challenge per request and pass
-   `nonce: {:required, challenge}` — the profile verifier rejects
-   `:not_required` outright, and §9's ledger is not optional on a transport
-   with no TLS.
-2. **Derive the target from the listener, never from the client.** The
-   `target_uri` your verifier expects must come from the address YOUR listener
-   bound (`http://127.0.0.1:PORT/PATH` or `http://[::1]:PORT/PATH`) — a Host
-   or X-Forwarded-* header is client-controlled data on an unauthenticated
-   transport.
+1. **The nonce is mandatory — and it is the listener's challenge, not the
+   signer's choice.** Mint a fresh single-use challenge per request, hand it
+   to the signer, and pass `nonce: {:required, challenge}` while consuming
+   the challenge ATOMICALLY at verification (`:ets.take`/a unique delete).
+   The profile verifier rejects `:not_required` outright. A client-chosen
+   nonce plus a dedupe ledger (the standard profile's §9 posture) still
+   leaves a first-use replay race on a no-TLS transport — a server-minted
+   single-use challenge closes it: the legitimate arrival consumes it before
+   any replay can.
+2. **Derive the target from the listener, never from the client — and refuse
+   to boot otherwise.** The `target_uri` your verifier expects must come from
+   the address YOUR listener bound (`http://127.0.0.1:PORT/PATH` or
+   `http://[::1]:PORT/PATH`) — a Host or X-Forwarded-* header is
+   client-controlled data on an unauthenticated transport, and a profile
+   receiver that starts on a routable interface is a configuration error
+   worth crashing for at boot, not a 401 storm.
 3. **Say what it is.** Loopback HTTP has no confidentiality and no server
    authentication and is not process isolation. It is a development-listener
    convenience, not an HTTPS substitute — keep profile selection explicit at
