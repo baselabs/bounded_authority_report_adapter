@@ -97,7 +97,7 @@ while IFS= read -r line; do
     echo "conformance-verify: FAIL — matrix row has an unknown class '$f1' (not in BAP's corpus taxonomy): '$line'" >&2
   elif ! valid_field "$VALID_SURFACES" "$f2"; then
     MALFORMED=1
-    echo "conformance-verify: FAIL — matrix row has an unknown surface '$f2' (expected check_envelope or verify_grant): '$line'" >&2
+    echo "conformance-verify: FAIL — matrix row has an unknown surface '$f2' (expected one of: check_envelope verify_grant check_local_loopback_envelope normalize_uri decode_proof): '$line'" >&2
   else
     ROWS+=("$f1"$'\t'"$f3")
   fi

@@ -39,12 +39,14 @@ mix run --no-halt -e EdgeAgent.Receiver.start
 # 2. terminal two — run the agent once against it
 mix run -e 'EdgeAgent.run() |> IO.inspect(label: "result")'
 
-# The local-loopback profile flow (development listeners): the same loop over
-# the byte-distinct ba+loopback-proof profile with a mandatory nonce and a
-# canonical http://127.0.0.1 / http://[::1] target (see
-# EdgeAgent.run_local_loopback/1 + the receiver's profile: :local_loopback
-# mode; tests/local_loopback_test.exs runs it over real IPv4 AND IPv6
-# listeners). Loopback HTTP is plain HTTP — not equivalent to HTTPS.
+# The local-loopback profile flow (development listeners): the byte-distinct
+# ba+loopback-proof profile. The flow is challenge-first — GET the receiver to
+# obtain a LISTENER-RESERVED single-use nonce, sign it via
+# EdgeAgent.run_local_loopback/1, POST; the receiver's profile mode derives its
+# target from its own bound ip/port, refuses to boot on a non-loopback
+# interface, and consumes the challenge atomically at verification
+# (tests/local_loopback_test.exs runs it over real IPv4 AND IPv6 listeners).
+# Loopback HTTP is plain HTTP — not equivalent to HTTPS.
 ```
 
 You should see:

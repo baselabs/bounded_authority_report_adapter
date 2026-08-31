@@ -61,7 +61,7 @@ Three things this profile is NOT:
 - **Not the verifier's whole job.** The verifying host owns nonce reservation, replay control, the
   listener-derived target, policy, and effects. This library signs; BAP verifies.
 
-The nonce is mandatory (a non-empty binary), and only canonical literal-loopback targets sign —
+The nonce is mandatory (a non-empty binary — on the verify side it is the listener's own single-use challenge), and only canonical literal-loopback targets sign —
 `localhost`, `127.0.0.2`, `0x7f.1`, `[::ffff:127.0.0.1]`, uppercase schemes, queries, fragments,
 HTTPS, and every other spelling fail closed. See the
 [recipe](docs/recipes.md#recipe-the-local-loopback-development-listener); the

@@ -39,12 +39,23 @@ verifier, deriving the expected target from the listener's own bound address —
 never from a Host or X-Forwarded-* header:
 
 ```elixir
-alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1
+alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: Loopback
+alias BoundedAuthorityProtocol.V1, as: StandardV1
+
+# 1. The LISTENER mints the challenge (single-use, atomically consumed at
+#    verify) — the signer never chooses the nonce.
+challenge = MyApp.ChallengeLedger.reserve()
+
+# 2. The signer binds it (this is the adapter call above).
+
+# 3. The verifier: the expected target comes from the listener's own bound
+#    address — never a Host or X-Forwarded-* header.
+:ok = MyApp.ChallengeLedger.consume!(challenge)
 
 {:ok, _facts} =
-  V1.check_envelope(
-    %V1.Credentials{grant: grant, proof: proof},
-    %V1.ExpectedRequest{
+  Loopback.check_envelope(
+    %StandardV1.Credentials{grant: grant, proof: proof},
+    %StandardV1.ExpectedRequest{
       trusted_issuer: trusted_issuer,
       issuer: issuer,
       audience: audience,
@@ -56,8 +67,8 @@ alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1
       evaluation_time: System.system_time(:second),
       clock_skew: 60,
       proof_max_age: 300,
-      nonce: {:required, reserved_nonce},          # mandatory on this profile
-      bounds: V1.Bounds.maximum()
+      nonce: {:required, challenge},          # mandatory on this profile
+      bounds: StandardV1.Bounds.maximum()
     }
   )
 ```
@@ -65,8 +76,10 @@ alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1
 The rules that bite:
 
 - The nonce is **required** at signing and `{:required, nonce}` at
-  verification — reserve it per request and dedupe it (replay defense is the
-  host's job; the profile assumes it).
+  verification — and it is the LISTENER's challenge, not the signer's choice:
+  the receiver mints it (single-use) and consumes it atomically at
+  verification, so a captured request cannot be replayed even once. The
+  signer reserves the challenge first (GET), then signs it in.
 - Only **canonical literal-loopback targets** sign. `localhost`, `127.0.0.2`,
   `0x7f.0.0.1`, `2130706433`, `[0:0:0:0:0:0:0:1]`, `[::ffff:127.0.0.1]`,
   uppercase schemes, explicit `:80`, leading-zero ports, dot-segments,

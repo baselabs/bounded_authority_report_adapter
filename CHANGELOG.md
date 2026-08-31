@@ -14,7 +14,7 @@ breaking changes (SemVer §4).
   key-handle callbacks, `%{grant, proof}` envelope, and closed error set as
   `sign_report/3`; two profile divergences: the nonce is required (non-empty
   binary), and only canonical literal-loopback HTTP targets
-  (`http://127.0.0.1[.port]/path`, `http://[::1][.port]/path`) sign. Admission
+  (`http://127.0.0.1[:port]/path`, `http://[::1][:port]/path`) sign. Admission
   is delegated to BAP's local-profile producer — this library adds no URI logic
   and never rewrites a caller-supplied target; `localhost`, other `127/8`
   spellings, integer/hex/octal IPv4, mapped/expanded IPv6, userinfo, trailing
