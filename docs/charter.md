@@ -79,7 +79,7 @@ These negatives are load-bearing — each maps to a different repo's job:
 - **It is not a transport.** Transport remains outside the library. This adapter
   envelopes a request before it is sent; how the envelope crosses a process or
   network boundary is the caller's concern.
-- **Publication does not widen its role.** The package is public on Hex at 0.4.0,
+- **Publication does not widen its role.** The package is public on Hex at 0.5.0,
   and its source is public. It is still only a signer and gains no verifier,
   runtime, transport, persistence, or custody authority from publication. The
   separate BA runtime remains a private commercial application and is not

@@ -58,14 +58,14 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # by docs/adr/0010-pin-bump-policy.md (a wire/verification change is a protocol
   # contract-major; an additive change is a minor).
   @protocol_app "bounded_authority_protocol"
-  @protocol_requirement "== 0.2.0"
+  @protocol_requirement "== 0.3.0"
 
   # The LOCKED version — the guard against silent lock drift. The exact requirement above
   # selects the authority suite's recertified protocol identity. A version bump is a
   # deliberate, reviewed change — the same commit raises the mix.exs requirement, BOTH wall
   # attributes, and the lock; this attribute makes the lock half mechanically loud instead
   # of trusted.
-  @protocol_locked_version "0.2.0"
+  @protocol_locked_version "0.3.0"
 
   defp requirement_tracks_locked_version?(requirement, locked_version) do
     requirement == "== #{locked_version}"

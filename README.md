@@ -17,7 +17,7 @@ verifier's side of the contract) is documented in
 ```elixir
 def deps do
   [
-    {:bounded_authority_report_adapter, "~> 0.4.0"}
+    {:bounded_authority_report_adapter, "~> 0.5.0"}
   ]
 end
 ```
@@ -35,12 +35,37 @@ The signer is universal across the four protocol objects, each through one share
 | Function | Object | Role |
 |---|---|---|
 | `sign_report/3` | holder proof (the grant passes through) | holder |
+| `sign_local_loopback_report/3` | local-loopback application proof (`ba+loopback-proof`) | holder |
 | `sign_anchor/3` | boundary anchor | role-agnostic |
 | `sign_key_transition/3` | key transition | role-agnostic |
 | `sign_grant/3` | grant | issuer-only, structurally gated |
 
 The role gate is load-bearing: a holder handle **cannot** sign a grant. Only a handle that resolves
 the issuer role may, so an agent can never mint its own capability.
+
+## The local-loopback profile (development listeners)
+
+`sign_local_loopback_report/3` is the explicit holder-side signer for BAP's byte-distinct
+`bap-application-proof/local-loopback-http/1` profile — plain HTTP on the *literal* loopback
+interface (`http://127.0.0.1` / `http://[::1]` only, exactly spelled). It exists for development
+listeners where TLS is impossible; the proof it produces carries `typ: ba+loopback-proof` and is
+rejected by the standard verifier, just as a standard `dpop+jwt` proof is rejected by the profile's
+verifier — the two families never mix.
+
+Three things this profile is NOT:
+
+- **Not equivalent to HTTPS.** Loopback HTTP has no confidentiality and no server authentication;
+  it is not process isolation either.
+- **Not inferable.** The profile is chosen by calling the function — there is no option on
+  `sign_report/3` and no detection from the URI, headers, or environment.
+- **Not the verifier's whole job.** The verifying host owns nonce reservation, replay control, the
+  listener-derived target, policy, and effects. This library signs; BAP verifies.
+
+The nonce is mandatory (a non-empty binary), and only canonical literal-loopback targets sign —
+`localhost`, `127.0.0.2`, `0x7f.1`, `[::ffff:127.0.0.1]`, uppercase schemes, queries, fragments,
+HTTPS, and every other spelling fail closed. See the
+[recipe](docs/recipes.md#recipe-the-local-loopback-development-listener); the
+`examples/edge_agent` app runs the flow over real IPv4 and IPv6 sockets.
 
 **See it run, self-contained (no database, no Docker):** the repository's `examples/` directory
 carries a Livebook demo that plays issuer → holder → verifier in one notebook, and an `edge_agent`

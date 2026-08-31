@@ -46,6 +46,7 @@ defmodule EdgeAgent.Receiver do
 
   @behaviour Plug
 
+  alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: Loopback
   alias BoundedAuthorityProtocol.V1
   alias BoundedAuthorityProtocol.V1.Jwk
   alias EdgeAgent.Receiver.NonceLedger
@@ -57,12 +58,20 @@ defmodule EdgeAgent.Receiver do
     # rather than as a 401 storm. The expected identity is overridable per
     # receiver instance (used by the wrong-identity tripwire test); the default is
     # the configured holder key (the demo's stand-in for the transport identity).
+    #
+    # Loopback mode (profile: :local_loopback) verifies via the profile's
+    # check_envelope and takes the expected target from `:target_uri` — the
+    # receiver's OWN bound listener (the ip/port it was started with), NEVER
+    # from a client-supplied Host/X-Forwarded-* header. The operator starting
+    # the listener owns that derivation; forwarding metadata is untrusted on a
+    # no-TLS transport.
     %{
+      profile: Keyword.get(opts, :profile, :standard),
       issuer_key_id: cfg(:issuer_key_id),
       issuer: cfg(:issuer),
       audience: cfg(:audience),
       operation: cfg(:operation),
-      target_uri: cfg(:target_uri),
+      target_uri: Keyword.get(opts, :target_uri, cfg(:target_uri)),
       clock_skew: cfg(:clock_skew),
       proof_max_age: cfg(:proof_max_age),
       trusted_issuer_key: public_key(cfg(:issuer_seed)),
@@ -102,38 +111,49 @@ defmodule EdgeAgent.Receiver do
   end
 
   # The complete safe path — ONE `with`, fail closed. A BAP-strict decode
-  # failure, a check_envelope failure, an identity-binding mismatch, AND a replay
-  # ALL collapse to :invalid -> the uniform 401. nil grant/proof (a header
-  # absent) hits check_envelope's non-binary catch-all clause -> :invalid.
+  # failure, a check_envelope failure (STANDARD or the local-loopback profile,
+  # per the receiver's configured profile), an identity-binding mismatch, AND a
+  # replay ALL collapse to :invalid -> the uniform 401. nil grant/proof (a
+  # header absent) hits the verifier's non-binary catch-all clause -> :invalid.
   defp verify(raw_body, grant, proof, invocation_id, nonce, config) do
     with {:ok, cast_arguments} <- V1.Json.decode(raw_body),
          {:ok, facts} <-
-           V1.check_envelope(
-             %V1.Credentials{grant: grant, proof: proof},
-             %V1.ExpectedRequest{
-               trusted_issuer: %V1.TrustedIssuer{
-                 key_id: config.issuer_key_id,
-                 public_key: config.trusted_issuer_key
-               },
-               issuer: config.issuer,
-               audience: config.audience,
-               method: "POST",
-               target_uri: config.target_uri,
-               invocation_id: invocation_id,
-               operation: config.operation,
-               cast_arguments: cast_arguments,
-               evaluation_time: System.system_time(:second),
-               clock_skew: config.clock_skew,
-               proof_max_age: config.proof_max_age,
-               nonce: {:required, nonce},
-               bounds: V1.Bounds.maximum()
-             }
-           ),
+           check_envelope(config.profile, grant, proof, %V1.ExpectedRequest{
+             trusted_issuer: %V1.TrustedIssuer{
+               key_id: config.issuer_key_id,
+               public_key: config.trusted_issuer_key
+             },
+             issuer: config.issuer,
+             audience: config.audience,
+             method: "POST",
+             target_uri: config.target_uri,
+             invocation_id: invocation_id,
+             operation: config.operation,
+             cast_arguments: cast_arguments,
+             evaluation_time: System.system_time(:second),
+             clock_skew: config.clock_skew,
+             proof_max_age: config.proof_max_age,
+             nonce: {:required, nonce},
+             bounds: V1.Bounds.maximum()
+           }),
          :ok <- bind_and_dedupe(facts.holder_thumbprint, config.expected_identity_key, nonce) do
       :ok
     else
       _ -> :invalid
     end
+  end
+
+  # The profile selection is EXPLICIT per receiver instance (boot-time), never
+  # per request data: the standard verifier rejects ba+loopback-proof bytes and
+  # the profile verifier rejects dpop+jwt bytes, each with its own admission
+  # rules (the standard target is the configured https URI; the loopback target
+  # is the listener-derived canonical http://127.0.0.1|[::1] URI).
+  defp check_envelope(:standard, grant, proof, expected) do
+    V1.check_envelope(%V1.Credentials{grant: grant, proof: proof}, expected)
+  end
+
+  defp check_envelope(:local_loopback, grant, proof, expected) do
+    Loopback.check_envelope(%V1.Credentials{grant: grant, proof: proof}, expected)
   end
 
   # §8 identity binding + §9 nonce dedup folded into one step: both need the

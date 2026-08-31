@@ -56,3 +56,13 @@
 See [Getting started](docs/getting-started.md), [Errors](docs/errors.md),
 [Telemetry](docs/telemetry.md), and
 [Consumer integration](docs/consumer-integration.md) for the long forms.
+
+13. The local-loopback profile is an explicit decision, never an inference.
+   `sign_local_loopback_report/3` is the ONLY way to produce
+   `ba+loopback-proof` bytes; there is no profile option on `sign_report/3`
+   and nothing detects the transport for you. The nonce is mandatory, only
+   canonical `http://127.0.0.1`/`http://[::1]` targets sign, and the verifying
+   host owns nonce reservation, replay control, and the listener-derived
+   target. Loopback HTTP is not equivalent to HTTPS — see
+   [Recipes](docs/recipes.md#recipe-the-local-loopback-development-listener).
+

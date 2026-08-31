@@ -3,6 +3,27 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 0.5.0
+
+The protocol dependency now selects `bounded_authority_protocol == 0.3.0`
+exactly. BAP 0.3.0 adds the local-loopback application-proof profile without
+changing any standard `dpop+jwt` byte, bound, or verdict — the four existing
+signing APIs, return shapes, key-handle contract, telemetry, and produced V1
+wire forms are unchanged, and the standard conformance oracle re-ran green at
+the new pin. The version moves to a pre-1.0 minor because the exact pin is a
+package-resolution break for consumers retaining BAP 0.2.x (see
+ADR-0018 for the pin-policy record).
+
+New capability: `sign_local_loopback_report/3` signs the byte-distinct
+`ba+loopback-proof` profile for canonical `http://127.0.0.1` / `http://[::1]`
+targets with a mandatory nonce. It is additive — nothing existing calls it —
+and its errors are the same closed `sign_error()` set. Local-loopback HTTP is
+plain HTTP (no TLS, not equivalent to HTTPS); the verifying host owns nonce
+reservation, replay control, and listener-derived target state.
+
+Run `mix deps.get` and confirm your lock contains one BAP 0.3.0 entry. Do not
+override BARA back to BAP 0.2.x or retain parallel BAP lines.
+
 ## 0.4.0
 
 The protocol dependency now selects `bounded_authority_protocol == 0.2.0`

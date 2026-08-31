@@ -4,6 +4,63 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0, `0.x` minor bumps may carry
 breaking changes (SemVer §4).
 
+## [0.5.0] — 2026-08-31
+
+### Added — explicit local-loopback application-proof signer
+
+- Add `sign_local_loopback_report/3` — the holder-side signer for BAP's
+  byte-distinct `bap-application-proof/local-loopback-http/1` profile
+  (`typ: "ba+loopback-proof"`, BAP 0.3.0 / BAP ADR-0027). Same report shape,
+  key-handle callbacks, `%{grant, proof}` envelope, and closed error set as
+  `sign_report/3`; two profile divergences: the nonce is required (non-empty
+  binary), and only canonical literal-loopback HTTP targets
+  (`http://127.0.0.1[.port]/path`, `http://[::1][.port]/path`) sign. Admission
+  is delegated to BAP's local-profile producer — this library adds no URI logic
+  and never rewrites a caller-supplied target; `localhost`, other `127/8`
+  spellings, integer/hex/octal IPv4, mapped/expanded IPv6, userinfo, trailing
+  dots, percent-encoded hosts, uppercase schemes, explicit `:80`,
+  leading-zero ports, dot-segment paths, queries, fragments, HTTPS, and every
+  other non-canonical form fails closed as `{:producer_error, :invalid}`.
+- Profile selection is the function name. No profile option exists on
+  `sign_report/3`, and none is inferred from the URI, headers, environment, or
+  a failed producer call. Standard `dpop+jwt` bytes and loopback bytes are
+  mutually rejected in both directions (structurally: kind-gated assemblers,
+  typ-gated parsers).
+- Telemetry: the object axis gains `:local_loopback_report` (additive; the
+  closed, value-free event contract is unchanged).
+
+### Changed
+
+- Select `bounded_authority_protocol == 0.3.0` exactly (from `== 0.2.0`).
+  Root/example locks and the dependency wall move together in one commit. The
+  span is `lib/`-non-empty (the profile surface), so the bump rides an
+  explicit owner-authorized supersession of ADR-0010's alignment default —
+  recorded in ADR-0018, with
+  BA re-alignment expected at the authority runtime's next dependency pass.
+- `sign_report/3` and all standard `dpop+jwt` behavior are unchanged; the
+  shared signing tail is parameterized by the BAP assembler (standard vs
+  profile) with no behavior change to the four existing entry points.
+
+### Verification
+
+- Execute BAP's complete local-loopback profile corpus through the dependency
+  (8 proof cases x decode-local/decode-standard/envelope verdicts, 36 URI
+  admission cases, index sha256 self-verification, byte-exact certified-proof
+  reproduction) alongside the unchanged standard corpus oracle; prove the
+  exact `sign/2` message equals BAP's local-profile signing input and that
+  assembly is BAP's.
+- Mutation-prove the guards: profile selection, the mandatory nonce, the
+  literal-host pass-through (the silent-rewrite design reds the deceptive-host
+  matrix), BAP-delegation (bounds-dropping and cross-pair wiring each red),
+  corpus verdict comparison, and producer-input drift.
+- Run the external-consumer smoke over real IPv4 and IPv6 loopback listeners
+  (the example app signs, POSTs, and verifies via the profile's
+  `check_envelope`; standard bytes are rejected there and loopback bytes by
+  the standard receiver; wrong-nonce and replay rejections are exercised).
+- Full library/example gate battery, package census + unpacked-package
+  consumer smoke, two-build reproducibility, and the supply-chain workflow on
+  the tag.
+
 ## [0.4.0] — 2026-08-27
 
 ### Changed

@@ -27,9 +27,17 @@ defmodule BoundedAuthorityReportAdapter do
       returning the compact a verifier checks via `verify_key_transition/4`. Role-agnostic
       (mirrors `sign_anchor/3`, NOT `sign_grant/3`): the current key's identity is resolved
       atomically via `key_identity/1` — see ADR-0009.
+    * **Local-loopback proof signing** (`sign_local_loopback_report/3`) — the explicit
+      holder-side signer for the byte-distinct local-loopback HTTP application proof
+      (`bap-application-proof/local-loopback-http/1`, protected `typ: "ba+loopback-proof"`;
+      BAP 0.3.0 / BAP ADR-0027). Same report shape and key-handle callbacks as
+      `sign_report/3`, with TWO profile divergences: the nonce is REQUIRED, and the
+      target must be a canonical `http://127.0.0.1`/`http://[::1]` URI. Profile
+      selection is the FUNCTION NAME — never an option, never inferred from the
+      URI, headers, environment, or a failed producer call.
 
-  The pattern generalizes to any BAP protocol object; the four named instantiations
-  (proof, boundary-anchor, grant, key-transition) are complete.
+  The pattern generalizes to any BAP protocol object; the four standard
+  instantiations plus the local-loopback profile sibling are complete.
 
   ## The key-handle contract (charter §6 invariant 1)
 
@@ -67,6 +75,7 @@ defmodule BoundedAuthorityReportAdapter do
       composable lib an edge agent (or any signing party) calls.
   """
 
+  alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopbackHttp
   alias BoundedAuthorityProtocol.V1.Json
   alias BoundedAuthorityReportAdapter.Telemetry
 
@@ -80,6 +89,21 @@ defmodule BoundedAuthorityReportAdapter do
           invocation_id: binary(),
           cast_arguments: Json.value(),
           nonce: nil | binary()
+        }
+
+  @typedoc """
+  The report shape `sign_local_loopback_report/3` consumes — the same field set
+  as `report()`, except the nonce is REQUIRED (a non-empty binary; enforced at
+  runtime — a typespec cannot express non-emptiness).
+  """
+  @type local_loopback_report :: %{
+          grant_compact: binary(),
+          operation: binary(),
+          method: binary(),
+          target_uri: binary(),
+          invocation_id: binary(),
+          cast_arguments: Json.value(),
+          nonce: binary()
         }
 
   @type envelope :: %{grant: binary(), proof: binary()}
@@ -215,7 +239,104 @@ defmodule BoundedAuthorityReportAdapter do
          proof = build_proof(report, holder_public_key, proof_id, issued_at),
          {:ok, signing_input} <- produce_proof_signing_input(proof, bounds),
          {:ok, proof_compact} <-
-           sign_and_assemble(key_handle, signing_input, holder_public_key, bounds) do
+           sign_and_assemble(
+             key_handle,
+             signing_input,
+             holder_public_key,
+             bounds,
+             &assemble_standard_compact/3
+           ) do
+      {:ok, %{grant: report.grant_compact, proof: proof_compact}}
+    end
+  end
+
+  @doc """
+  Signs the byte-distinct local-loopback HTTP application proof — the explicit
+  holder-side entry point for BAP's `bap-application-proof/local-loopback-http/1`
+  profile (`typ: "ba+loopback-proof"`, BAP ADR-0027). Returns the same
+  `%{grant: grant, proof: proof_compact}` envelope shape as `sign_report/3`; the
+  verifier checks it via
+  `BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1.check_envelope/2`.
+
+  This library signs; BAP verifies. Local-loopback HTTP is plain HTTP on the
+  literal loopback interface — it has **no TLS confidentiality or server
+  authentication and is not equivalent to HTTPS**. The verifier (the listener's
+  operator) owns trusted profile selection, nonce reservation and replay
+  control, listener-derived target state, policy, and effects — none of that
+  lives here.
+
+  ## The two profile divergences from `sign_report/3`
+
+    * **The nonce is required.** `nonce` must be a non-empty binary; the proof
+      binds it and the verifier MUST reserve + check it (the profile's
+      replay defense on a transport with no TLS).
+    * **The target must be a canonical literal-loopback HTTP URI** — exactly
+      `http://127.0.0.1[:port]/path` or `http://[::1][:port]/path` (decimal
+      port, `:80` elided, lowercase scheme, normalized path). Admission is
+      BAP's, by delegation: the caller's `target_uri` is passed through
+      UNCHANGED to BAP's local-profile producer, which requires the URI to
+      equal its own normalization — so `localhost`, other `127/8` spellings,
+      integer/hex/octal IPv4 forms, mapped/expanded IPv6, userinfo, trailing
+      dots, percent-encoded hosts, uppercase schemes, explicit `:80`,
+      leading-zero ports, dot-segment paths, queries, fragments, HTTPS, and
+      every other non-canonical or non-loopback form fails closed here as
+      `{:producer_error, :invalid}`. This library adds NO URI logic and never
+      silently rewrites a caller-supplied target.
+
+  Profile selection is the function name — there is no profile option on
+  `sign_report/3`, and no inference from the URI, headers, environment, or a
+  failed producer call. The two proof families are byte-distinct and mutually
+  rejected in both directions: a `ba+loopback-proof` is rejected by the
+  standard `check_envelope/2`, and a standard `dpop+jwt` proof is rejected by
+  the profile's `check_envelope/2`.
+
+  ## Options
+
+  Same as `sign_report/3`: `:bounds` (forwarded unchanged to BAP's producer
+  AND the profile assembler), `:issued_at`, `:proof_id`.
+
+  ## Errors (closed-atom set — no key material, nonce values, proof material, or report content)
+
+    * `:invalid_report` — a required field is missing, or the `nonce` is
+      absent, empty, or not a binary.
+    * `:invalid_key_handle` — the handle is malformed, or the handle's
+      `public_key/1` rejected / returned a non-32-byte key.
+    * `:signing_failed` — the holder's `sign/2` rejected, returned a
+      non-64-byte signature, violated the `{:ok, _} | {:error, _}` contract, or
+      the signature did not verify against the resolved holder public key.
+    * `{:producer_error, :invalid}` — BAP's local-profile producer or assembler
+      rejected the proof: a non-canonical or non-loopback `target_uri` (see
+      above), a nonce that violates BAP's bounds (oversized or not a valid
+      UTF-8 string — BARA checks presence and shape, BAP checks the profile's
+      semantics), or a bound violation.
+  """
+  @doc since: "0.5.0"
+  @spec sign_local_loopback_report(local_loopback_report(), key_handle(), opts()) ::
+          {:ok, envelope()} | {:error, sign_error()}
+  def sign_local_loopback_report(report, key_handle, opts \\ %{}) do
+    Telemetry.sign_span(:local_loopback_report, fn ->
+      do_sign_local_loopback_report(report, key_handle, opts)
+    end)
+  end
+
+  defp do_sign_local_loopback_report(report, key_handle, opts) do
+    opts = normalize_opts(opts)
+    bounds = Map.get(opts, :bounds, %{})
+    issued_at = Map.get(opts, :issued_at, System.system_time(:second))
+    proof_id = Map.get(opts, :proof_id) || generate_uuid()
+
+    with {:ok, report} <- validate_local_loopback_report(report),
+         {:ok, holder_public_key} <- resolve_public_key(key_handle),
+         proof = build_proof(report, holder_public_key, proof_id, issued_at),
+         {:ok, signing_input} <- produce_local_loopback_signing_input(proof, bounds),
+         {:ok, proof_compact} <-
+           sign_and_assemble(
+             key_handle,
+             signing_input,
+             holder_public_key,
+             bounds,
+             &LocalLoopbackHttp.assemble_compact/3
+           ) do
       {:ok, %{grant: report.grant_compact, proof: proof_compact}}
     end
   end
@@ -285,7 +406,14 @@ defmodule BoundedAuthorityReportAdapter do
     with {:ok, {key_id, public_key}} <- resolve_key_identity(key_handle),
          {:ok, anchor} <- build_anchor(anchor_input, public_key, key_id, anchored_at),
          {:ok, signing_input} <- produce_anchor_signing_input(anchor, bounds),
-         {:ok, anchor_compact} <- sign_and_assemble(key_handle, signing_input, public_key, bounds) do
+         {:ok, anchor_compact} <-
+           sign_and_assemble(
+             key_handle,
+             signing_input,
+             public_key,
+             bounds,
+             &assemble_standard_compact/3
+           ) do
       {:ok, %{anchor: anchor_compact}}
     end
   end
@@ -350,7 +478,14 @@ defmodule BoundedAuthorityReportAdapter do
     with {:ok, {key_id, public_key}} <- resolve_signing_identity(key_handle),
          {:ok, grant} <- build_grant(grant_input, key_id),
          {:ok, signing_input} <- produce_grant_signing_input(grant, bounds),
-         {:ok, grant_compact} <- sign_and_assemble(key_handle, signing_input, public_key, bounds) do
+         {:ok, grant_compact} <-
+           sign_and_assemble(
+             key_handle,
+             signing_input,
+             public_key,
+             bounds,
+             &assemble_standard_compact/3
+           ) do
       {:ok, %{grant: grant_compact}}
     end
   end
@@ -415,7 +550,13 @@ defmodule BoundedAuthorityReportAdapter do
            build_key_transition(transition_input, current_key_id, current_public_key),
          {:ok, signing_input} <- produce_key_transition_signing_input(transition, bounds),
          {:ok, compact} <-
-           sign_and_assemble(key_handle, signing_input, current_public_key, bounds) do
+           sign_and_assemble(
+             key_handle,
+             signing_input,
+             current_public_key,
+             bounds,
+             &assemble_standard_compact/3
+           ) do
       {:ok, %{key_transition: compact}}
     end
   end
@@ -427,12 +568,38 @@ defmodule BoundedAuthorityReportAdapter do
   # library signs flows through here. verify_signature is the wrong-key guard
   # (the RA1 cross-vendor CV-finding): a signature that does not verify against
   # the resolved public key is :signing_failed, never a silent false-success.
+  #
+  # The assembler parameter selects BAP's compact assembler for the signing
+  # input's profile — the standard kind goes to V1.assemble_compact/3, the
+  # local-loopback kind to the profile's assemble_compact/3. BAP enforces the
+  # pairing structurally (each assembler accepts exactly its own input kinds),
+  # so a mis-wired pair fails closed as {:producer_error, :invalid} rather than
+  # producing wrong-profile bytes.
   # ---------------------------------------------------------------------------
 
-  defp sign_and_assemble(key_handle, signing_input, public_key, bounds) do
+  @compile {:inline, assemble_standard_compact: 3}
+
+  defp assemble_standard_compact(signing_input, signature, bounds) do
+    BoundedAuthorityProtocol.V1.assemble_compact(signing_input, signature, bounds)
+  end
+
+  @spec sign_and_assemble(
+          key_handle(),
+          BoundedAuthorityProtocol.V1.SigningInput.t(),
+          binary(),
+          term(),
+          (BoundedAuthorityProtocol.V1.SigningInput.t(), binary(), term() ->
+             {:ok, binary()} | {:error, :invalid})
+        ) :: {:ok, binary()} | {:error, :signing_failed | {:producer_error, :invalid}}
+
+  defp sign_and_assemble(key_handle, signing_input, public_key, bounds, assembler)
+       when is_function(assembler, 3) do
     with {:ok, signature} <- sign_via_handle(key_handle, signing_input.message),
          :ok <- verify_signature(signing_input.message, signature, public_key) do
-      assemble_compact(signing_input, signature, bounds)
+      case assembler.(signing_input, signature, bounds) do
+        {:ok, compact} -> {:ok, compact}
+        {:error, :invalid} -> {:error, {:producer_error, :invalid}}
+      end
     end
   end
 
@@ -477,6 +644,24 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   defp validate_report(_report), do: {:error, :invalid_report}
+
+  # The local-loopback report: the SAME field checks as validate_report/1 (the
+  # shared helpers carry every invariant), plus the profile's ONE divergence —
+  # the nonce is REQUIRED (nil is fine on the standard profile, which treats it
+  # as optional; the loopback profile's replay defense assumes it). Presence +
+  # shape here; profile semantics + bounds stay BAP's at produce time.
+  defp validate_local_loopback_report(report) when is_map(report) do
+    with {:ok, report} <- validate_report(report),
+         :ok <- require_non_empty_nonce(report.nonce) do
+      {:ok, report}
+    end
+  end
+
+  defp validate_local_loopback_report(_report), do: {:error, :invalid_report}
+
+  defp require_non_empty_nonce(nonce) when is_binary(nonce) and byte_size(nonce) > 0, do: :ok
+
+  defp require_non_empty_nonce(_nonce), do: {:error, :invalid_report}
 
   defp required_binary(report, key) do
     case Map.fetch(report, key) do
@@ -596,6 +781,17 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp produce_proof_signing_input(proof, bounds) do
     case BoundedAuthorityProtocol.V1.proof_signing_input(proof, bounds) do
+      {:ok, signing_input} -> {:ok, signing_input}
+      {:error, :invalid} -> {:error, {:producer_error, :invalid}}
+    end
+  end
+
+  # The local-loopback profile's producer — the same fold, through the profile
+  # facade. Admission (canonical literal-loopback URI) and the profile's
+  # mandatory-nonce semantics are enforced HERE, in BAP, by delegation — this
+  # library passes the caller's target_uri through unchanged.
+  defp produce_local_loopback_signing_input(proof, bounds) do
+    case LocalLoopbackHttp.proof_signing_input(proof, bounds) do
       {:ok, signing_input} -> {:ok, signing_input}
       {:error, :invalid} -> {:error, {:producer_error, :invalid}}
     end
@@ -798,23 +994,11 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  defp assemble_compact(signing_input, signature, bounds) do
-    # Generic over the signing input's kind (:proof, :boundary_anchor, ...) —
-    # V1.assemble_compact/3 dispatches on kind and validates via the matching
-    # codec under the same bounds used to produce the signing input. All four
-    # public signing paths flow through here.
-    case BoundedAuthorityProtocol.V1.assemble_compact(signing_input, signature, bounds) do
-      {:ok, compact} -> {:ok, compact}
-      {:error, :invalid} -> {:error, {:producer_error, :invalid}}
-    end
-  end
-
   # Coerce a non-map opts (a caller bug) to the empty map rather than crashing with a
   # value-echoing BadMapError inside Map.get/3 — the closed-atom error discipline. opts is
   # caller-supplied config (bounds windows, timestamps); a non-map is a type violation per
-  # every *_opts() @spec, and the defaults are a safe fallback. Applied to all four sign_*
-  # entry points (sign_report/3, sign_anchor/3, sign_grant/3, sign_key_transition/3) — the
-  # same contract everywhere.
+  # every *_opts() @spec, and the defaults are a safe fallback. Applied to every sign_*
+  # entry point — the same contract everywhere.
   defp normalize_opts(opts) when is_map(opts), do: opts
   defp normalize_opts(_opts), do: %{}
 

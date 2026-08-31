@@ -27,6 +27,7 @@ Objects (one per signing entry point):
 | `:anchor` | `sign_anchor/3` |
 | `:grant` | `sign_grant/3` |
 | `:key_transition` | `sign_key_transition/3` |
+| `:local_loopback_report` | `sign_local_loopback_report/3` |
 
 Result classes (the classified outcome of a span):
 
