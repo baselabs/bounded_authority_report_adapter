@@ -7,6 +7,80 @@ HSM/KMS recipes reference your client module via config; compiling them as-is em
 undefined-integration warnings naming exactly those modules — that is the paste-verify
 passing (the marked integration points are yours to fill).
 
+## Recipe: the local-loopback development listener
+
+`sign_local_loopback_report/3` exists for one situation: a development
+listener that is *on the literal loopback interface* and cannot do TLS. It
+produces the byte-distinct `ba+loopback-proof` profile
+(`bap-application-proof/local-loopback-http/1`); the standard
+`dpop+jwt` verifier rejects those bytes and the profile verifier rejects
+standard bytes, so the two flows can never be confused on the wire.
+
+```elixir
+# The holder side — the target is the listener's OWN canonical URL.
+report = %{
+  grant_compact: grant_compact,          # issuer-signed, passes through untouched
+  operation: "report_external_materialization",
+  method: "POST",
+  target_uri: "http://127.0.0.1:4000/invoke",   # or "http://[::1]:4000/invoke"
+  invocation_id: invocation_id,           # a fresh UUIDv4 per request
+  cast_arguments: cast_arguments,         # BAP-tagged Json.value()
+  nonce: nonce                            # REQUIRED — the listener's challenge
+}
+
+{:ok, %{grant: grant, proof: proof}} =
+  BoundedAuthorityReportAdapter.sign_local_loopback_report(
+    report, {MyApp.DevHandle, :dev}, %{}
+  )
+```
+
+The verifier (the listener's operator) checks it with the profile's envelope
+verifier, deriving the expected target from the listener's own bound address —
+never from a Host or X-Forwarded-* header:
+
+```elixir
+alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1
+
+{:ok, _facts} =
+  V1.check_envelope(
+    %V1.Credentials{grant: grant, proof: proof},
+    %V1.ExpectedRequest{
+      trusted_issuer: trusted_issuer,
+      issuer: issuer,
+      audience: audience,
+      method: "POST",
+      target_uri: "http://127.0.0.1:4000/invoke",  # listener-derived
+      invocation_id: invocation_id,
+      operation: "report_external_materialization",
+      cast_arguments: cast_arguments,
+      evaluation_time: System.system_time(:second),
+      clock_skew: 60,
+      proof_max_age: 300,
+      nonce: {:required, reserved_nonce},          # mandatory on this profile
+      bounds: V1.Bounds.maximum()
+    }
+  )
+```
+
+The rules that bite:
+
+- The nonce is **required** at signing and `{:required, nonce}` at
+  verification — reserve it per request and dedupe it (replay defense is the
+  host's job; the profile assumes it).
+- Only **canonical literal-loopback targets** sign. `localhost`, `127.0.0.2`,
+  `0x7f.0.0.1`, `2130706433`, `[0:0:0:0:0:0:0:1]`, `[::ffff:127.0.0.1]`,
+  uppercase schemes, explicit `:80`, leading-zero ports, dot-segments,
+  queries, fragments, and HTTPS all fail closed with
+  `{:error, {:producer_error, :invalid}}`. Nothing is rewritten for you.
+- Loopback HTTP is **not equivalent to HTTPS** — no confidentiality, no server
+  authentication, and not process isolation. Keep it on the literal loopback
+  interface and behind an explicit profile decision.
+
+The runnable end-to-end version (sign, POST, verify, replay-dedupe over real
+IPv4 and IPv6 sockets) is the edge-agent example's run_local_loopback entry
+and its receiver's profile mode — see examples/edge_agent in the repository.
+
+
 ## Recipe: a network-HSM key handle
 
 Requires: nothing beyond this package (the HSM client is injected via config — your client

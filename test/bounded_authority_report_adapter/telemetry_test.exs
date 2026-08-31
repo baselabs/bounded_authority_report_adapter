@@ -89,6 +89,12 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
     }
   end
 
+  # The local-loopback variant of the report: a canonical literal-loopback
+  # target and a REQUIRED nonce (the profile's admission is BAP's).
+  defp build_local_loopback_report do
+    %{build_report() | target_uri: "http://127.0.0.1:4000/invoke", nonce: "challenge-001"}
+  end
+
   defp holder_handle, do: {RawKey, TestKeys.holder_keypair()}
 
   defp anchor_input do
@@ -198,9 +204,9 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
   defp failure_driver(:raw_map_cast_arguments),
     do: {%{build_report() | cast_arguments: %{"record" => 1}}, holder_handle()}
 
-  # --- all four objects emit -----------------------------------------------------
+  # --- every object emits --------------------------------------------------------
 
-  test "all four entry points emit their object atom" do
+  test "every entry point emits its object atom" do
     objects_with_calls = [
       {:report,
        fn ->
@@ -222,6 +228,14 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
            transition_input(),
            holder_handle(),
            %{}
+         )
+       end},
+      {:local_loopback_report,
+       fn ->
+         BoundedAuthorityReportAdapter.sign_local_loopback_report(
+           build_local_loopback_report(),
+           holder_handle(),
+           %{issued_at: @now - 50}
          )
        end}
     ]

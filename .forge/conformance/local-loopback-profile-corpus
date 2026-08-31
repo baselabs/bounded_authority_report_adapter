@@ -1,0 +1,14 @@
+# .forge/conformance/local-loopback-profile-corpus — the class x surface x test-id matrix
+# for the 0.5.0 local-loopback profile corpus harness (BAP 0.3.0's packaged
+# bap-application-proof/local-loopback-http/1 corpus, executed through the
+# dependency). Surfaces (from .forge/conformance-surfaces): the profile
+# envelope verifier, the two proof decoders, the URI admission normalizer,
+# and the producer/assembler pair.
+#
+# TAB-separated: class	surface	evidence
+valid	check_local_loopback_envelope	the certified proofs reproduce byte-exactly through the producer/assembler pair
+valid	normalize_uri	every URI admission case matches its declared verdict through the dependency
+invalid_nonce	check_local_loopback_envelope	every certified proof case matches its three declared verdicts
+invalid_uri	normalize_uri	every URI admission case matches its declared verdict through the dependency
+tamper_meaningful_byte	check_local_loopback_envelope	every certified proof case matches its three declared verdicts
+invalid_encoding	decode_proof	every certified proof case matches its three declared verdicts

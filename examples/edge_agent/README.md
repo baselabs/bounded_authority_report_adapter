@@ -38,6 +38,13 @@ mix run --no-halt -e EdgeAgent.Receiver.start
 
 # 2. terminal two — run the agent once against it
 mix run -e 'EdgeAgent.run() |> IO.inspect(label: "result")'
+
+# The local-loopback profile flow (development listeners): the same loop over
+# the byte-distinct ba+loopback-proof profile with a mandatory nonce and a
+# canonical http://127.0.0.1 / http://[::1] target (see
+# EdgeAgent.run_local_loopback/1 + the receiver's profile: :local_loopback
+# mode; tests/local_loopback_test.exs runs it over real IPv4 AND IPv6
+# listeners). Loopback HTTP is plain HTTP — not equivalent to HTTPS.
 ```
 
 You should see:

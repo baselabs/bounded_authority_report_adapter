@@ -28,7 +28,9 @@
 #      identity re-encode (decode + re-encode without flipping) stays GREEN,
 #      proving re-encoding alone is not the cause of the tamper test's red.
 #
-# Usage: .forge/conformance-verify.sh <matrix-path>
+# Usage: .forge/conformance-verify.sh <matrix-path> [test-file]
+#   The test-file defaults to the RA2 roundtrip harness; the 0.5.0
+#   local-loopback profile corpus matrix passes its own harness file.
 # Exit: 0 if the matrix is well-formed, every named cell's red-assertion holds,
 #       and the negative control stays green; nonzero otherwise.
 
@@ -38,7 +40,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
 MATRIX="${1:-.forge/conformance/b2-ra-conformance-roundtrip}"
-TEST_FILE="test/bounded_authority_report_adapter/conformance_roundtrip_test.exs"
+TEST_FILE="${2:-test/bounded_authority_report_adapter/conformance_roundtrip_test.exs}"
 
 if [ ! -f "$MATRIX" ]; then
   echo "conformance-verify: FAIL — matrix not found at $MATRIX" >&2
@@ -73,7 +75,7 @@ ROWS=()
 # Valid classes (BAP's 16-class corpus taxonomy) and surfaces this slice
 # exercises. A fabricated class/surface (e.g. made_up_class) is rejected.
 VALID_CLASSES=" valid boundary_near exact_bound maximum_plus_one invalid_duplicate invalid_encoding invalid_algorithm invalid_key invalid_claim invalid_time invalid_nonce invalid_uri invalid_request invalid_selector invalid_limit tamper_meaningful_byte "
-VALID_SURFACES=" check_envelope verify_grant "
+VALID_SURFACES=" check_envelope verify_grant check_local_loopback_envelope normalize_uri decode_proof "
 
 valid_field() {
   # $1 = the space-padded whitelist, $2 = the value

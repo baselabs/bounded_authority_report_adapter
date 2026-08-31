@@ -92,6 +92,63 @@ defmodule EdgeAgent do
     )
   end
 
+  @doc """
+  Runs the edge agent once over the LOCAL-LOOPBACK profile — the byte-distinct
+  `ba+loopback-proof` flow (`sign_local_loopback_report/3`) for a development
+  listener on the literal loopback interface.
+
+  The `target_uri` is the receiver's own canonical URL (`:receiver_url` —
+  exactly `http://127.0.0.1:PORT/PATH` or `http://[::1]:PORT/PATH`), and the
+  receiver verifies it against the target derived from ITS OWN bound listener,
+  never from client-supplied headers. Local-loopback HTTP is plain HTTP — no
+  TLS confidentiality or server authentication, NOT equivalent to HTTPS — and
+  the nonce is mandatory: the receiver reserves and dedupes it.
+
+  A non-canonical or non-loopback `:receiver_url` fails closed at signing
+  (`{:producer_error, :invalid}` — BAP's profile admission).
+  """
+  @spec run_local_loopback(keyword()) ::
+          {:ok, non_neg_integer(), binary()} | {:error, term()}
+  def run_local_loopback(opts \\ []) do
+    holder = holder_keypair()
+    {holder_pub, _holder_priv} = holder
+    {:ok, holder_thumbprint} = V1.Jwk.public_key_thumbprint_raw(holder_pub, %{})
+
+    {grant_compact, _issuer_pub} = EdgeAgent.DemoIssuer.signed_grant(holder_thumbprint)
+
+    raw_body = cfg(:report_body)
+    {:ok, cast_arguments} = V1.Json.decode(raw_body)
+
+    invocation_id = generate_invocation_id()
+    nonce = generate_nonce()
+
+    report = %{
+      grant_compact: grant_compact,
+      operation: cfg(:operation),
+      method: "POST",
+      target_uri: Keyword.get(opts, :receiver_url, cfg(:loopback_receiver_url)),
+      invocation_id: invocation_id,
+      cast_arguments: cast_arguments,
+      nonce: nonce
+    }
+
+    with {:ok, %{grant: ^grant_compact, proof: proof}} <-
+           BoundedAuthorityReportAdapter.sign_local_loopback_report(
+             report,
+             {EdgeAgent.Handle, holder},
+             %{}
+           ) do
+      post(
+        Keyword.get(opts, :receiver_url, cfg(:loopback_receiver_url)),
+        grant_compact,
+        proof,
+        raw_body,
+        invocation_id,
+        nonce
+      )
+    end
+  end
+
   defp post(url, grant, proof, body, invocation_id, nonce) do
     headers = [
       {"content-type", "application/json"},

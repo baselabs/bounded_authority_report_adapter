@@ -29,6 +29,10 @@ config :edge_agent,
   receiver_url: "http://127.0.0.1:4001/report",
   receiver_ip: {127, 0, 0, 1},
   receiver_port: 4001,
+  # The local-loopback profile flow (EdgeAgent.run_local_loopback/1): the
+  # canonical literal-loopback target of the development receiver. Must be
+  # exactly http://127.0.0.1:PORT/PATH or http://[::1]:PORT/PATH.
+  loopback_receiver_url: "http://127.0.0.1:4002/report",
   # --- verify windows (§4) -----------------------------------------------------
   clock_skew: 60,
   proof_max_age: 300

@@ -21,7 +21,7 @@ Runs the full capability round-trip in-process and plays all three roles so you 
 what the adapter does and doesn't do:
 
 1. **Issuer** mints a grant (played here only so the demo has a real grant — *not* the adapter's job).
-2. **Holder** — `BoundedAuthorityReportAdapter.sign_report/3` signs the proof over a report. **This is the adapter's one job.**
+2. **Holder** — `BoundedAuthorityReportAdapter.sign_report/3` signs the proof over a report. **This is the adapter's one job.** (Development listeners on literal loopback use the sibling `sign_local_loopback_report/3` — the byte-distinct `ba+loopback-proof` profile — exercised end-to-end by `EdgeAgent.run_local_loopback/1`.)
 3. **Verifier** — the public `BoundedAuthorityProtocol.V1.check_envelope/2` accepts the envelope.
 4. **Tamper** + **wrong-key** — both rejected (the bindings are real, not vacuous).
 

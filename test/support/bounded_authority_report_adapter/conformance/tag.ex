@@ -51,4 +51,31 @@ defmodule BoundedAuthorityReportAdapter.Conformance.Tag do
       "array" -> {:array, Enum.map(value, &from_json/1)}
     end
   end
+
+  @doc """
+  Translates a RAW `:json.decode` value (no type tags — the form the
+  local-loopback profile corpus stores its `cast_arguments` in) into the
+  tagged tuple form. The mirror of `from_json/1` for corpora that carry plain
+  JSON instead of the typed-array encoding.
+
+      iex> from_raw(%{"record_id" => "record-1"})
+      {:object, [{"record_id", {:string, "record-1"}}]}
+
+      iex> from_raw(5)
+      {:integer, 5}
+  """
+  def from_raw(nil), do: :null
+
+  def from_raw(value) when is_binary(value), do: {:string, value}
+  def from_raw(value) when is_boolean(value), do: {:boolean, value}
+
+  def from_raw(value) when is_integer(value), do: {:integer, value}
+
+  def from_raw(value) when is_float(value), do: {:float, value}
+
+  def from_raw(value) when is_map(value) do
+    {:object, Enum.map(value, fn {k, v} -> {k, from_raw(v)} end)}
+  end
+
+  def from_raw(value) when is_list(value), do: {:array, Enum.map(value, &from_raw/1)}
 end

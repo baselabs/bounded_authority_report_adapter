@@ -191,3 +191,34 @@ constraint on `(identity, nonce)`) and reject a seen nonce.
 Nonce uniqueness is NOT something the protocol package does for you; it is a consumer obligation,
 alongside the §8 identity binding.
 
+## 10. The local-loopback profile (development listeners)
+
+For a verifier serving plain HTTP on the *literal loopback interface*, BAP 0.3.0
+defines a byte-distinct sibling profile (`bap-application-proof/local-loopback-http/1`,
+protected `typ: ba+loopback-proof`). The signer-side entry is the adapter's
+`sign_local_loopback_report/3`; the consumer-side surface is
+`BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1.check_envelope/2`
+— a SEPARATE function, not an option on the standard one. The two proof
+families reject each other's bytes, so a profile receiver never accepts a
+production `dpop+jwt` proof and vice versa.
+
+Everything in §§2–9 applies unchanged (raw-body retention, the request-field
+contract, one `with` that fails closed to a uniform 401, identity binding, the
+nonce ledger), with three profile-specific obligations:
+
+1. **The nonce is mandatory.** Reserve a fresh challenge per request and pass
+   `nonce: {:required, challenge}` — the profile verifier rejects
+   `:not_required` outright, and §9's ledger is not optional on a transport
+   with no TLS.
+2. **Derive the target from the listener, never from the client.** The
+   `target_uri` your verifier expects must come from the address YOUR listener
+   bound (`http://127.0.0.1:PORT/PATH` or `http://[::1]:PORT/PATH`) — a Host
+   or X-Forwarded-* header is client-controlled data on an unauthenticated
+   transport.
+3. **Say what it is.** Loopback HTTP has no confidentiality and no server
+   authentication and is not process isolation. It is a development-listener
+   convenience, not an HTTPS substitute — keep profile selection explicit at
+   receiver construction (boot-time), never per-request.
+
+The runnable version is the edge-agent example's receiver (`profile:
+:local_loopback` mode) with `EdgeAgent.run_local_loopback/1`.

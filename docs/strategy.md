@@ -8,7 +8,7 @@ engineering + release posture.
 ## 1. Release posture: public package and public source
 
 The owner superseded the original private-not-Hex posture on 2026-08-20 (ADR
-0004). `bounded_authority_report_adapter` 0.4.0 is public on Hex and consumes the
+0004). `bounded_authority_report_adapter` 0.5.0 is public on Hex and consumes the
 public `bounded_authority_protocol` Hex package. Its GitHub source is public and
 the release tags are the durable source identities. The adapter is pre-1.0 and every
 release remains responsible for its own compatibility, conformance, provenance,

@@ -18,21 +18,32 @@ defmodule BoundedAuthorityReportAdapter.BoundsAwareAssemblyTest do
     end
   end
 
-  test "the shared tail and all four callers carry one bounds binding into assemble_compact/3" do
+  test "the shared tail and every caller carry one bounds binding into their assembler" do
     source = File.read!("lib/bounded_authority_report_adapter.ex")
 
+    # All FIVE signing paths route through the parameterized tail, each binding
+    # the SAME `bounds` used at produce time into the assembler it selects.
     shared_tail_and_calls =
       Regex.scan(
-        ~r/sign_and_assemble\(\s*key_handle,\s*signing_input,\s*(?:holder_public_key|public_key|current_public_key),\s*bounds\s*\)/,
+        ~r/sign_and_assemble\(\s*key_handle,\s*signing_input,\s*(?:holder_public_key|public_key|current_public_key),\s*bounds,\s*&(?:assemble_standard_compact|LocalLoopbackHttp\.assemble_compact)\/3\s*\)/,
         source
       )
 
     assert length(shared_tail_and_calls) == 5
 
+    # The standard wrapper binds that same bounds into BAP's standard assembler...
     assert source =~
              "BoundedAuthorityProtocol.V1.assemble_compact(signing_input, signature, bounds)"
 
     refute source =~ "BoundedAuthorityProtocol.V1.assemble_compact(signing_input, signature)"
+
+    # ...and the local-loopback path selects BAP's PROFILE assembler (assembly
+    # is delegated, never recreated locally), which receives the same bounds.
+    assert source =~ "&LocalLoopbackHttp.assemble_compact/3"
+
+    # The profile assembler must not be the /2-arity form (which would silently
+    # drop the caller's bounds).
+    refute source =~ "LocalLoopbackHttp.assemble_compact(signing_input, signature)\n"
   end
 
   defp signing_cases do
@@ -40,8 +51,40 @@ defmodule BoundedAuthorityReportAdapter.BoundsAwareAssemblyTest do
       {:proof, &sign_proof/1},
       {:boundary_anchor, &sign_anchor/1},
       {:grant, &sign_grant/1},
-      {:key_transition, &sign_key_transition/1}
+      {:key_transition, &sign_key_transition/1},
+      {:local_loopback_http_proof, &sign_local_loopback/1}
     ]
+  end
+
+  defp sign_local_loopback(bounds) do
+    {holder_public_key, _holder_private_key} = TestKeys.holder_keypair()
+
+    {grant_compact, _issuer_public_key} =
+      TestKeys.issuer_signed_grant_compact(
+        TestKeys.holder_thumbprint_raw(holder_public_key),
+        issued_at: @now - 100,
+        not_before: @now - 100,
+        expires_at: @now + 3_600
+      )
+
+    report = %{
+      grant_compact: grant_compact,
+      operation: @operation,
+      method: "POST",
+      target_uri: "http://127.0.0.1:4000/invoke",
+      invocation_id: "123e4567-e89b-42d3-a456-426614174000",
+      cast_arguments: {:object, [{"record", {:string, "example"}}]},
+      nonce: "bounds-aware-loopback"
+    }
+
+    case BoundedAuthorityReportAdapter.sign_local_loopback_report(report, holder_handle(), %{
+           bounds: bounds,
+           issued_at: @now - 50,
+           proof_id: "urn:example:proof:bounds-aware-loopback"
+         }) do
+      {:ok, %{proof: compact}} -> {:ok, compact}
+      error -> error
+    end
   end
 
   defp sign_proof(bounds) do

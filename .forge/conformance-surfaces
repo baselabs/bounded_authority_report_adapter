@@ -18,3 +18,10 @@
 # BAP's envelope verifier (check_envelope/2) + the grant-only verifier
 # (verify_grant/3 for the grant_time_cases). The harness file IS the surface.
 test/bounded_authority_report_adapter/conformance_roundtrip_test.exs
+
+# 0.5.0 — the local-loopback profile corpus harness. Surfaces: the profile's
+# envelope verifier (check_local_loopback_envelope via the profile facade),
+# both proof decoders (profile + standard, the cross-verdicts), the profile
+# URI admission normalizer (normalize_uri), and the profile producer/assembler
+# pair the adapter drives.
+test/bounded_authority_report_adapter/local_loopback_corpus_test.exs

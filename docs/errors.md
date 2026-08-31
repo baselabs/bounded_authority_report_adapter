@@ -9,6 +9,7 @@ The four error sets are identical except for their per-object input atom:
 | Entry point | Input atom | @type |
 |---|---|---|
 | `sign_report/3` | `:invalid_report` | `sign_error/0` |
+| `sign_local_loopback_report/3` | `:invalid_report` | `sign_error/0` |
 | `sign_anchor/3` | `:invalid_anchor` | `anchor_sign_error/0` |
 | `sign_grant/3` | `:invalid_grant` | `grant_sign_error/0` |
 | `sign_key_transition/3` | `:invalid_transition` | `transition_sign_error/0` |
@@ -31,7 +32,7 @@ semantically-invalid field against these rows.
 
 | Atom | Meaning | What to check | Recovery |
 |---|---|---|---|
-| `:invalid_report` | A required `report` field is missing or of the wrong basic type (`grant_compact`, `operation`, `method`, `target_uri`, `invocation_id`, `cast_arguments`, `nonce`), or `cast_arguments` is `nil`. | The map against `report()` in the moduledoc. | Fix the report fields. |
+| `:invalid_report` | A required `report` field is missing or of the wrong basic type (`grant_compact`, `operation`, `method`, `target_uri`, `invocation_id`, `cast_arguments`, `nonce`), or `cast_arguments` is `nil`. For `sign_local_loopback_report/3` this ALSO covers the mandatory nonce: an absent, empty, or non-binary `nonce`. | The map against `report()` (or `local_loopback_report()`) in the moduledoc. | Fix the report fields. |
 | `:invalid_anchor` | An `anchor_input` content field is missing, or `chain_hash` is not a binary. | `anchor_id`, `chain_id`, `sequence`, `chain_hash` presence and basic types. | Fix the anchor fields. |
 | `:invalid_grant` | A `grant_input` field is missing or of the wrong basic type. | `issuer`, `grant_id`, `audiences`, `issued_at`/`not_before`/`expires_at` presence and types. | Fix the grant fields. |
 | `:invalid_transition` | A `transition_input` field is missing, or `next_public_key` is not a 32-byte Ed25519 key (adapter-checked). | `transition_id`, `chain_id`, `effective_at`, `next_key_id`, `next_public_key`. | Fix the transition fields. |
@@ -47,3 +48,14 @@ producer.
 Each set is a `@type` on `BoundedAuthorityReportAdapter`
 (`sign_error/0`, `anchor_sign_error/0`, `grant_sign_error/0`, `transition_sign_error/0`)
 — dialyze your caller against them; this table is authored against those types.
+
+## The local-loopback profile entry point
+
+`sign_local_loopback_report/3` reuses `sign_error/0` unchanged. One reading
+note: a nonce that passes the presence check but violates the profile's
+semantics (oversized for the configured bounds, or not a valid UTF-8 string)
+surfaces as `{:producer_error, :invalid}` — BAP's producer owns profile
+semantics; the library owns presence and shape (the same split every field
+uses). A non-canonical or non-loopback `target_uri` is likewise
+`{:producer_error, :invalid}` — admission is BAP's, and the caller's URI is
+never rewritten.
