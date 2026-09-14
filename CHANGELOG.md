@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0, `0.x` minor bumps may carry
 breaking changes (SemVer §4).
 
+## [0.6.0] — 2026-09-14
+
+### Changed
+
+- Track the protocol's 0.4.0 release: the `bounded_authority_protocol` pin moves `== 0.3.0` →
+  `== 0.4.0` together with the dependency-wall attributes and the lock (one deliberate commit,
+  as the wall's gate demands). 0.4.0 is additive — the v2 contract-major lands beside the
+  byte-frozen v1 profile; the adapter consumes v1 producers and the local-loopback profile,
+  both unchanged — so this is a dependency-track release with zero adapter behavior change:
+  the full battery (coverage, dialyzer, package census, two-build reproducibility, the
+  edge-agent example) runs green against the resolved 0.4.0.
+- Dev-dependency advisory sweep: `mint` 1.9.3 → 1.10.0 (EEF-CVE-2026-82728 HIGH,
+  EEF-CVE-2026-82729 MEDIUM — dev-only req/finch path, not shipped) and `igniter` 0.8.3 →
+  0.8.4 (EEF-CVE-2026-82584 LOW). `mix hex.audit` and `mix deps.audit` both clean.
+
 ## [0.5.0] — 2026-08-31
 
 ### Added — explicit local-loopback application-proof signer

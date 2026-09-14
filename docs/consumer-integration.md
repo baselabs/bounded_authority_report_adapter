@@ -193,7 +193,7 @@ alongside the §8 identity binding.
 
 ## 10. The local-loopback profile (development listeners)
 
-For a verifier serving plain HTTP on the *literal loopback interface*, BAP 0.3.0
+For a verifier serving plain HTTP on the *literal loopback interface*, BAP 0.4.0
 defines a byte-distinct sibling profile (`bap-application-proof/local-loopback-http/1`,
 protected `typ: ba+loopback-proof`). The signer-side entry is the adapter's
 `sign_local_loopback_report/3`; the consumer-side surface is
