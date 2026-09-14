@@ -183,10 +183,10 @@ by construction. Do not reach for an `encode`; the body is bytes that already ex
 ## Commit discipline
 
 - Surgical pathspecs: `git commit -o <files>` (or explicit paths). **Never
-  `git add -A`** — `.forge/` (process state, gitignored) and `.zcode/` would ride.
-- `.forge/` is gitignored EXCEPT `.forge/critical-surfaces`, `.forge/conformance*`
+  `git add -A`** — the retired local-harness tree (process state, gitignored) and `.zcode/` would ride.
+- the retired local-harness tree was gitignored except its manifests (all removed from the repository and history 2026-09-14)
   (tracked-when-present). The commit MESSAGE is the audit trail for forge work
-  (`.forge/` artifacts don't ship).
+  (the retired local-harness tree artifacts don't ship).
 - Single tree on `master`, no feature branches unless the user says otherwise.
 - Never `git stash`.
 

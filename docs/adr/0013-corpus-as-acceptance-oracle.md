@@ -6,7 +6,7 @@ Date: 2026-08-17
 
 Accepted. Records RA2's acceptance posture (in force since 2026-08-09); until
 now the decision lived only in the ROADMAP RA2 row and the harness itself —
-`.forge/conformance-surfaces` pointed at "ROADMAP RA2 + charter §6" as its
+the retired local-harness conformance-surfaces manifest pointed at "ROADMAP RA2 + charter §6" as its
 authority, not an ADR. Authored when the 2026-08-17 alignment audit listed the
 gap. Couples to ADR-0010 (the pin-bump policy's corpus clause).
 
@@ -70,8 +70,8 @@ The corpus is the only oracle whose green MEANS "BAP accepts what BARA produces.
 - The harness's own wrongness (a vacuous-green round-trip, a mis-built
   `cast_arguments`, a shared-nonce assumption) ships a broken crypto contract
   QUIETLY — which is why the harness is itself a declared critical surface
-  (`.forge/critical-surfaces`) and its re-execution runner exists
-  (`.forge/conformance-verify.sh`, layer-iii; not yet wired into CI — the ops
+  (the retired local-harness critical-surfaces manifest) and its re-execution runner exists
+  (the retired conformance-verify runner, layer-iii; not yet wired into CI — the ops
   follow-on it records).
 - BARA's green is deliberately defined by ANOTHER repo's published artifacts:
   that coupling is the point (strategy §7), and ADR-0010 governs when the pin

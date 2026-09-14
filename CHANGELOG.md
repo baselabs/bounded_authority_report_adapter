@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed — repository hygiene
+
+- The retired local-harness (forge-era) artifact tree — still tracked at tip in this
+  repository — is removed from the working tree and from the entire git history
+  (owner-executed rewrite, 2026-09-14; the surviving content differs from pre-rewrite tips by
+  exactly those five paths). Live documentation references to the tree are neutralized.
+
 All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0, `0.x` minor bumps may carry
 breaking changes (SemVer §4).
