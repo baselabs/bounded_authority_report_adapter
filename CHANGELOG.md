@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.2 — 2026-09-17
 
 ### Added — Windows CI lane + cross-platform developer surface (owner standard, 2026-09-16)
 
@@ -28,6 +28,15 @@
   its stub harness intercepts git/curl through POSIX shebang exec, which Git Bash
   bypasses (the probe itself runs on Windows); the exclusion is named in the
   workflow's gate-job comment, never silent.
+
+### Changed — documentation currency
+
+- Docs sweep for this release: `getting-started`'s install floor moves `~> 0.5` →
+  `~> 0.6.0` (matching the README, which it had drifted behind); `strategy.md` drops
+  a stale hardcoded public-version number; the README's `mix ci` paragraph now names
+  the currency gate, the gate battery, and the OS matrix (macOS/Linux/Windows); the
+  Livebook was swept for version claims (none present) and its setup comment already
+  corrected in 0.6.1 (BAP resolves from public hex.pm).
 
 ## 0.6.1 — 2026-09-16
 

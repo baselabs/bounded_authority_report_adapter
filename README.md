@@ -88,11 +88,14 @@ mix deps.get
 mix ci
 ```
 
-`mix ci` reproduces the CI pipeline locally: format, warnings-as-errors compilation, Credo, and the
+`mix ci` reproduces the CI pipeline locally: dependency resolution plus the latest-first
+currency gate (ADR-0020), format, warnings-as-errors compilation, Credo, and the
 full test suite (including the conformance round-trip against the protocol package's published
-oracle vectors and the dependency-direction wall), for both the library and the example app. It also
-runs `mix hex.audit` against the edge example's own lock, so a transport advisory fails the local and
-GitHub entry points.
+oracle vectors and the dependency-direction wall), the coverage floor, dialyzer, doc warnings,
+both advisory audits, the package-boundary and reproducibility gates — for both the library and
+the example app, and a transport advisory fails the local and GitHub entry points alike.
+GitHub CI runs one lane per supported OTP major on Linux plus a `windows-latest` lane on the
+pinned versions: clone → build → test holds on macOS, Linux, and Windows.
 
 Requires Elixir `~> 1.18` — supported minors 1.18/1.19/1.20 — on Erlang/OTP 27 through 29
 (the majors on which the stack compiles — the protocol package's codecs decode through OTP

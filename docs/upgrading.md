@@ -3,6 +3,21 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 0.6.2
+
+Repository tooling/CI release — no library code, API, or runtime-dependency change; nothing
+for a consumer to do. The CI matrix gains a `windows-latest` lane on the pinned versions
+(Elixir 1.20.2 / OTP 29.0.3) in both jobs, so clone → build → test is proven on macOS,
+Linux, AND Windows (the owner's cross-platform standard, ADR-0019's lane list amended).
+Carrying that lane made the developer surface portable rather than POSIX-only: the
+dependency-currency gate is now an `.exs` (same behavior), the `mix ci` alias uses an
+env-guard instead of `env(1)` re-execs, the release gates spawn `mix` through a Windows
+shim and avoid `mktemp`/`Path.wildcard`/cwd-directed tar extraction (each a real Windows
+defect the lane caught), and `.gitattributes` keeps every checkout byte-identical. One
+named test exclusion: `DriftProbeTest` skips on Windows — its stub harness intercepts
+git/curl via POSIX shebang exec, which Git Bash bypasses (the drift probe itself runs
+there); the exclusion is declared in the workflow's gate-job comment.
+
 ## 0.6.1
 
 Repository tooling/hygiene release — no library code, API, or runtime-dependency change.
