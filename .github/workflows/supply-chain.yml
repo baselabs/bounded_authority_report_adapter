@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or ref to attest (e.g. v0.6.2) — for re-attesting a release whose tag predates a workflow fix"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -24,6 +30,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # workflow_dispatch re-attestation targets a specific tag/ref;
+          # tag pushes attest the pushed ref itself.
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: erlef/setup-beam@v1
         with:
@@ -33,8 +42,11 @@ jobs:
       - name: Install dependencies
         run: mix deps.get
 
+      # MIX_ENV is explicit: the mix ci alias's env-guard REFUSES any boot
+      # other than :test (the RA7 trap) instead of self-forcing it — the
+      # caller owns the environment now.
       - name: Run the full gate battery
-        run: mix ci
+        run: MIX_ENV=test mix ci
 
       # Artifact names derive from mix.exs @version — never hardcoded (a stale
       # name after a version bump silently attests nothing).
