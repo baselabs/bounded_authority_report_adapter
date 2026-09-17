@@ -415,13 +415,31 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     ]
   end
 
+  # Extract to MEMORY and write files via File — never erl_tar's {:cwd, ...}
+  # filesystem path. On Windows the cwd-directed extraction returned :ok
+  # while extracting nothing (the first windows-lane run's census found an
+  # empty tree); :memory + File.write! has no platform-sensitive path
+  # semantics at all (feedback_cross_platform_capability_is_required).
   defp extract_tar!(archive, target) do
-    case :erl_tar.extract(String.to_charlist(archive), [
-           :compressed,
-           {:cwd, String.to_charlist(target)}
-         ]) do
-      :ok -> :ok
-      {:error, reason} -> fail!("cannot extract #{archive}: #{inspect(reason)}")
+    case :erl_tar.extract(String.to_charlist(archive), [:compressed, :memory]) do
+      {:ok, entries} ->
+        target = String.to_charlist(target)
+
+        Enum.each(entries, fn
+          {name, data} when is_binary(data) ->
+            # Trim a possible "./" prefix so written paths match the census's
+            # relative names (cwd-directed extraction used to strip it).
+            rel = name |> to_string() |> String.trim_leading("./")
+            path = Path.join(target, rel)
+            File.mkdir_p!(Path.dirname(path))
+            File.write!(path, data)
+
+          _ ->
+            :ok
+        end)
+
+      {:error, reason} ->
+        fail!("cannot extract #{archive}: #{inspect(reason)}")
     end
   end
 
