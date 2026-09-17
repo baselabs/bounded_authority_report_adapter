@@ -6,15 +6,14 @@ defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
   # stubs never intercept and the WITHHELD-verdict assertions cannot hold
   # there. The probe ITSELF runs on Windows (the first windows-lane run
   # shows real verdicts from the real tools) — only this stub-exec harness
-  # is POSIX. Skipped via setup_all's {:skip, reason} on {:win32, :nt} —
+  # is POSIX. Skipped via a compile-time @moduletag on {:win32, :nt} —
   # named, not silent: the exclusion is declared in the workflow's gate-job
-  # comment (feedback_cross_platform_capability_is_required).
-  setup_all do
-    if :os.type() == {:win32, :nt} do
-      {:skip, "POSIX stub-exec harness only — named in ci.yml"}
-    else
-      :ok
-    end
+  # comment (feedback_cross_platform_capability_is_required). (Neither a
+  # custom-attribute "tag" — collected under its own name, so the nested
+  # skip never fires — nor setup_all {:skip, reason} — unsupported: any
+  # non-{:ok, _} return invalidates the module and reds the run — works.)
+  if :os.type() == {:win32, :nt} do
+    @moduletag skip: "POSIX stub-exec harness only — named in ci.yml"
   end
 
   setup do
