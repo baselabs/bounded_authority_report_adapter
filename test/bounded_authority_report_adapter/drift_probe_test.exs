@@ -1,6 +1,17 @@
 defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
   use ExUnit.Case, async: true
 
+  # The stub harness intercepts git/curl via POSIX exec of shebang scripts;
+  # Git Bash on Windows resolves through to the real tools instead, so the
+  # stubs never intercept and the WITHHELD-verdict assertions cannot hold
+  # there. The probe ITSELF runs on Windows (the first windows-lane run
+  # shows real verdicts from the real tools) — only this stub-exec harness
+  # is POSIX. Tagged, not silent: the exclusion is named in the workflow's
+  # gate-job comment (feedback_cross_platform_capability_is_required).
+  @stub_harness if :os.type() == {:win32, :nt},
+                  do: [skip: "POSIX stub-exec harness only — named in ci.yml"],
+                  else: []
+
   setup do
     base =
       Path.join(
@@ -23,6 +34,7 @@ defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
     {:ok, base: base, repo: repo, bin: bin}
   end
 
+  @stub_harness
   test "a malformed nonempty Hex response withholds every release verdict", context do
     write_executable!(Path.join(context.bin, "curl"), "#!/bin/sh\nprintf 'not-json'\n")
 
@@ -32,6 +44,7 @@ defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
     refute output =~ "is the latest stable"
   end
 
+  @stub_harness
   test "the BA pin parser selects bounded_authority_protocol rather than an earlier git ref",
        context do
     write_executable!(Path.join(context.bin, "curl"), "#!/bin/sh\nexit 1\n")
@@ -55,6 +68,7 @@ defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
     refute output =~ "BA:      pins aaaaaaaaaaaa"
   end
 
+  @stub_harness
   test "the BA pin parser reports an exact Hex protocol dependency", context do
     write_executable!(Path.join(context.bin, "curl"), "#!/bin/sh\nexit 1\n")
 

@@ -21,7 +21,10 @@ jobs:
     # exist but the protocol package's codecs decode through :json, which
     # enters stdlib in OTP 27) plus a windows-latest lane on the pinned
     # versions (owner standard, 2026-09-16: clone → build → test must hold on
-    # Windows too); every cell runs the identical battery.
+    # Windows too); every cell runs the identical battery. NAMED EXCLUSION:
+    # DriftProbeTest's three cases skip on windows only — their stub harness
+    # intercepts git/curl via POSIX shebang exec, which Git Bash bypasses;
+    # the drift PROBE itself runs on Windows (never a silent skip).
     # LOCKSTEP: these lanes move together with the mix.exs elixir range, the
     # config assert's set, and .tool-versions.
     strategy:
