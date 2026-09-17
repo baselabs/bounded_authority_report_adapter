@@ -65,7 +65,12 @@ intended.
 4. The CI matrix carries one lane per supported major — 1.18/27.3.4.14,
    1.19/28.5.0.3, 1.20.2/29.0.3 — the three lanes the matrix already ran;
    this ADR moves them from hand-chosen to lockstep-bound to the enforced
-   set.
+   set. Amended 2026-09-16 (same day, owner direction): the matrix also
+   carries a `windows-latest` lane on the pinned versions (1.20.2/29.0.3) —
+   the owner's cross-platform standard is that clone → build → test holds on
+   Windows, and CI is what proves it. The OS dimension is CI-side (like
+   checkout/setup-beam); `mix ci`'s local parity claim covers the pinned
+   Unix lane only.
 
 ## Rejected alternatives
 

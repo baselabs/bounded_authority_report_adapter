@@ -157,24 +157,34 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     assert String.contains?(example_job, "run: #{@audit_command}\n")
   end
 
-  test "both jobs run the full three-cell compatibility matrix" do
+  test "both jobs run the full compatibility matrix (every supported OTP major + the windows lane)" do
     # A dropped matrix cell narrows CI coverage silently (a lane that never
-    # runs looks green by absence) — pin the exact three cells per job and
-    # that setup-beam actually consumes the matrix variables.
+    # runs looks green by absence) — pin the exact cells per job and that
+    # setup-beam actually consumes the matrix variables. The windows-latest
+    # cell is the owner's cross-platform standard (2026-09-16): clone → build
+    # → test must hold on Windows, proven by CI on the pinned versions.
     workflow = File.read!(".github/workflows/ci.yml")
     [gate_job, example_job] = String.split(workflow, "\n  example:", parts: 2)
 
-    lanes = [{"1.18.4", "27.3.4.14"}, {"1.19.5", "28.5.0.3"}, {"1.20.2", "29.0.3"}]
+    lanes = [
+      {"ubuntu-latest", "1.18.4", "27.3.4.14"},
+      {"ubuntu-latest", "1.19.5", "28.5.0.3"},
+      {"ubuntu-latest", "1.20.2", "29.0.3"},
+      {"windows-latest", "1.20.2", "29.0.3"}
+    ]
 
     for {job_name, job} <- [{"gate", gate_job}, {"example", example_job}] do
-      assert job =~ ~r/strategy:\s+fail-fast:\s*false\s+matrix:\s*include:/m,
+      assert job =~ ~r/strategy:\s+fail-fast:\s*false\s+matrix:\s+include:/m,
              "the #{job_name} job must declare the fail-fast: false matrix"
 
-      for {elixir, otp} <- lanes do
-        cell = "- elixir: \"#{elixir}\"\n            otp: \"#{otp}\"\n"
+      assert job =~ ~r/runs-on: \$\{\{ matrix\.os \}\}/,
+             "the #{job_name} job must run on the matrix OS, not a pinned runner"
+
+      for {os, elixir, otp} <- lanes do
+        cell = "- os: #{os}\n            elixir: \"#{elixir}\"\n            otp: \"#{otp}\"\n"
 
         assert job =~ cell,
-               "the #{job_name} job must include the #{elixir}/#{otp} matrix cell"
+               "the #{job_name} job must include the #{os} #{elixir}/#{otp} matrix cell"
 
         # Non-vacuity: the cell string removed in-memory must break the match
         # (a loosened assertion that passes over a dropped lane reds here).

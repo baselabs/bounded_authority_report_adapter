@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added — Windows CI lane (owner standard, 2026-09-16)
+
+- The CI matrix gains a `windows-latest` lane on the pinned versions (Elixir 1.20.2 /
+  OTP 29.0.3) in both jobs, proving clone → build → test holds on Windows (ADR-0019's
+  lane list amended accordingly; the parity test pins the OS dimension with its
+  existing mutation proofs). The library itself gains no platform-specific code —
+  nothing about the shipped package changes.
+
 ## 0.6.1 — 2026-09-16
 
 ### Changed — repository toolchain hygiene (no library-code or runtime-dep change)

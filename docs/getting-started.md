@@ -3,8 +3,9 @@
 `bounded_authority_report_adapter` targets Elixir `~> 1.18` — supported minors 1.18/1.19/1.20 —
 on Erlang/OTP 27 through 29 (the protocol package's codecs decode through OTP 27's `:json`
 module, so OTP 25/26 are unsupported; the repository refuses to compile outside the set —
-ADR-0019). CI runs one lane per supported major: 1.18/27, 1.19/28, 1.20/29. The package is
-published on [Hex](https://hex.pm/packages/bounded_authority_report_adapter).
+ADR-0019). CI runs one lane per supported major — 1.18/27, 1.19/28, 1.20/29 — plus a
+windows-latest lane on the pinned versions (clone → build → test holds on Windows). The
+package is published on [Hex](https://hex.pm/packages/bounded_authority_report_adapter).
 
 ```elixir
 {:bounded_authority_report_adapter, "~> 0.5"}

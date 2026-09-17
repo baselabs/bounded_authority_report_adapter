@@ -106,9 +106,10 @@ version move. A probe, not a gate — not part of `mix ci`.
 CI (`.github/workflows/ci.yml`) runs **two jobs**: `gate` (the library: deps · currency ·
 format · compile · credo · test · gate battery) and `example` (the example app: deps ·
 currency · advisory audit, then the same four build steps, run from
-`examples/edge_agent/`). Both must stay green on ALL THREE matrix lanes (one per supported
-OTP major 27–29 — ADR-0019; 25/26 are excluded: BAP's codecs decode through `:json`, OTP
-27+ stdlib). The Livebook
+`examples/edge_agent/`). Both must stay green on the full matrix: one lane per supported
+OTP major 27–29 (ADR-0019; 25/26 are excluded: BAP's codecs decode through `:json`, OTP
+27+ stdlib) PLUS a `windows-latest` lane on the pinned versions (owner standard,
+2026-09-16: clone → build → test must hold on Windows). The Livebook
 (`examples/report_envelope_roundtrip.livemd`) is NOT run in CI — its round-trip is
 covered by the library's `sign_report_test.exs`.
 
