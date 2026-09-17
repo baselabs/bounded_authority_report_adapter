@@ -1,0 +1,5 @@
+# Cross-platform checkout discipline (feedback_cross_platform_capability_is_required):
+# LF everywhere a Windows checkout keeps the working tree byte-identical to
+# the Linux/macOS ones — `mix format --check-formatted` compares bytes and
+# reds on a CRLF tree. Binary detection stays automatic (text=auto).
+* text=auto eol=lf

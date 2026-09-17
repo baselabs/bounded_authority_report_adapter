@@ -114,14 +114,17 @@ OTP major 27–29 (ADR-0019; 25/26 are excluded: BAP's codecs decode through `:j
 covered by the library's `sign_report_test.exs`.
 
 **Local CI parity: `mix ci`** (root mix.exs alias) reproduces the workflow
-step-for-step — both jobs, with the example's owner-local `mix hex.audit` immediately
-after dependency resolution, every step forced under
-`MIX_ENV=test` (the workflow's job-level env; a bare local `:dev` boot would skip
-`test/support` at compile — the RA7 trap). It aborts at the first red step, like a
-failed CI job. It is the zero-spend stand-in while Actions can't run
+step-for-step — both jobs (the example job through `scripts/ci_example.exs`, its steps
+in the workflow's order: deps · currency · audit · the four build steps). The FIRST
+alias step is an env guard (`scripts/ci_env_guard.exs`) that refuses any boot other
+than `MIX_ENV=test` (a bare local `:dev` boot would skip `test/support` at compile —
+the RA7 trap) and prints the per-shell invocation; every later step is a bare task
+name — NO POSIX `env(1)` re-exec, so the alias is cross-platform
+(feedback_cross_platform_capability_is_required). It aborts at the first red step,
+like a failed CI job. It is the zero-spend stand-in while Actions can't run
 (Actions live again as of 2026-08-26 — the full matrix + supply-chain runs green) and doubles as the one-command
 pre-push check; workflow steps NOT reproduced locally: checkout/setup-beam (asdf
-here).
+here) and the OS matrix dimension (the windows-latest lane is CI-side).
 
 ## Per-file floor on EVERY touched file (the RA7 lesson)
 

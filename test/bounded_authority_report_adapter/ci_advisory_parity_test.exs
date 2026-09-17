@@ -1,9 +1,14 @@
 defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   @moduledoc """
-  Pins the CI orchestration to the two surfaces that must stay in step:
+  Pins the CI orchestration to the surfaces that must stay in step:
 
     * the example job audits its OWN lock immediately after resolving its deps
-      (the original advisory-parity invariant), and
+      (the original advisory-parity invariant) — in the workflow directly, in
+      `mix ci` through scripts/ci_example.exs's internal step order,
+    * the dependency-currency gate (ADR-0020) runs immediately after
+      dependency resolution on BOTH surfaces, through the portable .exs,
+    * the env guard is the FIRST `mix ci` step (the RA7 trap's cross-platform
+      replacement for the old POSIX env(1) re-exec), and
     * the gate battery (coverage floor, dialyzer, doc warnings, the library's
       own audits) exists as explicit steps in BOTH `mix ci` and the workflow's
       gate job, in the same order — the local/CI parity the `mix ci` alias
@@ -18,10 +23,14 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
   @edge_dir "examples/edge_agent"
   @audit_command "mix hex.audit"
-  @currency_command "bash scripts/check-deps-currency.sh"
+  @currency_exs "scripts/check_deps_currency.exs"
+  @currency_step "mix run --no-start #{@currency_exs}"
+  @env_guard_step "run --no-start scripts/ci_env_guard.exs"
 
   # The gate battery, in the canonical step order shared by `mix ci` and the
-  # workflow's gate job.
+  # workflow's gate job. The workflow spells each command `mix <command>`;
+  # the alias carries it as a bare task name (no env(1) re-exec — the
+  # cross-platform shape).
   @battery [
     {"coverage floor", "mix test --cover"},
     {"dialyzer", "mix dialyzer"},
@@ -32,13 +41,32 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     {"release reproducibility", "mix run --no-start scripts/check_reproducible.exs"}
   ]
 
-  test "mix ci audits the edge example immediately after resolving its dependencies" do
-    root_mix = File.read!("mix.exs")
+  test "mix ci boots through the env guard before any step" do
+    root_mix = File.read!("mix.exs") |> strip_comments()
 
-    assert root_mix =~
-             ~r|cmd --cd #{@edge_dir} env MIX_ENV=test mix deps\.get"\s*,\s*"cmd --cd #{@edge_dir} env MIX_ENV=test bash \.\./\.\./scripts/check-deps-currency\.sh"\s*,\s*"cmd --cd #{@edge_dir} env MIX_ENV=test #{@audit_command}"|,
-           "mix ci must fail on advisories in the edge example's own lock immediately after " <>
-             "that project resolves its dependencies (currency between them)"
+    assert root_mix =~ ~r|"#{@env_guard_step}",\s*"deps\.get",|,
+           "the env guard must be the FIRST ci step, immediately before deps.get — " <>
+             "it replaces the old POSIX env(1) re-exec (the RA7 trap stays guarded)"
+
+    mutated = String.replace(root_mix, ~s{"#{@env_guard_step}",}, "", global: false)
+    refute mutated == root_mix, "env-guard mutation fixture changed nothing"
+    refute mutated =~ ~r|"#{@env_guard_step}",\s*"deps\.get",|
+  end
+
+  test "mix ci audits the edge example immediately after resolving its dependencies" do
+    # In the portable alias the example job lives in scripts/ci_example.exs;
+    # the invariant is its INTERNAL step order (deps → currency → audit),
+    # plus the alias entry that runs it.
+    root_mix = File.read!("mix.exs") |> strip_comments()
+    runner = File.read!("scripts/ci_example.exs")
+
+    assert root_mix =~ ~r|"run --no-start scripts/ci_example\.exs"|,
+           "mix ci must run the example job's runner as its example section"
+
+    assert runner =~
+             ~r|\{"install deps", \["deps\.get"\]\},\s*\{"check dependency currency \(latest-first\)",\s*\[[^\]]*\]\},\s*\{"audit dependencies", \["hex\.audit"\]\},|,
+           "the example runner must audit the edge example's own lock immediately " <>
+             "after resolving its dependencies (currency between them)"
   end
 
   test "the GitHub example job audits its owner-local lock after dependency resolution" do
@@ -50,7 +78,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
            "the GitHub example job must bind every mix command to examples/edge_agent"
 
     assert example_job =~
-             ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Check dependency currency \(latest-first\)\s+run: bash \.\./\.\./scripts/check-deps-currency\.sh\s+- name: Audit dependencies\s+run: #{@audit_command}|,
+             ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Check dependency currency \(latest-first\)\s+run: mix run --no-start \.\./\.\./scripts/check_deps_currency\.exs\s+- name: Audit dependencies\s+run: #{@audit_command}|,
            "the GitHub example job must run mix hex.audit against examples/edge_agent, not " <>
              "the root library lock"
   end
@@ -64,11 +92,10 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     workflow = File.read!(".github/workflows/ci.yml") |> strip_comments()
     [gate_job, _] = String.split(workflow, "\n  example:", parts: 2)
 
-    alias_pattern =
-      ~r|cmd env MIX_ENV=test mix deps\.get",\s*"cmd env MIX_ENV=test bash scripts/check-deps-currency\.sh",|
+    alias_pattern = ~r|"deps\.get",\s*"run --no-start scripts/check_deps_currency\.exs",|
 
     workflow_pattern =
-      ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Check dependency currency \(latest-first\)\s+run: bash scripts/check-deps-currency\.sh|
+      ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Check dependency currency \(latest-first\)\s+run: mix run --no-start scripts/check_deps_currency\.exs|
 
     assert root_mix =~ alias_pattern,
            "mix ci must run the currency gate immediately after the library resolves its deps"
@@ -79,7 +106,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     mutated_alias =
       String.replace(
         root_mix,
-        ~s{"cmd env MIX_ENV=test bash scripts/check-deps-currency.sh",},
+        ~s{"run --no-start scripts/check_deps_currency.exs",},
         "",
         global: false
       )
@@ -88,7 +115,9 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     refute mutated_alias =~ alias_pattern, "alias adjacency survives a dropped currency step"
 
     mutated_gate =
-      String.replace(gate_job, "run: #{@currency_command}\n", "run: mix test\n", global: false)
+      String.replace(gate_job, "run: mix run --no-start #{@currency_exs}\n", "run: mix test\n",
+        global: false
+      )
 
     refute mutated_gate == gate_job, "workflow mutation fixture changed nothing"
     refute mutated_gate =~ workflow_pattern, "workflow adjacency survives a dropped currency step"
@@ -98,7 +127,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     root_mix = File.read!("mix.exs") |> strip_comments()
 
     assert root_mix =~
-             ~r|cmd env MIX_ENV=test mix test",\s*"#{battery_pattern()}|,
+             ~r|"test",\s*#{alias_battery_pattern()}|,
            "mix ci must run the gate battery (coverage floor, dialyzer, docs warnings, " <>
              "the library's own audits) in the canonical order immediately after the test step"
   end
@@ -121,7 +150,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     # what proves the gate (a pattern later loosened into vacuity reds HERE,
     # not just in production).
     workflow = File.read!(".github/workflows/ci.yml") |> strip_comments()
-    [gate_job, example_job] = String.split(workflow, "\n  example:", parts: 2)
+    [gate_job, _example_job] = String.split(workflow, "\n  example:", parts: 2)
     root_mix = File.read!("mix.exs") |> strip_comments()
 
     for {_name, command} <- @battery do
@@ -141,20 +170,16 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
       # The mix ci alias surface: drop the quoted alias entry, then the
       # production alias pattern must no longer match mix.exs.
       mutated_alias =
-        String.replace(root_mix, ~s{"cmd env MIX_ENV=test #{command}",}, "", global: false)
+        String.replace(root_mix, ~s{"#{alias_form(command)}",}, "", global: false)
 
       refute mutated_alias == root_mix,
              "the alias mutation fixture for #{command} did not change mix.exs — " <>
                "the mutation proof is not exercising the red path"
 
-      refute mutated_alias =~ Regex.compile!(battery_pattern()),
+      refute mutated_alias =~ Regex.compile!(alias_battery_pattern()),
              "the alias parity pattern still matches mix.exs with #{command} dropped — " <>
                "the gate would stay green over a missing step"
     end
-
-    # The example job slice is untouched by the gate-job mutations above (its
-    # own hex.audit survives) — the scoping the two-surface split relies on.
-    assert String.contains?(example_job, "run: #{@audit_command}\n")
   end
 
   test "both jobs run the full compatibility matrix (every supported OTP major + the windows lane)" do
@@ -204,11 +229,16 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   # pattern pins ACTUAL adjacency of the commands.
   defp strip_comments(text), do: Regex.replace(~r/^\s*#[^\n]*$/m, text, "")
 
-  # The mix ci alias shape: comma-quoted commands, in battery order.
-  defp battery_pattern do
+  # The alias spells a battery command as a bare task name (no `mix ` prefix —
+  # the cross-platform, env(1)-free shape).
+  defp alias_form("mix " <> rest), do: rest
+
+  # The mix ci alias shape: comma-quoted bare task names, in battery order
+  # (each entry carries its own quotes; the join is just comma + whitespace).
+  defp alias_battery_pattern do
     @battery
-    |> Enum.map_join(~s{",\\s*"}, fn {_name, command} ->
-      Regex.escape("cmd env MIX_ENV=test #{command}")
+    |> Enum.map_join(~s{,\\s*}, fn {_name, command} ->
+      Regex.escape(~s{"#{alias_form(command)}"})
     end)
   end
 

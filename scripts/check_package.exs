@@ -79,7 +79,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
       package_root = Path.join(scratch_root, "package")
       consumer_root = Path.join(scratch_root, "consumer")
 
-      run!("mix", ["hex.build", "--output", archive_path], source_root, [])
+      run_mix!(["hex.build", "--output", archive_path], source_root, [])
       assert_regular_nonempty!(archive_path)
 
       File.mkdir_p!(outer_root)
@@ -190,8 +190,8 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
 
   defp compile_package!(package_root) do
     environment = [{"MIX_ENV", "prod"}]
-    run!("mix", ["deps.get", "--only", "prod"], package_root, environment)
-    run!("mix", ["compile", "--warnings-as-errors"], package_root, environment)
+    run_mix!(["deps.get", "--only", "prod"], package_root, environment)
+    run_mix!(["compile", "--warnings-as-errors"], package_root, environment)
   end
 
   defp compile_consumer!(consumer_root, package_root) do
@@ -225,8 +225,8 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     )
 
     environment = [{"MIX_ENV", "prod"}]
-    run!("mix", ["deps.get"], consumer_root, environment)
-    run!("mix", ["compile", "--warnings-as-errors"], consumer_root, environment)
+    run_mix!(["deps.get"], consumer_root, environment)
+    run_mix!(["compile", "--warnings-as-errors"], consumer_root, environment)
 
     run!(
       "mix",
@@ -426,25 +426,36 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   end
 
   defp unique_tmp_root! do
-    template = Path.join(System.tmp_dir!(), "bounded-authority-report-package.XXXXXX")
+    # System.tmp_dir!/0 + a unique name — `mktemp` is a POSIX utility and the
+    # gate runs on Windows lanes too (feedback_cross_platform_capability_is_required).
+    path =
+      Path.join(
+        System.tmp_dir!(),
+        "bounded-authority-report-package.#{System.unique_integer([:positive])}#{System.monotonic_time()}"
+      )
 
-    case System.cmd("mktemp", ["-d", template], stderr_to_stdout: true) do
-      {path, 0} ->
-        path = String.trim(path)
-
-        if File.dir?(path),
-          do: path,
-          else: fail!("mktemp returned a missing directory")
-
-      {output, status} ->
-        fail!("mktemp exited with status #{status}: #{String.trim(output)}")
-    end
+    File.mkdir_p!(path)
+    path
   end
 
   defp assert_regular_nonempty!(path) do
     unless File.regular?(path) and File.stat!(path).size > 0 do
       fail!("package archive is missing or empty")
     end
+  end
+
+  # `mix` is a .cmd shim on Windows and cannot be spawned directly — route
+  # through cmd /c there (feedback_cross_platform_capability_is_required).
+  defp mix_args(arguments) do
+    case :os.type() do
+      {:win32, _} -> {"cmd", ["/c", "mix" | arguments]}
+      _ -> {"mix", arguments}
+    end
+  end
+
+  defp run_mix!(arguments, directory, environment) do
+    {command, args} = mix_args(arguments)
+    run!(command, args, directory, environment)
   end
 
   defp run!(command, arguments, directory, environment) do

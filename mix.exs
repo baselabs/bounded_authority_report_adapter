@@ -57,48 +57,46 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   # `mix ci` — local CI parity: reproduces .github/workflows/ci.yml step-for-
   # step on the pinned dev lane (every library-job step + the example job's
   # steps) with zero GitHub Actions spend.
-  # The workflow exports MIX_ENV: test at the JOB level, so every step here
-  # re-execs mix under MIX_ENV=test via env(1) — a bare local `mix ci` would
-  # otherwise boot in :dev, and a :dev compile skips test/support (the
-  # warnings trap). `mix cmd` aborts on the first non-zero step, like a failed
-  # CI job. Not reproduced locally: checkout/setup-beam (asdf here).
+  # Cross-platform shape (feedback_cross_platform_capability_is_required): NO
+  # POSIX env(1) re-exec — the FIRST step is an env guard that refuses any
+  # boot other than MIX_ENV=test (a :dev compile skips test/support, the RA7
+  # trap) with the per-shell invocation in its message; every later step is a
+  # plain task name. The example job runs through scripts/ci_example.exs (a
+  # `mix cmd --cd` + bare `mix` spawn is POSIX/Windows-brittle), preserving
+  # the step-for-step order and abort-on-first-red semantics. Not reproduced
+  # locally: checkout/setup-beam (asdf here), the OS matrix dimension.
   defp aliases do
     [
       ci: [
+        "run --no-start scripts/ci_env_guard.exs",
         # job: gate (the library)
-        "cmd env MIX_ENV=test mix deps.get",
+        "deps.get",
         # Latest-first dependency currency (ADR-0020; the workflow's currency
-        # step — caller-cwd script, runs against THIS project).
-        "cmd env MIX_ENV=test bash scripts/check-deps-currency.sh",
-        "cmd env MIX_ENV=test mix format --check-formatted",
-        "cmd env MIX_ENV=test mix compile --warnings-as-errors",
-        "cmd env MIX_ENV=test mix credo --strict",
-        "cmd env MIX_ENV=test mix test",
+        # step — caller-cwd .exs, runs against THIS project).
+        "run --no-start scripts/check_deps_currency.exs",
+        "format --check-formatted",
+        "compile --warnings-as-errors",
+        "credo --strict",
+        "test",
         # The gate battery (parity with the sibling-standard batteries): coverage
         # floor, dialyzer (PLT + analysis under :test so test/support/ is in the
         # paths — the RA7 lesson), doc warnings, and the LIBRARY's own advisory
         # audits (the example job has always audited its own lock; the library's
         # lock is now audited too).
-        "cmd env MIX_ENV=test mix test --cover",
-        "cmd env MIX_ENV=test mix dialyzer",
-        "cmd env MIX_ENV=test mix docs --warnings-as-errors",
-        "cmd env MIX_ENV=test mix hex.audit",
-        "cmd env MIX_ENV=test mix deps.audit",
+        "test --cover",
+        "dialyzer",
+        "docs --warnings-as-errors",
+        "hex.audit",
+        "deps.audit",
         # The shipped-artifact gate: builds the exact Hex archive, proves its
         # census/metadata, and compiles + smoke-runs a consumer against the
         # UNPACKED package (scripts/check_package.exs; scratch-cleaned).
-        "cmd env MIX_ENV=test mix run --no-start scripts/check_package.exs",
+        "run --no-start scripts/check_package.exs",
         # Two cache-isolated builds of the exact archive must agree byte for
         # byte (the release-candidate reproducibility gate).
-        "cmd env MIX_ENV=test mix run --no-start scripts/check_reproducible.exs",
+        "run --no-start scripts/check_reproducible.exs",
         # job: example (the workflow's working-directory: examples/edge_agent)
-        "cmd --cd examples/edge_agent env MIX_ENV=test mix deps.get",
-        "cmd --cd examples/edge_agent env MIX_ENV=test bash ../../scripts/check-deps-currency.sh",
-        "cmd --cd examples/edge_agent env MIX_ENV=test mix hex.audit",
-        "cmd --cd examples/edge_agent env MIX_ENV=test mix format --check-formatted",
-        "cmd --cd examples/edge_agent env MIX_ENV=test mix compile --warnings-as-errors",
-        "cmd --cd examples/edge_agent env MIX_ENV=test mix credo --strict",
-        "cmd --cd examples/edge_agent env MIX_ENV=test mix test"
+        "run --no-start scripts/ci_example.exs"
       ]
     ]
   end

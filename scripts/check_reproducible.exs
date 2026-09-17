@@ -58,7 +58,9 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
 
   defp assert_mix_lock_present!(source_root) do
     unless File.regular?(Path.join(source_root, "mix.lock")) do
-      raise("release candidate check failed: mix.lock is missing — reproducibility cannot be checked without a locked dep set")
+      raise(
+        "release candidate check failed: mix.lock is missing — reproducibility cannot be checked without a locked dep set"
+      )
     end
   end
 
@@ -83,25 +85,22 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
   end
 
   defp build_in!(copy_root, output) do
-    run!("mix", ["deps.get"], copy_root)
-    run!("mix", ["hex.build", "--output", output], copy_root)
+    run_mix!(["deps.get"], copy_root)
+    run_mix!(["hex.build", "--output", output], copy_root)
     assert_regular_nonempty!(output)
   end
 
+  # System.tmp_dir!/0 + a unique name — `mktemp` is a POSIX utility and the
+  # gate runs on Windows lanes too (feedback_cross_platform_capability_is_required).
   defp unique_tmp_root! do
-    template = Path.join(System.tmp_dir!(), "bounded-authority-report-reproducible.XXXXXX")
+    path =
+      Path.join(
+        System.tmp_dir!(),
+        "bounded-authority-report-reproducible.#{System.unique_integer([:positive])}#{System.monotonic_time()}"
+      )
 
-    case System.cmd("mktemp", ["-d", template], stderr_to_stdout: true) do
-      {path, 0} ->
-        path = String.trim(path)
-
-        if File.dir?(path),
-          do: path,
-          else: raise("release candidate check failed: mktemp returned a missing directory")
-
-      {output, status} ->
-        raise("release candidate check failed: mktemp exited with status #{status}: #{String.trim(output)}")
-    end
+    File.mkdir_p!(path)
+    path
   end
 
   defp sha256_file(path) do
@@ -115,6 +114,18 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
     end
   end
 
+  # `mix` is a .cmd shim on Windows and cannot be spawned directly — route
+  # through cmd /c there (feedback_cross_platform_capability_is_required).
+  defp run_mix!(arguments, directory) do
+    {command, args} =
+      case :os.type() do
+        {:win32, _} -> {"cmd", ["/c", "mix" | arguments]}
+        _ -> {"mix", arguments}
+      end
+
+    run!(command, args, directory)
+  end
+
   defp run!(command, arguments, directory) do
     case System.cmd(command, arguments,
            cd: directory,
@@ -125,7 +136,9 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
         :ok
 
       {_output, status} ->
-        raise("release candidate check failed: #{command} #{Enum.join(arguments, " ")} exited with status #{status}")
+        raise(
+          "release candidate check failed: #{command} #{Enum.join(arguments, " ")} exited with status #{status}"
+        )
     end
   end
 end

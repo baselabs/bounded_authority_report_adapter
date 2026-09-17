@@ -29,7 +29,10 @@ anchored on a hard `$` silently fails open on padded rows.
    major jump pending, or resolver conflict). The one deliberate pin in this
    repo is `bounded_authority_protocol == 0.4.0` — ADR-0010's bump policy
    owns it; the currency gate never floats it.
-2. **`scripts/check-deps-currency.sh`** enforces the policy under a
+2. **`scripts/check_deps_currency.exs`** (run via `mix run --no-start` — an
+   `.exs`, not the original `.sh`, so the gate runs on every OS lane;
+   `feedback_cross_platform_capability_is_required`) enforces
+   the policy under a
    caller-cwd contract: the script never cds — CI invokes it once per
    project job from that job's working directory, and `mix ci` invokes it
    for both projects. It classifies the RENDERED tables (direct AND `--all`):

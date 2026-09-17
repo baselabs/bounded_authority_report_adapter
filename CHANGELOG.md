@@ -2,13 +2,23 @@
 
 ## Unreleased
 
-### Added — Windows CI lane (owner standard, 2026-09-16)
+### Added — Windows CI lane + cross-platform developer surface (owner standard, 2026-09-16)
 
 - The CI matrix gains a `windows-latest` lane on the pinned versions (Elixir 1.20.2 /
   OTP 29.0.3) in both jobs, proving clone → build → test holds on Windows (ADR-0019's
   lane list amended accordingly; the parity test pins the OS dimension with its
   existing mutation proofs). The library itself gains no platform-specific code —
   nothing about the shipped package changes.
+- The first Windows run red exactly where the cross-platform rule predicts, so the
+  developer surface is ported, not just the lane: `.gitattributes` (`* text=auto
+  eol=lf` — a CRLF Windows checkout failed `mix format --check-formatted`); the
+  currency gate moves from a bash script to `scripts/check_deps_currency.exs` (same
+  caller-cwd contract and rendered-table classification); the release gates
+  (`check_package.exs`, `check_reproducible.exs`) drop `mktemp` for `System.tmp_dir!/0`
+  and spawn `mix` through a `cmd /c` shim on Windows; the `mix ci` alias drops its
+  POSIX `env(1)` re-execs for an env-guard first step (`scripts/ci_env_guard.exs`,
+  preserving the RA7 :dev-boot refusal) with the example job running through
+  `scripts/ci_example.exs` (same steps, same order, abort-on-first-red).
 
 ## 0.6.1 — 2026-09-16
 
