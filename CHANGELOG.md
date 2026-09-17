@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Dependencies
+
+- Lock moved to the resolvable latest: spitfire 0.4.2 (a transitive of sourceror; 0.4.2
+  reached the registry after 0.6.2 and the latest-first gate flagged it on the next run).
+  No requirement changes; no direct dependency moved.
+
 ### Documentation
 
 - README: the protocol-package pointers now carry both the hex.pm package and its GitHub
