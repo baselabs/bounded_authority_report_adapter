@@ -116,7 +116,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
       {:ok, _} ->
         :ok
 
-      {:error, _reason} ->
+      _other ->
         Process.sleep(200)
         remove_scratch!(path, retries - 1)
     end
