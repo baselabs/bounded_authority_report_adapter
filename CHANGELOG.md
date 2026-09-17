@@ -13,12 +13,21 @@
   developer surface is ported, not just the lane: `.gitattributes` (`* text=auto
   eol=lf` — a CRLF Windows checkout failed `mix format --check-formatted`); the
   currency gate moves from a bash script to `scripts/check_deps_currency.exs` (same
-  caller-cwd contract and rendered-table classification); the release gates
-  (`check_package.exs`, `check_reproducible.exs`) drop `mktemp` for `System.tmp_dir!/0`
-  and spawn `mix` through a `cmd /c` shim on Windows; the `mix ci` alias drops its
-  POSIX `env(1)` re-execs for an env-guard first step (`scripts/ci_env_guard.exs`,
+  caller-cwd contract and rendered-table classification); the `mix ci` alias drops
+  its POSIX `env(1)` re-execs for an env-guard first step (`scripts/ci_env_guard.exs`,
   preserving the RA7 :dev-boot refusal) with the example job running through
-  `scripts/ci_example.exs` (same steps, same order, abort-on-first-red).
+  `scripts/ci_example.exs` (same steps, same order, abort-on-first-red); release-gate
+  `mix` spawns route through a `cmd /c` shim on Windows; `mktemp` is replaced by
+  `System.tmp_dir!/0`. Porting surfaced three Windows-only defects now fixed in the
+  gates themselves: `:erl_tar` cwd-directed extraction silently extracted nothing
+  (now `:memory` + `File.write!`), `Path.wildcard`'s `:filelib` underpinnings split
+  only on `/` so a backslashed temp base matched nothing (the census is now a
+  recursive `File.ls!` walk), and `File.rm_rf!` hit a delete race on still-open
+  handles (cleanup now retries and warns — an ephemeral temp dir never reds a
+  verdict). `DriftProbeTest` skips on Windows via a compile-time `@moduletag` —
+  its stub harness intercepts git/curl through POSIX shebang exec, which Git Bash
+  bypasses (the probe itself runs on Windows); the exclusion is named in the
+  workflow's gate-job comment, never silent.
 
 ## 0.6.1 — 2026-09-16
 
