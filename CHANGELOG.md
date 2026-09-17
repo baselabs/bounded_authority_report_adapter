@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Documentation
+
+- README: the protocol-package pointers now carry both the hex.pm package and its GitHub
+  repository, and state the one-directional dependency — this adapter depends on the protocol
+  package (never the reverse), and the protocol package's README describes this adapter as its
+  holder-side companion.
+
 ## 0.6.2 — 2026-09-17
 
 ### Added — Windows CI lane + cross-platform developer surface (owner standard, 2026-09-16)

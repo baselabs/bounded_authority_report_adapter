@@ -1,12 +1,15 @@
 # Bounded Authority Report Adapter
 
 Holder-side companion signer for the [Bounded Authority
-Protocol](https://hex.pm/packages/bounded_authority_protocol). The protocol package produces the
-deterministic signing input for each protocol object (holder proof, boundary anchor, grant, key
-transition) and **refuses to sign**; this library takes a local key handle and a signing input and
-produces the signed compact form. **The private key never enters the library** — callers supply a
-`{module(), term()}` handle whose module implements the signing callbacks against their own custody
-(an HSM, a KMS, or an in-process key in test).
+Protocol](https://hex.pm/packages/bounded_authority_protocol)
+([GitHub](https://github.com/baselabs/bounded_authority_protocol)). The protocol package produces
+the deterministic signing input for each protocol object (holder proof, boundary anchor, grant,
+key transition) and **refuses to sign**; this library takes a local key handle and a signing input
+and produces the signed compact form. **The private key never enters the library** — callers supply
+a `{module(), term()}` handle whose module implements the signing callbacks against their own
+custody (an HSM, a KMS, or an in-process key in test). The protocol package's README describes
+this adapter as its holder-side companion; the dependency is one-directional (this adapter depends
+on the protocol package, never the reverse).
 
 Verifiers depend only on the protocol package, never on this adapter. Consuming an envelope (the
 verifier's side of the contract) is documented in
