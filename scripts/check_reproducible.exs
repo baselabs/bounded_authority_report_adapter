@@ -52,7 +52,30 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
       IO.puts("release candidate reproducibility gate passed (two independent builds agree)")
       IO.puts("candidate archive SHA-256: #{digest1}")
     after
-      File.rm_rf!(tmp)
+      remove_scratch!(tmp)
+    end
+  end
+
+  # Best-effort scratch cleanup with bounded retries: on Windows a lingering
+  # handle from a just-exited child build can make rm_rf raise :eexist — the
+  # gate's VERDICT must never hinge on deleting an ephemeral temp dir.
+  defp remove_scratch!(path, retries \\ 3)
+
+  defp remove_scratch!(path, 0) do
+    IO.puts(
+      :stderr,
+      "check warning: could not fully remove scratch #{path} — ephemeral, left for the OS temp cleanup"
+    )
+  end
+
+  defp remove_scratch!(path, retries) do
+    case File.rm_rf(path) do
+      {:ok, _} ->
+        :ok
+
+      {:error, _reason} ->
+        Process.sleep(200)
+        remove_scratch!(path, retries - 1)
     end
   end
 

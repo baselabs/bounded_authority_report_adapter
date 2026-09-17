@@ -94,7 +94,31 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
 
       IO.puts("package archive boundary passed")
     after
-      File.rm_rf!(scratch_root)
+      remove_scratch!(scratch_root)
+    end
+  end
+
+  # Best-effort scratch cleanup with bounded retries: on Windows a lingering
+  # handle from a just-exited child build can make rm_rf raise :eexist — the
+  # gate's VERDICT must never hinge on deleting an ephemeral temp dir (a
+  # final miss warns; the runner's temp dir dies with the machine).
+  defp remove_scratch!(path, retries \\ 3)
+
+  defp remove_scratch!(path, 0) do
+    IO.puts(
+      :stderr,
+      "check warning: could not fully remove scratch #{path} — ephemeral, left for the OS temp cleanup"
+    )
+  end
+
+  defp remove_scratch!(path, retries) do
+    case File.rm_rf(path) do
+      {:ok, _} ->
+        :ok
+
+      {:error, _reason} ->
+        Process.sleep(200)
+        remove_scratch!(path, retries - 1)
     end
   end
 
