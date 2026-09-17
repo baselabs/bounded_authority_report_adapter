@@ -35,7 +35,8 @@ both mix projects; dev-only dependency bumps: `dialyxir` 1.4.8, `ex_doc` 0.40.4
 
 ## 0.6.0
 
-The protocol dependency now selects `bounded_authority_protocol == 0.4.0` exactly
+The protocol dependency now selects `bounded_authority_protocol == 0.4.1` exactly (the
+2026-09-17 bump to the protocol's 0.4.1 — a wire-identical tooling/docs patch)
 (from `== 0.3.0`). BAP 0.4.0 is additive — the v2 contract-major lands beside the
 byte-frozen v1 profile — so this is a package-resolution break for consumers retaining
 BAP 0.3.x, with zero adapter behavior change. The four signing APIs, return shapes,

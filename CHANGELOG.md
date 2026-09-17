@@ -4,7 +4,10 @@
 
 ### Dependencies
 
-- Lock moved to the resolvable latest: spitfire 0.4.2 (a transitive of sourceror; 0.4.2
+- The protocol pin moves to `== 0.4.1` (the 2026-09-17 protocol release — a
+  wire-identical tooling/docs patch; ADR-0010's bump policy). Root and edge-agent
+  locks follow; the dependency-direction wall and upgrading guide carry the new
+  version. Lock moved to the resolvable latest: spitfire 0.4.2 (a transitive of sourceror; 0.4.2
   reached the registry after 0.6.2 and the latest-first gate flagged it on the next run).
   No requirement changes; no direct dependency moved.
 
