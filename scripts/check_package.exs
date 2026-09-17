@@ -133,11 +133,13 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   ## checks
 
   defp check_exact_files!(package_root) do
+    # Recursive File.ls! walk, never Path.wildcard: :filelib.wildcard splits
+    # its pattern on "/" only, so a backslashed Windows temp base
+    # (C:\Users\RUNNER~1\...) matches nothing — the census saw an empty tree
+    # with the files present on disk (first windows-lane runs).
     actual =
       package_root
-      |> Path.join("**/*")
-      |> Path.wildcard(match_dot: true)
-      |> Enum.filter(&File.regular?/1)
+      |> regular_files_under!()
       |> Enum.map(&Path.relative_to(&1, package_root))
       |> MapSet.new()
 
@@ -150,6 +152,16 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
           "unexpected=#{inspect(unexpected)}"
       )
     end
+  end
+
+  defp regular_files_under!(dir) do
+    dir
+    |> File.ls!()
+    |> Enum.flat_map(fn name ->
+      path = Path.join(dir, name)
+
+      if File.dir?(path), do: regular_files_under!(path), else: [path]
+    end)
   end
 
   defp check_metadata!(path, version, requirements) do
