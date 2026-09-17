@@ -103,10 +103,12 @@ version move. A probe, not a gate — not part of `mix ci`.
    its own `mix.lock`, its own `deps/`. The adapter is a `path: "../.."` dep; it
    pulls req/bandit/plug. Runnable end-to-end (`EdgeAgent.run` → `EdgeAgent.Receiver`).
 
-CI (`.github/workflows/ci.yml`) runs **two jobs**: `gate` (the library: format ·
-compile · credo · test) and `example` (the example app: dependency advisory audit,
-then the same four build steps, run from `examples/edge_agent/`). Both must stay
-green. The Livebook
+CI (`.github/workflows/ci.yml`) runs **two jobs**: `gate` (the library: deps · currency ·
+format · compile · credo · test · gate battery) and `example` (the example app: deps ·
+currency · advisory audit, then the same four build steps, run from
+`examples/edge_agent/`). Both must stay green on ALL THREE matrix lanes (one per supported
+OTP major 27–29 — ADR-0019; 25/26 are excluded: BAP's codecs decode through `:json`, OTP
+27+ stdlib). The Livebook
 (`examples/report_envelope_roundtrip.livemd`) is NOT run in CI — its round-trip is
 covered by the library's `sign_report_test.exs`.
 
@@ -204,5 +206,10 @@ by construction. Do not reach for an `encode`; the body is bytes that already ex
 
 ## Environment
 
-Elixir 1.20.2 / OTP 29 (`.tool-versions`, asdf). Run `mix` from inside the repo
-dir (the asdf shim quirk). BAP is consumed from its public Hex release.
+Elixir 1.20.2 / OTP 29 (`.tool-versions`, asdf — the dev lane). The supported set is
+Elixir minors 1.18/1.19/1.20 on Erlang/OTP majors 27–29 (25/26 are excluded: BAP's
+codecs decode through `:json`, OTP 27+ stdlib), enforced at config load by
+`config/config.exs` (both mix projects) and carried one-lane-per-major by the CI matrix
+(ADR-0019; the mix range, the set, `.tool-versions`, and the lanes move in ONE commit).
+Run `mix` from inside the repo dir (the asdf shim quirk). BAP is consumed from its public
+Hex release.

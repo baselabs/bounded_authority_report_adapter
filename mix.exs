@@ -1,13 +1,20 @@
 defmodule BoundedAuthorityReportAdapter.MixProject do
   use Mix.Project
 
-  @version "0.6.0"
+  @version "0.6.1"
   @source_url "https://github.com/baselabs/bounded_authority_report_adapter"
 
   def project do
     [
       app: :bounded_authority_report_adapter,
       version: @version,
+      # Supported Elixir line (ADR-0019): the range admits the supported
+      # minors (1.18/1.19/1.20) and Mix refuses anything outside it at
+      # compile. The supported OTP-major set ({27..29}) is enforced by
+      # config/config.exs — 25/26 are excluded: the protocol package's
+      # codecs decode through :json, which enters stdlib in OTP 27.
+      # LOCKSTEP: this range, that set, .tool-versions, and the CI matrix
+      # lanes move together in ONE commit.
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -48,8 +55,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   end
 
   # `mix ci` — local CI parity: reproduces .github/workflows/ci.yml step-for-
-  # step (five library steps; edge dependency audit + five build steps) with zero
-  # GitHub Actions spend.
+  # step on the pinned dev lane (every library-job step + the example job's
+  # steps) with zero GitHub Actions spend.
   # The workflow exports MIX_ENV: test at the JOB level, so every step here
   # re-execs mix under MIX_ENV=test via env(1) — a bare local `mix ci` would
   # otherwise boot in :dev, and a :dev compile skips test/support (the
@@ -60,6 +67,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       ci: [
         # job: gate (the library)
         "cmd env MIX_ENV=test mix deps.get",
+        # Latest-first dependency currency (ADR-0020; the workflow's currency
+        # step — caller-cwd script, runs against THIS project).
+        "cmd env MIX_ENV=test bash scripts/check-deps-currency.sh",
         "cmd env MIX_ENV=test mix format --check-formatted",
         "cmd env MIX_ENV=test mix compile --warnings-as-errors",
         "cmd env MIX_ENV=test mix credo --strict",
@@ -83,6 +93,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "cmd env MIX_ENV=test mix run --no-start scripts/check_reproducible.exs",
         # job: example (the workflow's working-directory: examples/edge_agent)
         "cmd --cd examples/edge_agent env MIX_ENV=test mix deps.get",
+        "cmd --cd examples/edge_agent env MIX_ENV=test bash ../../scripts/check-deps-currency.sh",
         "cmd --cd examples/edge_agent env MIX_ENV=test mix hex.audit",
         "cmd --cd examples/edge_agent env MIX_ENV=test mix format --check-formatted",
         "cmd --cd examples/edge_agent env MIX_ENV=test mix compile --warnings-as-errors",
@@ -109,6 +120,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # deps; the emitter is shape-validated and value-free
       # (lib/bounded_authority_report_adapter/telemetry.ex).
       {:telemetry, "~> 1.3"},
+      # DELIBERATE EXACT PIN, never floated: BAP's version IS the wire-contract
+      # identity this adapter compiles against (ADR-0010's bump policy +
+      # ADR-0017's exact-pin rationale). A bare `mix deps.update` on it reds
+      # the dependency wall by design; a bump is a reviewed, one-commit move.
       {:bounded_authority_protocol, "== 0.4.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # The install task (lib/mix/tasks) uses Igniter when present; the file

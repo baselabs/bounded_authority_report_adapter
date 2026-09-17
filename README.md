@@ -94,7 +94,11 @@ oracle vectors and the dependency-direction wall), for both the library and the 
 runs `mix hex.audit` against the edge example's own lock, so a transport advisory fails the local and
 GitHub entry points.
 
-Requires Elixir 1.18+ (developed on 1.20 / OTP 29). The runnable `examples/edge_agent` app is a
+Requires Elixir `~> 1.18` — supported minors 1.18/1.19/1.20 — on Erlang/OTP 27 through 29
+(the majors on which the stack compiles — the protocol package's codecs decode through OTP
+27's `:json` module, so 25/26 are out; enforced at compile time by the repository's own
+`config/config.exs`, never shipped to consumers — ADR-0019). Developed on
+1.20 / OTP 29. The runnable `examples/edge_agent` app is a
 separate mix project with its own deps and CI job — develop it from inside that directory.
 
 ## Telemetry

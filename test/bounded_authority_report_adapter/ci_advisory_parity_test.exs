@@ -18,6 +18,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
   @edge_dir "examples/edge_agent"
   @audit_command "mix hex.audit"
+  @currency_command "bash scripts/check-deps-currency.sh"
 
   # The gate battery, in the canonical step order shared by `mix ci` and the
   # workflow's gate job.
@@ -35,9 +36,9 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     root_mix = File.read!("mix.exs")
 
     assert root_mix =~
-             ~r|cmd --cd #{@edge_dir} env MIX_ENV=test mix deps\.get"\s*,\s*"cmd --cd #{@edge_dir} env MIX_ENV=test #{@audit_command}"|,
+             ~r|cmd --cd #{@edge_dir} env MIX_ENV=test mix deps\.get"\s*,\s*"cmd --cd #{@edge_dir} env MIX_ENV=test bash \.\./\.\./scripts/check-deps-currency\.sh"\s*,\s*"cmd --cd #{@edge_dir} env MIX_ENV=test #{@audit_command}"|,
            "mix ci must fail on advisories in the edge example's own lock immediately after " <>
-             "that project resolves its dependencies"
+             "that project resolves its dependencies (currency between them)"
   end
 
   test "the GitHub example job audits its owner-local lock after dependency resolution" do
@@ -49,9 +50,48 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
            "the GitHub example job must bind every mix command to examples/edge_agent"
 
     assert example_job =~
-             ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Audit dependencies\s+run: #{@audit_command}|,
+             ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Check dependency currency \(latest-first\)\s+run: bash \.\./\.\./scripts/check-deps-currency\.sh\s+- name: Audit dependencies\s+run: #{@audit_command}|,
            "the GitHub example job must run mix hex.audit against examples/edge_agent, not " <>
              "the root library lock"
+  end
+
+  test "the dependency-currency gate runs in both surfaces immediately after dependency resolution" do
+    # ADR-0020's wiring pin, both surfaces, adjacency to deps.get (drift is
+    # known at resolution time; the earlier it reds, the less work follows).
+    # Mutation-proven: dropping the step from either surface must break the
+    # adjacency pattern — a gate the orchestration silently skips is absent.
+    root_mix = File.read!("mix.exs") |> strip_comments()
+    workflow = File.read!(".github/workflows/ci.yml") |> strip_comments()
+    [gate_job, _] = String.split(workflow, "\n  example:", parts: 2)
+
+    alias_pattern =
+      ~r|cmd env MIX_ENV=test mix deps\.get",\s*"cmd env MIX_ENV=test bash scripts/check-deps-currency\.sh",|
+
+    workflow_pattern =
+      ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Check dependency currency \(latest-first\)\s+run: bash scripts/check-deps-currency\.sh|
+
+    assert root_mix =~ alias_pattern,
+           "mix ci must run the currency gate immediately after the library resolves its deps"
+
+    assert gate_job =~ workflow_pattern,
+           "the gate job must run the currency step immediately after dependency install"
+
+    mutated_alias =
+      String.replace(
+        root_mix,
+        ~s{"cmd env MIX_ENV=test bash scripts/check-deps-currency.sh",},
+        "",
+        global: false
+      )
+
+    refute mutated_alias == root_mix, "alias mutation fixture changed nothing"
+    refute mutated_alias =~ alias_pattern, "alias adjacency survives a dropped currency step"
+
+    mutated_gate =
+      String.replace(gate_job, "run: #{@currency_command}\n", "run: mix test\n", global: false)
+
+    refute mutated_gate == gate_job, "workflow mutation fixture changed nothing"
+    refute mutated_gate =~ workflow_pattern, "workflow adjacency survives a dropped currency step"
   end
 
   test "mix ci runs the gate battery in the canonical order after the plain test step" do

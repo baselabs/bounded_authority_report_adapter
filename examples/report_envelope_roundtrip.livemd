@@ -59,7 +59,7 @@ box — nothing more. The other two boxes are played below only so you can see t
 
 ```elixir
 # Pulls this repo (the adapter) + its one dependency, bounded_authority_protocol (the public
-# format/verifier package). First run fetches BAP from its private git remote (needs access).
+# format/verifier package, resolved from hex.pm — no private remote, no access needed).
 adapter_path = __DIR__ |> Path.join("..") |> Path.expand()
 
 Mix.install([

@@ -1,9 +1,36 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 — 2026-09-16
 
-### Changed — repository hygiene
+### Changed — repository toolchain hygiene (no library-code or runtime-dep change)
 
+- The repository now enforces its own toolchain (ADR-0019): `config/config.exs` in both
+  mix projects refuses to build on an Erlang/OTP major outside the supported set {27–29}
+  at config load — before compilation and before dependency resolution. The set is
+  probe-discovered, not hand-picked: OTP 25/26 have official images but are excluded
+  because `bounded_authority_protocol` 0.4.0's codecs decode through `:json`, which
+  enters stdlib in OTP 27 (probe-proven: the test battery fails compile on both, and
+  `code:ensure_loaded(json)` is `{error,nofile}` there). The assert is NOT part of the
+  published package (the `files:` allowlist excludes `config/`; the package census gate
+  proves it) — consumers are unaffected. The CI matrix's three lanes (1.18/27, 1.19/28,
+  1.20/29) are now lockstep-bound to the enforced set: mix range, config set,
+  `.tool-versions`, and lanes move in ONE commit.
+- Dependency-currency gate (ADR-0020): `scripts/check-deps-currency.sh` — caller-cwd,
+  classifies the RENDERED `mix hex.outdated` tables (direct + `--all`; whitespace-anchored
+  status matches), fails on resolvable drift and on an unrendered (unverified) state,
+  reports resolver-rejected pins with their requirement chains. Runs in both CI jobs
+  after dependency install and in both project sections of `mix ci`.
+- Latest-first dependency sweep (dev/test-only; the shipped requirement set is
+  unchanged): `dialyxir` 1.4.7 → 1.4.8, `ex_doc` 0.40.3 → 0.40.4, and transitive
+  `sourceror` 1.12.2 → 1.12.3 (released to hex.pm mid-audit; the new currency gate
+  caught it on its first battery run and blocked the release until resolved); example
+  app `req` 0.7.2 → 0.7.4 (the example's lock had drifted behind the library's).
+  `mix hex.audit` / `mix deps.audit` clean on both projects.
+- Docs re-trued to the enforced-set story (README, getting-started, upgrading — which
+  also gains the missing 0.6.0 section and drops a stale Unreleased block that
+  duplicated shipped 0.3.0 content); the Livebook setup comment's claim that BAP is
+  fetched from a "private git remote" is corrected (it resolves from public hex.pm);
+  the notebook's cells were executed end-to-end (8 cells, all pinned verdicts).
 - The retired local-harness (forge-era) artifact tree — still tracked at tip in this
   repository — is removed from the working tree and from the entire git history
   (owner-executed rewrite, 2026-09-14; the surviving content differs from pre-rewrite tips by

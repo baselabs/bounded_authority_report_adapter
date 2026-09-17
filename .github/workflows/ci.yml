@@ -15,8 +15,12 @@ jobs:
 
     # Local parity: `mix ci` reproduces these steps step-for-step on the
     # PINNED lane only (asdf .tool-versions — the local floor). The matrix is
-    # CI-side breadth across supported Elixir/OTP pairs; every cell runs the
-    # identical battery.
+    # CI-side breadth: one lane per supported OTP major (the set enforced by
+    # config/config.exs, ADR-0019 — {27..29}; OTP 25/26 are excluded: images
+    # exist but the protocol package's codecs decode through :json, which
+    # enters stdlib in OTP 27); every cell runs the identical battery.
+    # LOCKSTEP: these lanes move together with the mix.exs elixir range, the
+    # config assert's set, and .tool-versions.
     strategy:
       fail-fast: false
       matrix:
@@ -43,6 +47,9 @@ jobs:
 
       - name: Install deps
         run: mix deps.get
+
+      - name: Check dependency currency (latest-first)
+        run: bash scripts/check-deps-currency.sh
 
       - name: Check formatting
         run: mix format --check-formatted
@@ -83,8 +90,9 @@ jobs:
     name: examples/edge_agent (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-latest
 
-    # Same three-cell matrix as the gate job: the example app is part of the
-    # supported surface (its Bandit/Req pins must hold on every lane).
+    # Same three-lane matrix as the gate job (one lane per supported OTP
+    # major, ADR-0019): the example app is part of the supported surface (its
+    # Bandit/Req pins must hold on every lane).
     strategy:
       fail-fast: false
       matrix:
@@ -113,6 +121,9 @@ jobs:
 
       - name: Install deps
         run: mix deps.get
+
+      - name: Check dependency currency (latest-first)
+        run: bash ../../scripts/check-deps-currency.sh
 
       - name: Audit dependencies
         run: mix hex.audit

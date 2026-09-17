@@ -20,6 +20,11 @@ defmodule EdgeAgent.MixProject do
     [
       app: :edge_agent,
       version: @version,
+      # Supported Elixir line (ADR-0019), same as the library's: the range
+      # admits 1.18/1.19/1.20 and Mix refuses anything outside at compile.
+      # The supported OTP-major set ({27..29}) is enforced by this project's
+      # config/config.exs. LOCKSTEP: mix range, that set, .tool-versions, and
+      # the CI example-job lanes move together in ONE commit.
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps()

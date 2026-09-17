@@ -3,6 +3,32 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 0.6.1
+
+Repository tooling/hygiene release — no library code, API, or runtime-dependency change.
+The repository now enforces its own toolchain: builds refuse Erlang/OTP majors outside the
+supported set {27–29} at config load, before compilation (ADR-0019). OTP 25 and 26 are
+explicitly outside the set — `bounded_authority_protocol` 0.4.0's codecs decode through
+OTP 27's `:json` module, so the stack cannot compile its test battery there (probe-proven
+on the official `elixir:1.18.4-otp-25` and `elixir:1.19.6-otp-26` images). The assert
+lives in the repository's `config/config.exs`, which is NOT part of the published
+package — consumers are unaffected. The CI matrix keeps its three lanes (1.18/27,
+1.19/28, 1.20/29 — one per supported major), now locked to the enforced set. A
+dependency-currency gate (latest-first policy, ADR-0020) runs in CI and `mix ci` for
+both mix projects; dev-only dependency bumps: `dialyxir` 1.4.8, `ex_doc` 0.40.4
+(example app: `req` 0.7.4). Nothing for a consumer to do.
+
+## 0.6.0
+
+The protocol dependency now selects `bounded_authority_protocol == 0.4.0` exactly
+(from `== 0.3.0`). BAP 0.4.0 is additive — the v2 contract-major lands beside the
+byte-frozen v1 profile — so this is a package-resolution break for consumers retaining
+BAP 0.3.x, with zero adapter behavior change. The four signing APIs, return shapes,
+key-handle contract, telemetry, and produced V1 wire forms are unchanged.
+
+Run `mix deps.get` and confirm your lock contains one BAP 0.4.0 entry. Do not
+override BARA back to BAP 0.3.x or retain parallel BAP lines.
+
 ## 0.5.0
 
 The protocol dependency now selects `bounded_authority_protocol == 0.3.0`
@@ -45,18 +71,6 @@ full guide set, the Igniter installer, the doctor preflight, and the
 supply-chain workflow. The contract itself is NOT yet operative — 1.0 is
 deferred until the release sees real consumer use (owner direction, 2026-08-26);
 until then the pre-1.0 SemVer §4 policy applies.
-
-## Unreleased → (next)
-
-- Telemetry: the four signing entry points now emit a value-free two-event surface —
-  `[:bounded_authority_report_adapter, :sign, :start|:stop]`. You will observe the new
-  events only after attaching a handler to those exact event names (`:telemetry`
-  dispatches by exact name; there is no wildcard attach). No handler is attached by the
-  library. A new runtime dependency (`:telemetry ~> 1.3`, zero transitive deps) entered
-  the package's requirements.
-- CI/gates (no API change): coverage floor, dialyzer, doc warnings, dependency audits,
-  and the package boundary check run in `mix ci`; the workflow runs a three-cell
-  Elixir/OTP matrix.
 
 ## 0.2.1
 

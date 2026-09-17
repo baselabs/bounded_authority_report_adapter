@@ -1,5 +1,18 @@
 import Config
 
+# Self-enforcing toolchain (ADR-0019): same supported-OTP set as the library —
+# {27..29}. OTP 25 and 26 are excluded with the library: the protocol
+# package's codecs decode through :json, which enters stdlib in OTP 27, so
+# the stack cannot run there even though images exist. LOCKSTEP with the
+# library's mix.exs elixir range, the repo's .tool-versions, and the CI
+# example-job lanes.
+supported_otp = ["27", "28", "29"]
+running_otp = to_string(:erlang.system_info(:otp_release))
+
+unless running_otp in supported_otp do
+  raise "edge_agent supports Erlang/OTP 27/28/29; running #{running_otp} (Elixir #{System.version()}, code root #{:code.root_dir()})."
+end
+
 # Demo configuration for the edge-agent reference app. The agent + receiver SHARE
 # this config so the request-field contract (consumer-integration.md §3) is
 # byte-agreement-by-construction: `target_uri`, `operation`, `issuer`,
