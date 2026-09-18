@@ -3,6 +3,14 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 0.6.3
+
+The protocol pin moves to `bounded_authority_protocol == 0.4.1` — the 2026-09-17 protocol
+release is wire-identical to 0.4.0 (docs and tooling only), so no signing or verification
+behavior changes; consumers gain nothing functional and lose nothing by staying on 0.6.2 with
+protocol 0.4.0 until they choose to move. Also in 0.6.3: the spitfire 0.4.2 transitive and the
+README cross-links to the protocol repository.
+
 ## 0.6.2
 
 Repository tooling/CI release — no library code, API, or runtime-dependency change; nothing
