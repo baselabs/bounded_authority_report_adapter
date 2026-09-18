@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BAP in Elixir — the reference signer</title>
+<meta name="description" content="bounded_authority_report_adapter: the Elixir reference implementation of the Bounded Authority Protocol's holder/issuer signing side. Private keys never enter the library — callers supply a {module, term} handle into their own custody.">
+<link rel="stylesheet" href="./styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%230f172a'/%3E%3Ctext x='24' y='32' font-family='Arial,sans-serif' font-size='19' font-weight='800' text-anchor='middle' fill='%23a78bfa'%3E[BAP]%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="i-key"><path d="M10.6 13.4L21 3"/><path d="M18 4l2 2"/><path d="M15 7l2 2"/><circle cx="7.2" cy="16.8" r="3.8"/></g>
+    <g id="i-seal"><path d="M6 21h12"/><path d="M8 21v-2c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v2"/><path d="M12 3a3.2 3.2 0 0 1 3.2 3.2c0 2.2-3.2 3.3-3.2 5.8 0-2.5-3.2-3.6-3.2-5.8A3.2 3.2 0 0 1 12 3z"/></g>
+    <g id="i-person"><circle cx="12" cy="8" r="3.3"/><path d="M5.2 20.5a6.8 6.8 0 0 1 13.6 0"/></g>
+    <g id="i-shield"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M8.8 12l2.2 2.2 4.2-4.2"/></g>
+    <g id="i-doc"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M10 12h5"/><path d="M10 16h5"/></g>
+    <g id="i-lock"><rect x="6" y="11" width="12" height="9" rx="2"/><path d="M9 11V8a3 3 0 0 1 6 0v3"/></g>
+    <g id="i-check"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.3l2.4 2.4 4.6-4.9"/></g>
+    <g id="i-terminal"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 10l2.6 2-2.6 2"/><path d="M12.5 14h4"/></g>
+  </defs>
+</svg>
+
+<header class="familynav">
+  <nav>
+    <span class="brand"><span class="wordmark"><i>[</i>BAP<i>]</i></span></span>
+    <span class="fam">
+      <a href="https://baselabs.github.io/bounded_authority_protocol/" title="The protocol hub">Protocol</a>
+      <a href="https://baselabs.github.io/bounded_authority_protocol_typescript/" title="The verifier package — the live bench">Verifier</a>
+      <a href="https://baselabs.github.io/bounded_authority_signer_typescript/" title="The signer package — the live envelope playground">Signer</a>
+      <a href="#" class="here" title="You are here">Elixir&nbsp;reference</a>
+    </span>
+    <a class="gh" href="https://github.com/baselabs/bounded_authority_report_adapter">GitHub&nbsp;↗</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <p class="kicker"><span class="wordmark hero-mark"><i>[</i>BAP<i>]</i></span> Bounded Authority · the Elixir reference</p>
+    <h1>The reference signer, <em>in Elixir</em>.</h1>
+    <p class="lede"><code style="background:none;border:none;color:#cbd5e1">bounded_authority_report_adapter</code> is the holder/issuer
+    companion signer the TypeScript package ports: it takes a <strong>{module, term()} key handle</strong> whose callbacks reach
+    your own custody — an HSM, a KMS, an in-process test key — and produces the signed envelope.
+    <strong>The private key never enters the library.</strong> The dependency is one-directional:
+    this adapter depends on the protocol package, never the reverse; verifiers depend only on the
+    protocol package, never on this adapter.</p>
+    <div class="hero-actions">
+      <a class="btn primary" href="https://baselabs.github.io/bounded_authority_signer_typescript/"><svg class="ic"><use href="#i-terminal"/></svg> See it run — the playground</a>
+      <a class="btn ghost" href="https://hex.pm/packages/bounded_authority_report_adapter">hex.pm package</a>
+    </div>
+    <div class="flow" aria-label="The envelope flow">
+      <div class="actor issuer"><svg class="ic"><use href="#i-seal"/></svg><span>Issuer</span><small>sign_grant/3</small></div>
+      <div class="artifact"><svg class="ic"><use href="#i-doc"/></svg><span>grant</span></div>
+      <div class="actor holder"><svg class="ic"><use href="#i-person"/></svg><span>Holder</span><small>sign_report/3</small></div>
+      <div class="artifact"><svg class="ic"><use href="#i-doc"/></svg><span>proof</span></div>
+      <div class="actor verifier"><svg class="ic"><use href="#i-shield"/></svg><span>Verifier</span><small>check_envelope/2</small></div>
+    </div>
+    <ul class="badges">
+      <li>hex 0.6.3</li><li>CI green on macOS · Linux · Windows</li><li>telemetry: closed, value-free</li>
+    </ul>
+  </div>
+</section>
+
+<main>
+<section id="surface" class="wrap">
+  <div class="sec-head"><h2>The signing surface</h2>
+  <p>Five entry points, one shared signing tail, one closed error-atom set — identical in shape
+  to the TypeScript port.</p></div>
+  <table class="signers">
+    <thead><tr><th>Function</th><th>Object</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><code>sign_report/3</code></td><td>holder proof — the grant passes through untouched</td><td><span class="role-badge holder">holder</span></td></tr>
+      <tr><td><code>sign_local_loopback_report/3</code></td><td>local-loopback application proof (<code>ba+loopback-proof</code>)</td><td><span class="role-badge holder">holder</span></td></tr>
+      <tr><td><code>sign_anchor/3</code></td><td>boundary anchor</td><td><span class="role-badge">role-agnostic</span></td></tr>
+      <tr><td><code>sign_key_transition/3</code></td><td>key transition</td><td><span class="role-badge">role-agnostic</span></td></tr>
+      <tr><td><code>sign_grant/3</code></td><td>capability grant</td><td><span class="role-badge issuer">issuer-only, structurally gated</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="why" class="wrap why">
+  <div class="why-head">
+    <h2>What the reference guarantees</h2>
+    <p>The properties the whole family inherits — enforced here first, ported verbatim.</p>
+  </div>
+  <div class="grid3">
+    <article class="whycard">
+      <h3>Custody is the caller’s.</h3>
+      <p class="pain">A signing library that touches key material becomes the most valuable
+      target in your system.</p>
+      <p class="answer"><svg class="ic"><use href="#i-check"/></svg> The adapter only ever calls <strong>{module, term()} callbacks</strong> into your
+      custody — and every sign path ends in a verify-against-the-public-key guard, so a
+      misconfigured custodian fails loudly.</p>
+    </article>
+    <article class="whycard">
+      <h3>A holder cannot mint capability.</h3>
+      <p class="pain">If the agent’s key can self-issue grants, the boundary is decorative.</p>
+      <p class="answer"><svg class="ic"><use href="#i-check"/></svg> <strong>sign_grant/3 resolves the issuer role atomically</strong> and fails
+      closed before sign/2 is ever called — a holder handle cannot mint its own authority.</p>
+    </article>
+    <article class="whycard">
+      <h3>Nothing leaks in failure.</h3>
+      <p class="pain">Error messages that narrate which check failed are reconnaissance gifts.</p>
+      <p class="answer"><svg class="ic"><use href="#i-check"/></svg> Closed error atoms, value-free telemetry — <strong>no key material, message
+      bytes, or report content</strong> ever appears in an error or an event.</p>
+    </article>
+  </div>
+</section>
+
+<section id="family" class="wrap">
+  <div class="why-head">
+    <h2>The family</h2>
+    <p>One protocol, four repositories, two ecosystems — same wire bytes everywhere.</p>
+  </div>
+  <div class="fammap">
+    <article class="famcard">
+      <h3><svg class="ic"><use href="#i-doc"/></svg> The protocol</h3>
+      <p>The monorepo: wire specs, the ADR library, certified conformance corpora, the threat model.</p>
+      <div class="links"><a href="https://baselabs.github.io/bounded_authority_protocol/">the hub</a><a href="https://github.com/baselabs/bounded_authority_protocol">repository</a><a href="https://hex.pm/packages/bounded_authority_protocol">hex.pm</a></div>
+    </article>
+    <article class="famcard">
+      <h3><svg class="ic"><use href="#i-seal"/></svg> The signer (TypeScript)</h3>
+      <p>The npm port of this adapter — with the live envelope playground in your browser.</p>
+      <div class="links"><a href="https://baselabs.github.io/bounded_authority_signer_typescript/">playground</a><a href="https://www.npmjs.com/package/@bounded-authority-protocol/signer">npm</a></div>
+    </article>
+    <article class="famcard">
+      <h3><svg class="ic"><use href="#i-shield"/></svg> The verifier (TypeScript)</h3>
+      <p>The npm verify side with its live bench — decode, check, tamper.</p>
+      <div class="links"><a href="https://baselabs.github.io/bounded_authority_protocol_typescript/">the bench</a><a href="https://www.npmjs.com/package/@bounded-authority-protocol/verifier">npm</a></div>
+    </article>
+    <article class="famcard here">
+      <h3><svg class="ic"><use href="#i-key"/></svg> This repository</h3>
+      <p>The Elixir reference signer. Docs, guides, recipes, and the upgrade path live on hexdocs.</p>
+      <div class="links"><a href="https://hexdocs.pm/bounded_authority_report_adapter/">hexdocs</a><a href="https://hex.pm/packages/bounded_authority_report_adapter">hex.pm</a><a href="https://github.com/baselabs/bounded_authority_report_adapter">repository</a></div>
+    </article>
+  </div>
+</section>
+</main>
+
+<footer class="familynav footer">
+  <nav>
+    <span class="brand"><span class="wordmark"><i>[</i>BAP<i>]</i></span></span>
+    <span class="fam">
+      <a href="https://baselabs.github.io/bounded_authority_protocol/">Protocol</a>
+      <a href="https://baselabs.github.io/bounded_authority_protocol_typescript/">Verifier</a>
+      <a href="https://baselabs.github.io/bounded_authority_signer_typescript/">Signer</a>
+      <a href="https://github.com/baselabs/bounded_authority_report_adapter">Elixir&nbsp;reference</a>
+    </span>
+    <span class="fine">Apache-2.0 · an open protocol by baselabs</span>
+  </nav>
+</footer>
+</body>
+</html>
