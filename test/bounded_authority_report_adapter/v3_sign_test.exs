@@ -935,9 +935,28 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
 
     test "a v2 grant fails both report gates as :invalid_report (the payload names the major)" do
       # v1 and v2 grants share the EdDSA header, so a header-only gate cannot
-      # separate them — the payload's v claim does (review finding 2).
+      # separate them — the payload's v claim does (review finding 2). The
+      # fixture grant is GENUINELY valid first — proven green through the V2
+      # facade — so the gate's rejection is a major rejection, not a
+      # malformed-input rejection.
       {ed_pub, ed_priv} = TestKeys.holder_keypair()
-      foreign_grant = mismatched_major_grant_compact(TestKeys.holder_thumbprint_raw(ed_pub))
+      ed_thumb = TestKeys.holder_thumbprint_raw(ed_pub)
+      foreign_grant = mismatched_major_grant_compact(ed_thumb)
+
+      {v2_issuer_pub, _} = TestKeys.issuer_keypair()
+
+      assert {:ok, _facts} =
+               BoundedAuthorityProtocol.V2.verify_grant(
+                 foreign_grant,
+                 %TrustedIssuer{key_id: "issuer-2026-07", public_key: v2_issuer_pub},
+                 %ExpectedGrant{
+                   issuer: "https://issuer.example.test",
+                   audience: "https://verifier.example.test",
+                   evaluation_time: 1_500,
+                   clock_skew: 60,
+                   bounds: V1.Bounds.maximum()
+                 }
+               )
 
       assert {:error, :invalid_report} =
                BoundedAuthorityReportAdapter.sign_report(

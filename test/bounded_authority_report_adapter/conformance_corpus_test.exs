@@ -86,7 +86,8 @@ defmodule BoundedAuthorityReportAdapter.ConformanceCorpusTest do
       assert length(Enum.uniq(executed_ids)) == census, major
       assert MapSet.new(executed_ids) == MapSet.new(corpus.case_ids), major
 
-      disagreements = for id <- executed_ids, result = find_result(results, id), not result.agree, do: id
+      disagreements =
+        for id <- executed_ids, result = find_result(results, id), not result.agree, do: id
 
       assert disagreements == [],
              "#{major} corpus cases disagreed with the dependency: " <> inspect(disagreements)
