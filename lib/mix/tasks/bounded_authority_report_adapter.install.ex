@@ -52,15 +52,26 @@ if Code.ensure_loaded?(Igniter) do
         Implement each callback against your real custody store (HSM, KMS, key
         server). The adapter calls THESE functions and never sees the private key.
 
+        Two suite surfaces share this behaviour (ADR-0021): the major-1
+        surface (BoundedAuthorityReportAdapter — Ed25519, 32-byte keys) and
+        the major-3 surface (BoundedAuthorityReportAdapter.V3 — ES256,
+        65-byte uncompressed-SEC1 P-256 points, raw r||s signatures with
+        low-S; the adapter normalizes high-S returns). The KEY's wire shape
+        selects which surface it can serve; run
+        mix bounded_authority_report_adapter.doctor to check yours.
+
         Which callback matters for which operation:
           sign_report/3         -> sign/2, public_key/1 (thumbprint/1 is NOT
                                    called by the adapter — the proof's thumbprint
                                    is computed internally from the resolved public
                                    key; your thumbprint/1 exists for caller-side
-                                   self-checking)
+                                   self-checking and must use the SUITE'S RFC 7638
+                                   preimage: OKP members for Ed25519, EC members
+                                   for P-256)
           sign_anchor/3         -> sign/2, key_identity/1 (atomic kid+pub snapshot)
           sign_grant/3          -> sign/2, signing_identity/1 (must declare :issuer)
           sign_key_transition/3 -> sign/2, key_identity/1
+          V3.sign_report/3 and siblings -> the same callbacks over P-256 keys
         \"\"\"
 
         @behaviour BoundedAuthorityReportAdapter
@@ -73,9 +84,16 @@ if Code.ensure_loaded?(Igniter) do
 
         @impl true
         def sign(message, _handle) when is_binary(message) do
-          # Real shape (Ed25519 via your custody stack):
+          # Real shape (Ed25519 via your custody stack, for the major-1 surface):
           #   {:ok, signature} = MyHsm.sign_ed25519(_handle, message)
           #   {:ok, signature}
+          #
+          # For the V3 surface (ES256): return the RFC 7518 §3.4 RAW r||s form
+          # (exactly 64 bytes). DER output must be converted first — e.g. for
+          # OTP crypto, decode the DER SEQUENCE to (r, s), normalize low-S
+          # (s <- n - s when s > n/2), and re-encode as two padded 32-byte
+          # big-endian integers. The adapter ALSO normalizes low-S, and
+          # rejects DER (a 71-byte return is :signing_failed).
           raise "wire #{inspect(module)}.sign/2 to your custody store — see docs/recipes.md"
         end
 
@@ -89,9 +107,12 @@ if Code.ensure_loaded?(Igniter) do
 
         @impl true
         def thumbprint(_handle) do
-          # Real shape (after public_key/1 is wired):
+          # Real shape (after public_key/1 is wired) — the SUITE'S RFC 7638
+          # preimage: OKP members for a 32-byte Ed25519 key, EC members for a
+          # 65-byte P-256 key:
           #   {:ok, pub} = public_key(_handle)
           #   BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(pub, %{})
+          #   (P-256: SHA-256 of BoundedAuthorityProtocol.V3.EcJwk's preimage)
           raise "wire #{inspect(module)}.thumbprint/1 (delegate to public_key/1)"
         end
 

@@ -8,13 +8,16 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
 
   use ExUnit.Case, async: false
 
+  alias BoundedAuthorityProtocol.V1
   alias Mix.Tasks.BoundedAuthorityReportAdapter.Doctor
+
+  def ed_thumb_ref(pub), do: elem(V1.Jwk.public_key_thumbprint_raw(pub, %{}), 1)
 
   # Scratch handles, one per defect class.
   defmodule FullHandle do
     def sign(message, _ref), do: {:ok, keypair_sign(message)}
     def public_key(_ref), do: {:ok, elem(keypair(), 0)}
-    def thumbprint(_ref), do: {:ok, :crypto.hash(:sha256, elem(keypair(), 0))}
+    def thumbprint(_ref), do: {:ok, __MODULE__.ed_thumb_ref(elem(keypair(), 0))}
     def key_identity(_ref), do: {:ok, {"k", elem(keypair(), 0)}}
     def signing_identity(_ref), do: {:ok, {:holder, "k", elem(keypair(), 0)}}
     defp keypair, do: :crypto.generate_key(:eddsa, :ed25519, <<7::256>>)
@@ -23,7 +26,9 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
 
   defmodule NoSignHandle do
     def public_key(_ref), do: {:ok, elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0)}
-    def thumbprint(_ref), do: {:ok, <<0::256>>}
+
+    def thumbprint(_ref),
+      do: {:ok, __MODULE__.ed_thumb_ref(elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0))}
 
     def key_identity(_ref),
       do: {:ok, {"k", :crypto.generate_key(:eddsa, :ed25519, <<7::256>>) |> elem(0)}}
@@ -56,7 +61,9 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
   defmodule MinimalHandle do
     def sign(_m, _r), do: {:ok, <<0::512>>}
     def public_key(_r), do: {:ok, elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0)}
-    def thumbprint(_r), do: {:ok, <<0::256>>}
+
+    def thumbprint(_r),
+      do: {:ok, __MODULE__.ed_thumb_ref(elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0))}
   end
 
   defmodule WrongKeyHandle do
@@ -69,9 +76,72 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
          ])}
 
     def public_key(_r), do: {:ok, elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0)}
+
+    def thumbprint(_r),
+      do: {:ok, __MODULE__.ed_thumb_ref(elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0))}
+
+    def key_identity(_r), do: {:ok, {"k", :key}}
+    def signing_identity(_r), do: {:ok, {:holder, "k", :key}}
+  end
+
+  # EC fixtures (ADR-0021): a clean P-256 handle, an off-curve key, a
+  # thumbprint mismatch, a high-S producer, and a valid-point wrong-curve key.
+  defmodule FullECHandle do
+    alias BoundedAuthorityReportAdapter.TestKeys
+
+    defp keypair, do: :crypto.generate_key(:ecdh, :prime256v1, <<7::256>>)
+
+    def sign(message, _ref), do: {:ok, TestKeys.ec_sign_raw_low_s(message, elem(keypair(), 1))}
+
+    def public_key(_ref), do: {:ok, elem(keypair(), 0)}
+
+    def thumbprint(_ref), do: {:ok, TestKeys.ec_thumbprint_raw(elem(keypair(), 0))}
+
+    def key_identity(_ref), do: {:ok, {"k", elem(keypair(), 0)}}
+    def signing_identity(_ref), do: {:ok, {:holder, "k", elem(keypair(), 0)}}
+  end
+
+  defmodule OffCurveECHandle do
+    def sign(_m, _r), do: {:ok, <<0::512>>}
+    def public_key(_r), do: {:ok, <<4>> <> String.duplicate(<<0xFF>>, 64)}
     def thumbprint(_r), do: {:ok, <<0::256>>}
     def key_identity(_r), do: {:ok, {"k", :key}}
     def signing_identity(_r), do: {:ok, {:holder, "k", :key}}
+  end
+
+  defmodule ThumbprintMismatchECHandle do
+    alias BoundedAuthorityReportAdapter.TestKeys
+
+    def sign(message, _r),
+      do: {:ok, TestKeys.ec_sign_raw_low_s(message, elem(keypair(), 1))}
+
+    def public_key(_r), do: {:ok, elem(keypair(), 0)}
+
+    # The WRONG preimage: a hash of the raw key bytes, not the RFC 7638 EC
+    # member set — exactly the implementation mistake the fatal exists for.
+    def thumbprint(_r), do: {:ok, :crypto.hash(:sha256, elem(keypair(), 0))}
+
+    defp keypair, do: :crypto.generate_key(:ecdh, :prime256v1, <<7::256>>)
+  end
+
+  defmodule HighSECHandle do
+    alias BoundedAuthorityReportAdapter.TestKeys
+
+    @ec_n TestKeys.ec_n()
+    @ec_half_n div(@ec_n, 2)
+
+    def sign(message, _r) do
+      raw = TestKeys.ec_sign_raw_low_s(message, elem(keypair(), 1))
+      <<r::binary-32, s::binary-32>> = raw
+      si = :binary.decode_unsigned(s)
+      s_bytes = if si > @ec_half_n, do: si, else: @ec_n - si
+      bytes = :binary.encode_unsigned(s_bytes)
+      {:ok, r <> String.duplicate(<<0>>, 32 - byte_size(bytes)) <> bytes}
+    end
+
+    def public_key(_r), do: {:ok, elem(keypair(), 0)}
+    def thumbprint(_r), do: {:ok, TestKeys.ec_thumbprint_raw(elem(keypair(), 0))}
+    defp keypair, do: :crypto.generate_key(:ecdh, :prime256v1, <<7::256>>)
   end
 
   test "a fully-wired handle is clean" do
@@ -118,6 +188,40 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
   test "--live is skipped with a note when fatals exist" do
     assert %{fatals: [_ | _], advisories: advisories} = Doctor.check(NoSignHandle, :ref, true)
     assert Enum.any?(advisories, &(&1 =~ "--live skipped"))
+  end
+
+  test "a fully-wired P-256 handle is clean (major-3 surface, --live green)" do
+    assert %{fatals: [], advisories: []} = Doctor.check(FullECHandle, :ref, true)
+  end
+
+  test "RED: a 65-byte key that is not a P-256 point trips the shape fatal" do
+    assert %{fatals: fatals} = Doctor.check(OffCurveECHandle, :ref, false)
+    assert Enum.any?(fatals, &(&1 =~ "65-byte on-curve P-256 point"))
+  end
+
+  test "RED: a thumbprint over the wrong preimage trips the match fatal" do
+    assert %{fatals: fatals} = Doctor.check(ThumbprintMismatchECHandle, :ref, false)
+    assert Enum.any?(fatals, &(&1 =~ "RFC 7638 digest derived from public_key/1"))
+  end
+
+  test "--major 3: an Ed25519 key is fatal; --major 1: a P-256 key is fatal" do
+    assert %{fatals: fatals} = Doctor.check(FullHandle, :ref, false, 3)
+    assert Enum.any?(fatals, &(&1 =~ "wrong key type for --major 3"))
+
+    assert %{fatals: fatals} = Doctor.check(FullECHandle, :ref, false, 1)
+    assert Enum.any?(fatals, &(&1 =~ "wrong key type for --major 1"))
+  end
+
+  test "--major with a matching key stays clean and reports the unlocked surface" do
+    assert %{fatals: [], advisories: advisories} =
+             Doctor.check(FullECHandle, :ref, false, 3)
+
+    assert Enum.any?(advisories, &(&1 =~ "major-3 surface"))
+  end
+
+  test "--live on a high-S P-256 handle: the normalization advisory, not a failure" do
+    assert %{fatals: [], advisories: advisories} = Doctor.check(HighSECHandle, :ref, true)
+    assert Enum.any?(advisories, &(&1 =~ "HIGH-S" and &1 =~ "normalizes"))
   end
 
   # --- the run/1 CLI wrapper (exit discipline + shell output) ---
