@@ -48,6 +48,16 @@ The corpus is the only oracle whose green MEANS "BAP accepts what BARA produces.
    apart — and coupling the harness to a moving target buys drift noise, not
    safety. Extension is revisited at a protocol corpus-stability point, e.g.
    a tagged corpus release per its ADR-0019 artifact-distribution direction.)*
+   *(Scope superseded 2026-09-22 by explicit owner direction, B2 / ADR-0021:
+   the ES256 workout upgrade extends the harness to all three certified
+   corpora — v1, v2, v3 — executed through the pinned dependency's own
+   certified loader and runner, with each corpus's index SHA-256 pinned
+   independently in `conformance_corpus_test.exs`. The revisit condition this
+   decision named HAS arrived: the corpora are now certified, revisioned,
+   index-pinned artifacts (ADR 0019's artifact-distribution direction,
+   realized), so the harness couples to frozen identities, not a moving
+   target. The one-vector scope above continues to govern the RA2 vector
+   harness itself; the three-corpus leg is a separate, additional oracle.)*
 2. **Defect-injection keeps the harness non-vacuous** (a green harness over a
    broken contract is the failure class this decision exists to prevent):
    signature-flip and `ba_req` tamper tripwires go RED, plus the corpus's own
