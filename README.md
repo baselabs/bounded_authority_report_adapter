@@ -1,7 +1,10 @@
 # Bounded Authority Report Adapter
 
 Holder-side companion signer for the [Bounded Authority
-Protocol](https://hex.pm/packages/bounded_authority_protocol)
+Protocol](https://hex.pm/packages/bounded_authority_protocol). Current release:
+[0.7.0](https://hex.pm/packages/bounded_authority_report_adapter/0.7.0) — registry checksum
+`39ec21ffabe981059b9940d17f86a782e12a9148fddefbf14cc7f4a2c96bfc0d`, read back from the
+registry API and identical to the tagged-tree build and the publish output.
 ([GitHub](https://github.com/baselabs/bounded_authority_protocol)). The protocol package produces
 the deterministic signing input for each protocol object (holder proof, boundary anchor, grant,
 key transition) and **refuses to sign**; this library takes a local key handle and a signing input
