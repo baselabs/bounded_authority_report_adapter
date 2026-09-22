@@ -13,11 +13,18 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
 
   def ed_thumb_ref(pub), do: elem(V1.Jwk.public_key_thumbprint_raw(pub, %{}), 1)
 
+  def ed_thumb_pub7, do: ed_thumb_ref(pub7())
+
+  defp pub7, do: elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0)
+
   # Scratch handles, one per defect class.
   defmodule FullHandle do
     def sign(message, _ref), do: {:ok, keypair_sign(message)}
     def public_key(_ref), do: {:ok, elem(keypair(), 0)}
-    def thumbprint(_ref), do: {:ok, __MODULE__.ed_thumb_ref(elem(keypair(), 0))}
+
+    def thumbprint(_ref),
+      do: {:ok, BoundedAuthorityReportAdapter.DoctorTaskTest.ed_thumb_ref(elem(keypair(), 0))}
+
     def key_identity(_ref), do: {:ok, {"k", elem(keypair(), 0)}}
     def signing_identity(_ref), do: {:ok, {:holder, "k", elem(keypair(), 0)}}
     defp keypair, do: :crypto.generate_key(:eddsa, :ed25519, <<7::256>>)
@@ -28,7 +35,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     def public_key(_ref), do: {:ok, elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0)}
 
     def thumbprint(_ref),
-      do: {:ok, __MODULE__.ed_thumb_ref(elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0))}
+      do: {:ok, BoundedAuthorityReportAdapter.DoctorTaskTest.ed_thumb_pub7()}
 
     def key_identity(_ref),
       do: {:ok, {"k", :crypto.generate_key(:eddsa, :ed25519, <<7::256>>) |> elem(0)}}
@@ -63,7 +70,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     def public_key(_r), do: {:ok, elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0)}
 
     def thumbprint(_r),
-      do: {:ok, __MODULE__.ed_thumb_ref(elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0))}
+      do: {:ok, BoundedAuthorityReportAdapter.DoctorTaskTest.ed_thumb_pub7()}
   end
 
   defmodule WrongKeyHandle do
@@ -78,7 +85,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     def public_key(_r), do: {:ok, elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0)}
 
     def thumbprint(_r),
-      do: {:ok, __MODULE__.ed_thumb_ref(elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0))}
+      do: {:ok, BoundedAuthorityReportAdapter.DoctorTaskTest.ed_thumb_pub7()}
 
     def key_identity(_r), do: {:ok, {"k", :key}}
     def signing_identity(_r), do: {:ok, {:holder, "k", :key}}
@@ -142,6 +149,56 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     def public_key(_r), do: {:ok, elem(keypair(), 0)}
     def thumbprint(_r), do: {:ok, TestKeys.ec_thumbprint_raw(elem(keypair(), 0))}
     defp keypair, do: :crypto.generate_key(:ecdh, :prime256v1, <<7::256>>)
+  end
+
+  # Review-repair fixtures (B2 code-review round): a thumbprint that raises
+  # is a fatal (not swallowed), and a rotating handle's thumbprint mismatch
+  # is an inconclusive advisory, not a defect.
+  defmodule RaisingThumbprintHandle do
+    def sign(_m, _r), do: {:ok, <<0::512>>}
+
+    def public_key(_r), do: {:ok, elem(:crypto.generate_key(:eddsa, :ed25519, <<7::256>>), 0)}
+    def thumbprint(_r), do: raise("custody store unreachable")
+    def key_identity(_r), do: {:ok, {"k", :key}}
+    def signing_identity(_r), do: {:ok, {:holder, "k", :key}}
+  end
+
+  defmodule RotatingHandle do
+    # Rotates ONCE after the first call (a real rotation event): the first
+    # public_key sample sees key A, every later call sees key B — so the
+    # thumbprint (sampled second) names B while the gate's key was A.
+    def public_key(_r), do: {:ok, keypair(rotate())}
+
+    def thumbprint(_r),
+      do: {:ok, BoundedAuthorityReportAdapter.DoctorTaskTest.ed_thumb_ref(keypair(rotate()))}
+
+    def sign(_m, _r), do: {:ok, <<0::512>>}
+    def key_identity(_r), do: {:ok, {"k", :key}}
+    def signing_identity(_r), do: {:ok, {:holder, "k", :key}}
+
+    defp keypair(0), do: :crypto.generate_key(:eddsa, :ed25519, <<7::256>>) |> elem(0)
+    defp keypair(1), do: :crypto.generate_key(:eddsa, :ed25519, <<8::256>>) |> elem(0)
+
+    defp rotate do
+      count = Process.get({__MODULE__, :calls}) || 0
+      Process.put({__MODULE__, :calls}, count + 1)
+      if count == 0, do: 0, else: 1
+    end
+  end
+
+  test "RED: a thumbprint that raises trips the thumbprint-callback fatal" do
+    assert %{fatals: fatals} = Doctor.check(RaisingThumbprintHandle, :ref, false)
+    assert Enum.any?(fatals, &(&1 =~ "thumbprint/1 rejected, raised, or exited"))
+  end
+
+  test "a rotating handle's thumbprint mismatch is the inconclusive advisory" do
+    assert %{fatals: [], advisories: advisories} = Doctor.check(RotatingHandle, :ref, false)
+
+    assert Enum.any?(
+             advisories,
+             &(&1 =~ "rotated during the preflight" and &1 =~ "inconclusive")
+           ),
+           inspect(advisories)
   end
 
   test "a fully-wired handle is clean" do
@@ -258,6 +315,27 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
   end
 
   @tag :capture_shell
+  @tag :capture_shell
+  test "run/1 rejects a malformed --major value with a usage fatal" do
+    with_process_shell(fn ->
+      assert catch_exit(Doctor.run(["--handle", "FullHandle", "--major", "bogus"])) ==
+               {:shutdown, 1}
+
+      assert_received {:mix_shell, :error, ["[FATAL] " <> fatal]}
+      assert fatal =~ "malformed option"
+    end)
+  end
+
+  @tag :capture_shell
+  test "run/1 prints the default-mode key-type info line for a clean handle" do
+    with_process_shell(fn ->
+      Doctor.run(["--handle", "BoundedAuthorityReportAdapter.DoctorTaskTest.FullHandle"])
+
+      assert_received {:mix_shell, :info,
+                       ["[info] key type: Ed25519 (32-byte) — unlocks the major-1 surface" <> _]}
+    end)
+  end
+
   test "run/1 on a clean handle prints clean and does not exit" do
     with_process_shell(fn ->
       Doctor.run(["--handle", "BoundedAuthorityReportAdapter.DoctorTaskTest.FullHandle"])

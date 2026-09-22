@@ -360,17 +360,19 @@ dependency (BAP 0.5.1):
   B2 instruction of 2026-09-22 names all three corpora and their index
   pins). The extension is recorded the way ADR-0018 recorded supersession —
   explicit, scoped, owner-facing — as a dated amendment on ADR-0013 itself.
-  Shape: all three corpora's index SHA-256 pins asserted (v1
-  `4cb5072a…`, v2 `6de6289b…`, v3 `a5c8075e…`) plus each index's per-file
-  sha256 self-verification and case-count declarations, and every case
-  executed through the pinned package's matching façade. The v1 and v2 legs
-  are dep tamper-evidence (BAP's certified corpus through BAP's own
-  functions — a patched or mutated dependency reds); the v3 leg is that PLUS
-  the BARA-side production oracle: the v3 signing-input and assemble-compact
-  cases are reproduced BYTE-EXACTLY through the producer/assembler pair this
-  library drives, and the envelope cases verify through `V3.check_envelope/2`.
-  An exhaustive-coverage guard reds on corpus growth until deliberately
-  extended.
+  Shape (amended after the B2 code review): all three corpora's index SHA-256
+  pins asserted independently (v1 `4cb5072a…`, v2 `6de6289b…`, v3
+  `a5c8075e…`), full integrity through the package loader, every case
+  executed through the package's certified runner with the executed census
+  proven from the runner's RESULTS, and a `.raw`-sidecar tamper leg proving
+  hash enforcement. ALL THREE legs are dep tamper-evidence — BAP's certified
+  corpus through BAP's own functions; the BARA-side production oracle is a
+  SEPARATE test surface, not this leg: `v3_sign_test.exs`'s round-trips
+  (this library signs; the v3 façade verifies) and its
+  differential-agreement leg are where BARA's own producing path is proven.
+  The runner's byte-exact signing-input cases certify the same producer
+  functions BARA calls, at the package level. An exhaustive-coverage guard
+  reds on corpus growth (the index pin) until deliberately extended.
 - A future contract-major 4 with a new key type adds a new namespace module
   and a new accepted wire shape at its resolvers; nothing in this design
   requires revisiting the v1 or v3 surfaces.

@@ -35,7 +35,6 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
   alias BoundedAuthorityReportAdapter.TestKeys
 
   alias BoundedAuthorityReportAdapter.TestKeys
-  alias BoundedAuthorityReportAdapter.V3TestHandles
   alias CapturingECKeyHandle
   alias CraftedSignatureHandle
   alias DerReturnECKeyHandle
@@ -44,7 +43,10 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
   alias GrantHolderECKeyHandle
   alias GrantIssuerECKeyHandle
   alias HighSECKeyHandle
+  alias OffCurveIssuerKeyHandle
   alias OffCurveKeyHandle
+  alias OffCurveKeyIdentityHandle
+  alias WrongCurveIssuerKeyHandle
   alias WrongCurveKeyHandle
   alias WrongKeyECHandle
   alias WrongSuiteHandle
@@ -54,7 +56,6 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
   @cast_arguments {:object, [{"record", {:object, [{"region", {:string, "us-east"}}]}}]}
 
   defp ec_holder, do: TestKeys.ec_holder_keypair()
-  defp ec_issuer_pub, do: TestKeys.ec_issuer_keypair() |> elem(0)
 
   defp report_fixture(grant_compact) do
     %{
@@ -113,6 +114,54 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
       public_key: public_key,
       valid_from: around - 100,
       valid_before: around + 100
+    }
+  end
+
+  # A genuinely signed v2 grant (EdDSA header like v1; payload v: 2 and a
+  # range selector) — the discriminator leg for the payload-major gate.
+  defp mismatched_major_grant_compact(holder_thumbprint) do
+    alias BoundedAuthorityProtocol.V2
+
+    {pub, priv} = TestKeys.issuer_keypair()
+
+    grant = %V2.Grant{
+      key_id: "issuer-2026-07",
+      issuer: "https://issuer.example.test",
+      grant_id: "urn:example:grant:v2-gate-test",
+      audiences: ["https://verifier.example.test"],
+      issued_at: 1_000,
+      not_before: 1_000,
+      expires_at: 2_000,
+      holder_thumbprint: holder_thumbprint,
+      operations: [
+        %V2.Operation{
+          name: "report_external_materialization",
+          selectors: [{:gte, ["limit"], {:integer, 10}}]
+        }
+      ]
+    }
+
+    {:ok, signing_input} = V2.grant_signing_input(grant, %{})
+    signature = :crypto.sign(:eddsa, :none, signing_input.message, [priv, :ed25519])
+    {:ok, compact} = V2.assemble_compact(signing_input, signature)
+    compact
+  end
+
+  defp ed_grant_input(holder_thumbprint) do
+    %{
+      issuer: "https://issuer.example.test",
+      grant_id: "urn:example:grant:ed-improper-list",
+      audiences: ["https://verifier.example.test"],
+      issued_at: 1_000,
+      not_before: 1_000,
+      expires_at: 2_000,
+      holder_thumbprint: holder_thumbprint,
+      operations: [
+        %BoundedAuthorityProtocol.V1.Operation{
+          name: "report_external_materialization",
+          selectors: [:all]
+        }
+      ]
     }
   end
 
@@ -450,7 +499,11 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
       }
     end
 
-    test "an off-curve 65-byte key is :invalid_key_handle on report AND grant", ctx do
+    # Review repair (B2 round): the malformed-point handles now carry the
+    # issuer-role snapshot / atomic key identity, so the rejection provably
+    # comes from POINT VALIDATION, not from a missing optional callback
+    # rejecting first.
+    test "an off-curve 65-byte key is :invalid_key_handle on report, grant, AND anchor", ctx do
       assert {:error, :invalid_key_handle} =
                BoundedAuthorityReportAdapter.V3.sign_report(
                  ctx.report,
@@ -463,7 +516,16 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
       assert {:error, :invalid_key_handle} =
                BoundedAuthorityReportAdapter.V3.sign_grant(
                  ctx.grant,
-                 {OffCurveKeyHandle, :ref},
+                 {OffCurveIssuerKeyHandle, :ref},
+                 %{}
+               )
+
+      assert OffCurveIssuerKeyHandle.sign_call_count() == 0
+
+      assert {:error, :invalid_key_handle} =
+               BoundedAuthorityReportAdapter.V3.sign_anchor(
+                 anchor_fixture(),
+                 {OffCurveKeyIdentityHandle, :ref},
                  %{}
                )
     end
@@ -481,7 +543,7 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
       assert {:error, :invalid_key_handle} =
                BoundedAuthorityReportAdapter.V3.sign_grant(
                  ctx.grant,
-                 {WrongCurveKeyHandle, :ref},
+                 {WrongCurveIssuerKeyHandle, :ref},
                  %{}
                )
     end
@@ -838,6 +900,66 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
                    nonce: nil
                  },
                  ed25519_handle(),
+                 %{issued_at: @now}
+               )
+    end
+  end
+
+  # --------------------------------------------- review-repair regressions
+
+  describe "cross-vendor review repairs (B2 round)" do
+    test "an improper-list audiences value is :invalid_grant on BOTH grant paths, no raise" do
+      {pub, priv} = ec_holder()
+
+      assert {:error, :invalid_grant} =
+               BoundedAuthorityReportAdapter.V3.sign_grant(
+                 Map.put(grant_fixture(ec_thumb(pub)), :audiences, [
+                   "https://verifier.example.test" | :bad_tail
+                 ]),
+                 {GrantIssuerECKeyHandle, {pub, priv}},
+                 %{}
+               )
+
+      {ed_pub, ed_priv} = TestKeys.holder_keypair()
+      ed_thumb = TestKeys.holder_thumbprint_raw(ed_pub)
+
+      assert {:error, :invalid_grant} =
+               BoundedAuthorityReportAdapter.sign_grant(
+                 Map.put(ed_grant_input(ed_thumb), :audiences, [
+                   "https://verifier.example.test" | :bad_tail
+                 ]),
+                 {GrantIssuerHandle, {ed_pub, ed_priv}},
+                 %{}
+               )
+    end
+
+    test "a v2 grant fails both report gates as :invalid_report (the payload names the major)" do
+      # v1 and v2 grants share the EdDSA header, so a header-only gate cannot
+      # separate them — the payload's v claim does (review finding 2).
+      {ed_pub, ed_priv} = TestKeys.holder_keypair()
+      foreign_grant = mismatched_major_grant_compact(TestKeys.holder_thumbprint_raw(ed_pub))
+
+      assert {:error, :invalid_report} =
+               BoundedAuthorityReportAdapter.sign_report(
+                 %{
+                   grant_compact: foreign_grant,
+                   operation: "report_external_materialization",
+                   method: "POST",
+                   target_uri: "https://api.example.test/invoke",
+                   invocation_id: "123e4567-e89b-42d3-a456-426614174000",
+                   cast_arguments: @cast_arguments,
+                   nonce: nil
+                 },
+                 {RawKey, {ed_pub, ed_priv}},
+                 %{issued_at: @now}
+               )
+
+      {ec_pub, ec_priv} = ec_holder()
+
+      assert {:error, :invalid_report} =
+               BoundedAuthorityReportAdapter.V3.sign_report(
+                 report_fixture(foreign_grant),
+                 {RawKey, {ec_pub, ec_priv}},
                  %{issued_at: @now}
                )
     end

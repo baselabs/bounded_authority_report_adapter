@@ -57,6 +57,8 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "test/support/bounded_authority_report_adapter/test_handles.ex",
                        "test/support/test_keys.ex"
                      ])
+  @external_v2_paths MapSet.new(["test/bounded_authority_report_adapter/v3_sign_test.exs"])
+
   @external_v3_paths MapSet.new([
                        "lib/bounded_authority_report_adapter/v3.ex",
                        "lib/mix/tasks/bounded_authority_report_adapter.doctor.ex",
@@ -233,6 +235,9 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
       _ -> {node, acc}
     end
   end
+
+  defp external_wire_namespace_ok?("BoundedAuthorityProtocol.V2", path),
+    do: MapSet.member?(@external_v2_paths, path)
 
   # An externally owned wire namespace (an enumerated BoundedAuthorityProtocol
   # major) is accepted only at its exact enumerated consuming paths.

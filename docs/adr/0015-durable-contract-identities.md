@@ -26,7 +26,9 @@ the tracked architecture gate to three enumerated identities:
 - *(Amended 2026-09-22, ADR-0021:)* `BoundedAuthorityProtocol.V3` joins
   `BoundedAuthorityProtocol.V1` as an enumerated external wire namespace, accepted
   only at the exact adapter and test-support paths that consume it
-  (`v3.ex`, `test_keys.ex`, `v3_sign_test.exs`); the V1 namespace's accepted path
+  (`v3.ex`, `test_keys.ex`, `v3_sign_test.exs`); `BoundedAuthorityProtocol.V2`
+  is enumerated likewise (its single consuming path: the v3 suite's
+  payload-major discriminator leg); the V1 namespace's accepted path
   set gains the three files that now reference the shared producer structs
   (`v3.ex`, `standard_byte_identity_test.exs`, `v3_sign_test.exs`); the doctor
   task (`lib/mix/tasks/...doctor.ex`) joins both sets — it derives both suites'

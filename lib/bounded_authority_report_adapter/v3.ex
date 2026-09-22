@@ -43,7 +43,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   with `:invalid_report` when `grant_compact` is not a v3 grant — the same
   gate the major-1 surface applies in its own direction.
 
-  The key-handle behaviour (the `@callback` set, including the atomic
+  The key-handle behavior (the `@callback` set, including the atomic
   `key_identity/1` / `signing_identity/1` snapshots and the C1 issuer-role
   gate on `sign_grant/3`) is defined on `BoundedAuthorityReportAdapter` and
   is shared by both surfaces; see that module's callback docs for the
@@ -213,7 +213,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   The C1 gate is the major-1 surface's, over P-256 material: the handle's
   atomic `signing_identity/1` must resolve `{:issuer, key_id, public_key}`
   with a valid 65-byte P-256 key; a `:holder` declaration, a missing
-  callback, or any other key shape is `{:invalid_key_handle` before `sign/2`.
+  callback, or any other key shape is `{:error, :invalid_key_handle}` before `sign/2`.
   The signed header's `kid` comes from the snapshot, never caller input.
   Verifiable via `BoundedAuthorityProtocol.V3.verify_grant/3`.
   """
@@ -529,12 +529,14 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   # The mixed-major fail-fast (ADR-0021 Decision 8): a v3 proof pairs with a
   # v3 grant, and BAP's proof producer only HASHES grant_compact — without
-  # this gate a v1 grant would sail through into a credential no verifier
-  # accepts. The bounded, signature-free header walk pins the major through
-  # the closed `alg` check (v3: "ES256").
+  # this gate a v1 (or v2) grant would sail through into a credential no
+  # verifier accepts. The gate is the major's own bounded DECODER, not the
+  # header walk: v1 and v2 grants share the EdDSA header, so the major is
+  # only distinguishable in the payload's `v` claim, which each major's
+  # closed decode rejects on mismatch (cross-vendor code review, B2).
   defp matching_grant_major(grant_compact) do
-    case V3.untrusted_key_locator(grant_compact, %{}) do
-      {:ok, _locator} -> :ok
+    case V3.decode_grant(grant_compact, %{}) do
+      {:ok, _decoded_grant} -> :ok
       {:error, :invalid} -> {:error, :invalid_report}
     end
   end
@@ -616,9 +618,12 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   end
 
   defp required_grant_audiences(grant_input) do
+    # An IMPROPER list (["a" | :tail]) passes is_list/1 but raises inside
+    # Enum.all?/2 — the closed-error contract requires rejecting it as data
+    # (cross-vendor code review, B2; the same defect existed on the v1 path).
     case Map.fetch(grant_input, :audiences) do
       {:ok, audiences} when is_list(audiences) and audiences != [] ->
-        if Enum.all?(audiences, &is_binary/1),
+        if proper_list?(audiences) and Enum.all?(audiences, &is_binary/1),
           do: {:ok, audiences},
           else: {:error, :invalid_grant}
 
@@ -626,6 +631,12 @@ defmodule BoundedAuthorityReportAdapter.V3 do
         {:error, :invalid_grant}
     end
   end
+
+  defp proper_list?([]), do: true
+
+  defp proper_list?([_head | rest]), do: proper_list?(rest)
+
+  defp proper_list?(_improper), do: false
 
   defp required_grant_operations(grant_input) do
     case Map.fetch(grant_input, :operations) do

@@ -58,40 +58,53 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   @impl Mix.Task
   def run(args) do
-    {opts, _parsed, _invalid} =
+    {opts, _parsed, invalid} =
       OptionParser.parse(args,
         strict: [handle: :string, ref: :string, live: :boolean, major: :integer]
       )
 
-    with {:ok, module} <- fetch_module(opts),
+    with :ok <- reject_invalid_options(invalid),
+         {:ok, module} <- fetch_module(opts),
          {:ok, major} <- fetch_major(opts),
          ref <- fetch_ref(opts) do
       report = check(module, ref, Keyword.get(opts, :live, false), major)
-
-      for line <- report.fatals, do: Mix.shell().error("[FATAL] #{line}")
-      for line <- report.advisories, do: Mix.shell().info("[advisory] #{line}")
-
-      cond do
-        report.fatals != [] ->
-          Mix.shell().error(
-            "doctor: #{length(report.fatals)} fatal finding(s) — fix before wiring"
-          )
-
-          exit({:shutdown, 1})
-
-        report.advisories != [] ->
-          Mix.shell().info(
-            "doctor: no fatal findings; #{length(report.advisories)} advisory note(s)"
-          )
-
-        true ->
-          Mix.shell().info("doctor: clean")
-      end
+      report_and_exit(report, module, ref, major)
     else
       {:error, line} ->
         Mix.shell().error("[FATAL] #{line}")
         exit({:shutdown, 1})
     end
+  end
+
+  defp report_and_exit(report, module, ref, major) do
+    for line <- report.fatals, do: Mix.shell().error("[FATAL] #{line}")
+    for line <- report.advisories, do: Mix.shell().info("[advisory] #{line}")
+    print_default_shape_line(report, module, ref, major)
+    verdict(report)
+  end
+
+  defp print_default_shape_line(_report, _module, _ref, major) when major in [1, 3], do: :ok
+
+  defp print_default_shape_line(%{fatals: []}, module, ref, nil) do
+    case shape_report(module, ref, nil) do
+      nil -> :ok
+      line -> Mix.shell().info("[info] #{line}")
+    end
+  end
+
+  defp print_default_shape_line(_report, _module, _ref, _major), do: :ok
+
+  defp verdict(%{fatals: fatals}) when fatals != [] do
+    Mix.shell().error("doctor: #{length(fatals)} fatal finding(s) — fix before wiring")
+    exit({:shutdown, 1})
+  end
+
+  defp verdict(%{advisories: advisories}) when advisories != [] do
+    Mix.shell().info("doctor: no fatal findings; #{length(advisories)} advisory note(s)")
+  end
+
+  defp verdict(_clean) do
+    Mix.shell().info("doctor: clean")
   end
 
   @doc """
@@ -113,8 +126,9 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
         }
 
   def check(module, ref, live?, major) do
-    fatals = fatals(module, ref, major)
-    advisories = advisories(module)
+    {thumbprint_fatal_list, thumbprint_advisory_list} = thumbprint_findings(module, ref)
+    fatals = fatals(module, ref, major) ++ thumbprint_fatal_list
+    advisories = thumbprint_advisory_list ++ advisories(module)
 
     advisories =
       cond do
@@ -132,10 +146,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   end
 
   defp fatals(module, ref, major) do
-    module_fatals(module) ++
-      callback_fatals(module) ++
-      public_key_fatals(module, ref, major) ++
-      thumbprint_fatals(module, ref)
+    module_fatals(module) ++ callback_fatals(module) ++ public_key_fatals(module, ref, major)
   end
 
   defp module_fatals(module) do
@@ -201,39 +212,61 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
       "points accept only their own suite's key shape (ADR-0021)"
   end
 
-  # The thumbprint-match fatal: the issuer mints cnf.jkt from the RFC 7638
+  # The thumbprint-match gate: the issuer mints cnf.jkt from the RFC 7638
   # digest over the SUITE'S preimage, so a thumbprint implementation that
   # hashes anything else fails every envelope at verification with no
-  # producer-side catch. Runs only when both callbacks resolve a usable key.
-  defp thumbprint_fatals(module, ref) do
+  # producer-side catch. Returns {fatals, advisories}: a REJECTED/raised
+  # thumbprint callback is fatal (swallowing it made the check vacuously
+  # clean); a mismatch is fatal only for a STABLE key — a stateful handle
+  # that rotated between the two calls reports an inconclusive rotation
+  # advisory instead (cross-vendor code review, B2).
+  defp thumbprint_findings(module, ref) do
     if Code.ensure_loaded?(module) and function_exported?(module, :public_key, 1) and
          function_exported?(module, :thumbprint, 1) do
-      thumbprint_mismatch(module, ref)
+      with {:ok, key} <- safe_call(module, :public_key, [ref]),
+           {:ok, expected} <- expected_thumbprint(key),
+           thumbprint_result <- safe_call(module, :thumbprint, [ref]) do
+        thumbprint_verdict(module, ref, key, expected, thumbprint_result)
+      else
+        # The key-shape failure is already reported by the shape gate above.
+        _ -> {[], []}
+      end
     else
-      []
+      {[], []}
     end
   end
 
-  defp thumbprint_mismatch(module, ref) do
-    with {:ok, key} <- safe_call(module, :public_key, [ref]),
-         {:ok, expected} <- expected_thumbprint(key),
-         {:ok, actual} <- safe_call(module, :thumbprint, [ref]) do
-      thumbprint_verdict(expected, actual)
-    else
-      # The key shape or callback failure is already reported above.
-      _ -> []
-    end
+  defp thumbprint_verdict(_module, _ref, _key, expected, {:ok, actual})
+       when actual == expected,
+       do: {[], []}
+
+  defp thumbprint_verdict(module, ref, key, _expected, {:ok, _mismatch}),
+    do: rotation_aware_mismatch(module, ref, key)
+
+  defp thumbprint_verdict(_module, _ref, _key, _expected, _thumbprint_failed) do
+    {[
+       "thumbprint/1 rejected, raised, or exited for the supplied ref — the " <>
+         "callback must return the RFC 7638 digest"
+     ], []}
   end
 
-  defp thumbprint_verdict(expected, actual) when expected == actual, do: []
+  defp rotation_aware_mismatch(module, ref, key) do
+    case safe_call(module, :public_key, [ref]) do
+      {:ok, ^key} ->
+        {[
+           "thumbprint/1 does not match the RFC 7638 digest derived from public_key/1 " <>
+             "(the suite's preimage: OKP members for Ed25519 keys, EC members for P-256 " <>
+             "keys) — the issuer's cnf.jkt is minted from that digest, so a mismatched " <>
+             "implementation fails every envelope at verification"
+         ], []}
 
-  defp thumbprint_verdict(_expected, _actual) do
-    [
-      "thumbprint/1 does not match the RFC 7638 digest derived from public_key/1 " <>
-        "(the suite's preimage: OKP members for Ed25519 keys, EC members for P-256 " <>
-        "keys) — the issuer's cnf.jkt is minted from that digest, so a mismatched " <>
-        "implementation fails every envelope at verification"
-    ]
+      _rotated ->
+        {[],
+         [
+           "public_key/1 changed between samples — the handle rotated during the " <>
+             "preflight; the thumbprint comparison is inconclusive (not a defect)"
+         ]}
+    end
   end
 
   defp expected_thumbprint(key) do
@@ -287,12 +320,28 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   # fully-wired handle of either type still reports clean.
   defp shape_advisory(_module, _ref, nil), do: []
 
-  defp shape_advisory(module, ref, major) do
+  defp shape_advisory(module, ref, major) when major in [1, 3] do
+    case shape_report(module, ref, major) do
+      nil -> []
+      line -> [line]
+    end
+  end
+
+  @doc """
+  The key-type report line for the handle's resolved key (nil when the key
+  shape is invalid or does not match the requested `major`). `run/1` prints
+  it in default mode as info; the pure `check/4` carries it as an advisory
+  only under `--major`, so a fully-wired handle of either type still
+  reports clean.
+  """
+  @spec shape_report(module(), term(), 1 | 3 | nil) :: String.t() | nil
+
+  def shape_report(module, ref, major) do
     with {:ok, key} <- safe_call(module, :public_key, [ref]),
          {:ok, line} <- shape_line(key, major) do
-      [line]
+      line
     else
-      _ -> []
+      _ -> nil
     end
   end
 
@@ -349,6 +398,10 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
     else
       :error
     end
+  rescue
+    _backend_failure -> :error
+  catch
+    _kind, _reason -> :error
   end
 
   defp probe_verdict({:p256, public_key}, message, signature) do
@@ -441,6 +494,15 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
       {:ok, name} -> {:ok, Module.concat([name])}
       :error -> {:error, "--handle <Module> is required"}
     end
+  end
+
+  # Malformed flags (e.g. --major bogus, --major 3.0, a bare --major) must
+  # be fatal usage errors, not silently dropped to the permissive default
+  # (cross-vendor code review, B2).
+  defp reject_invalid_options([]), do: :ok
+
+  defp reject_invalid_options(invalid) do
+    {:error, "unrecognized or malformed option(s): #{inspect(invalid)}"}
   end
 
   defp fetch_major(opts) do

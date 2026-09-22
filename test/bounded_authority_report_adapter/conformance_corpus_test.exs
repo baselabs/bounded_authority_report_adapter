@@ -71,15 +71,22 @@ defmodule BoundedAuthorityReportAdapter.ConformanceCorpusTest do
   end
 
   @tag :conformance
-  test "every certified case agrees through the pinned package's runner" do
-    for major <- Map.keys(@pinned_total_cases) do
+  test "every certified case agrees, with the executed census proven from the RESULTS" do
+    # Review repair (B2 round): the census is proven from the RUNNER'S
+    # RESULTS, not from the loaded corpus — an empty or truncated result set
+    # cannot pass — and the executed case-id set must equal the loaded one.
+    for {major, census} <- @pinned_total_cases do
       {:ok, corpus} = Corpus.load(corpus_map(major))
+      results = Runner.run(corpus)
 
-      disagreements =
-        for {_path, results} <- Runner.run(corpus),
-            result <- results,
-            not result.agree,
-            do: result.case_id
+      executed_ids =
+        for {_path, file_results} <- results, result <- file_results, do: result.case_id
+
+      assert length(executed_ids) == census, major
+      assert length(Enum.uniq(executed_ids)) == census, major
+      assert MapSet.new(executed_ids) == MapSet.new(corpus.case_ids), major
+
+      disagreements = for id <- executed_ids, result = find_result(results, id), not result.agree, do: id
 
       assert disagreements == [],
              "#{major} corpus cases disagreed with the dependency: " <> inspect(disagreements)
@@ -87,30 +94,25 @@ defmodule BoundedAuthorityReportAdapter.ConformanceCorpusTest do
   end
 
   @tag :conformance
-  test "the executed census equals the certified census (no silent case loss)" do
-    for {major, census} <- @pinned_total_cases do
-      {:ok, corpus} = Corpus.load(corpus_map(major))
+  test "the integrity verification is not vacuous: a tampered corpus byte reds the load" do
+    # Non-vacuity proof (the defect-injection discipline), repaired per the
+    # B2 review: tamper a .raw SIDECAR (hash-verified, never parsed) so the
+    # rejection proves HASH ENFORCEMENT — flipping a byte inside a JSON case
+    # file would fail at decode before the hash check could fire.
+    map = corpus_map("v3")
 
-      executed =
-        corpus.cases |> Enum.map(fn {_path, cases} -> length(cases) end) |> Enum.sum()
+    {path, bytes} =
+      Enum.find(Enum.sort(map), fn {p, _} -> String.ends_with?(p, ".raw") end) ||
+        raise "no .raw sidecar in the v3 corpus"
 
-      assert executed == census, major
-      assert corpus.index["total_cases"] == executed, major
-    end
+    tampered = Map.put(map, path, bytes <> <<0>>)
+    assert {:error, :invalid} = Corpus.load(tampered)
   end
 
-  @tag :conformance
-  test "the integrity verification is not vacuous: a tampered corpus byte reds the load" do
-    # Non-vacuity proof (the defect-injection discipline): flip one byte in
-    # one case file's in-memory copy and the loader must reject — proving
-    # the green loads above certify content, not mere presence.
-    map = corpus_map("v3")
-    [{path, bytes} | _] = Enum.sort(map)
-
-    {head, rest} = String.split_at(bytes, 8)
-    tampered = Map.put(map, path, head <> "X" <> rest)
-
-    assert {:error, :invalid} = Corpus.load(tampered)
+  defp find_result(results, case_id) do
+    Enum.find_value(results, fn {_path, file_results} ->
+      Enum.find(file_results, &(&1.case_id == case_id))
+    end)
   end
 
   defp corpus_map(major) do

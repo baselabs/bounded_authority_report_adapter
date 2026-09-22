@@ -332,3 +332,58 @@ defmodule ECSnapshotIssuerHandle do
   def public_key({public_key, _private_key}), do: {:ok, public_key}
   def thumbprint(_handle), do: {:ok, <<0::256>>}
 end
+
+defmodule OffCurveIssuerKeyHandle do
+  @moduledoc """
+  An `{:issuer, kid, off-curve-65-byte-key}` snapshot — the grant path's
+  point-validation leg (review repair: the rejection must come from the
+  arithmetic, not a missing `signing_identity/1`). `sign/2` must never run.
+  """
+  @behaviour BoundedAuthorityReportAdapter
+
+  @off_curve <<4>> <> String.duplicate(<<0xFF>>, 64)
+  @key {__MODULE__, :sign_count}
+
+  def signing_identity(_handle), do: {:ok, {:issuer, "issuer-2026-09", @off_curve}}
+
+  def sign(_message, _handle) do
+    Process.put(@key, (Process.get(@key) || 0) + 1)
+    {:error, :must_not_be_called}
+  end
+
+  def public_key(_handle), do: {:ok, @off_curve}
+  def thumbprint(_handle), do: {:ok, <<0::256>>}
+  def sign_call_count, do: Process.get(@key) || 0
+end
+
+defmodule WrongCurveIssuerKeyHandle do
+  @moduledoc """
+  An `{:issuer, kid, secp256k1-point}` snapshot — the wrong-curve leg on the
+  grant path (the mis-wired custody slot; only on-curve arithmetic catches
+  it).
+  """
+  @behaviour BoundedAuthorityReportAdapter
+
+  {secp_pub, _} = :crypto.generate_key(:ecdh, :secp256k1, <<4::256>>)
+  @secp_pub secp_pub
+
+  def signing_identity(_handle), do: {:ok, {:issuer, "issuer-2026-09", @secp_pub}}
+  def sign(_message, _handle), do: {:error, :must_not_be_called}
+  def public_key(_handle), do: {:ok, @secp_pub}
+  def thumbprint(_handle), do: {:ok, <<0::256>>}
+end
+
+defmodule OffCurveKeyIdentityHandle do
+  @moduledoc """
+  A `{kid, off-curve-65-byte-key}` atomic key identity — the ANCHOR path's
+  point-validation leg (the `resolve_key_identity/1` resolver).
+  """
+  @behaviour BoundedAuthorityReportAdapter
+
+  @off_curve <<4>> <> String.duplicate(<<0xEE>>, 64)
+
+  def key_identity(_handle), do: {:ok, {"bad-anchor-key", @off_curve}}
+  def sign(_message, _handle), do: {:error, :must_not_be_called}
+  def public_key(_handle), do: {:ok, @off_curve}
+  def thumbprint(_handle), do: {:ok, <<0::256>>}
+end

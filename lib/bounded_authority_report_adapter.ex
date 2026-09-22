@@ -672,15 +672,18 @@ defmodule BoundedAuthorityReportAdapter do
 
   # The mixed-major fail-fast, v1 direction (ADR-0021 Decision 8): a v1
   # proof pairs with a v1 grant, and BAP's proof producer only hashes
-  # grant_compact — without this gate a v3 grant would pass through into an
-  # envelope no verifier accepts. The bounded, signature-free header walk
-  # pins the major via the closed `alg` check (v1: "EdDSA"); anything else
-  # fails HERE as :invalid_report, per this repo's fail-fast principle. This
-  # is the ONE deliberate behavior change on the major-1 surface (previously
-  # such an envelope failed downstream at check_envelope/2).
+  # grant_compact — without this gate a v2 or v3 grant would pass through
+  # into an envelope no verifier accepts. The gate is the major's own
+  # bounded DECODER, not the header walk: v1 and v2 grants share the EdDSA
+  # header, so the major is only distinguishable in the payload's `v` claim,
+  # which the closed v1 decode rejects on mismatch (cross-vendor code
+  # review, B2). Anything but a v1 grant fails HERE as :invalid_report, per
+  # this repo's fail-fast principle. This is the ONE deliberate behavior
+  # change on the major-1 surface (previously such an envelope failed
+  # downstream at check_envelope/2).
   defp matching_grant_major(grant_compact) do
-    case BoundedAuthorityProtocol.V1.untrusted_key_locator(grant_compact, %{}) do
-      {:ok, _locator} -> :ok
+    case BoundedAuthorityProtocol.V1.decode_grant(grant_compact, %{}) do
+      {:ok, _decoded_grant} -> :ok
       {:error, :invalid} -> {:error, :invalid_report}
     end
   end
@@ -926,9 +929,12 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   defp required_grant_audiences(grant_input) do
+    # An IMPROPER list (["a" | :tail]) passes is_list/1 but raises inside
+    # Enum.all?/2 — the closed-error contract requires rejecting it as data
+    # (cross-vendor code review, B2; the same defect existed on the v1 path).
     case Map.fetch(grant_input, :audiences) do
       {:ok, audiences} when is_list(audiences) and audiences != [] ->
-        if Enum.all?(audiences, &is_binary/1),
+        if proper_list?(audiences) and Enum.all?(audiences, &is_binary/1),
           do: {:ok, audiences},
           else: {:error, :invalid_grant}
 
@@ -936,6 +942,12 @@ defmodule BoundedAuthorityReportAdapter do
         {:error, :invalid_grant}
     end
   end
+
+  defp proper_list?([]), do: true
+
+  defp proper_list?([_head | rest]), do: proper_list?(rest)
+
+  defp proper_list?(_improper), do: false
 
   defp required_grant_operations(grant_input) do
     # Operations are %V1.Operation{} structs; shape + the unique-name constraint are
