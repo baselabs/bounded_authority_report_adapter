@@ -1,5 +1,31 @@
 # Upgrading
 
+## 0.7.0 — the ES256 surface (`BoundedAuthorityReportAdapter.V3`) and one v1 tightening
+
+0.7.0 adds the contract-major-3 signing surface (ADR-0021): the same four
+standard instantiations over the `BAP3-ES256-SHA256` suite (EC P-256 keys,
+raw `r || s` signatures with adapter-owned low-S normalization), selected by
+module name. The exact protocol pin moves to `0.5.1`.
+
+Migration notes:
+
+- **Nothing changes for existing major-1 consumers or handles.** The v1
+  signing path is byte-identical for valid v1 inputs (pinned by a
+  byte-identity suite captured before the change).
+- **One deliberate v1 tightening:** `sign_report/3` and
+  `sign_local_loopback_report/3` now reject a `grant_compact` that is not a
+  v1 grant — a v2 or v3 grant, or a malformed compact — with
+  `{:error, :invalid_report}` at the producer, instead of emitting an
+  envelope that fails downstream at `check_envelope/2`. Callers that
+  (deliberately) fed foreign-major grants will see the earlier, cleaner
+  error.
+- **v3 handles** return the 65-byte uncompressed-SEC1 public key and the
+  64-byte raw `r || s` signature (DER is rejected as `:signing_failed`;
+  convert at the handle). See `docs/recipes.md`'s P-256 sibling and the
+  doctor's `--major 3` gate.
+
+
+
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 

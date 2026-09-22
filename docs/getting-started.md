@@ -32,7 +32,9 @@ verifies.
 
 ## Your first sign, in minutes
 
-A development handle is ~25 lines: a seeded Ed25519 pair behind the five callbacks. (The
+A development handle is ~25 lines: a seeded Ed25519 pair behind the five callbacks
+(an `ES256` P-256 pair serves the `V3` surface the same way — the key's wire shape
+selects the surface, ADR-0021). (The
 source repository carries a reference implementation under `test/support/` — it is
 TEST-ONLY and deliberately NOT shipped in the package; in production the handle fronts
 an HSM, OS keychain, or key server.)

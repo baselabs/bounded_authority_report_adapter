@@ -41,7 +41,8 @@ an application request, and the adapter returns the grant + proof envelope:
    `cast_arguments`).
 3. Produce the deterministic proof signing input via
    `BoundedAuthorityProtocol.V1.proof_signing_input/2`.
-4. Sign the input's message with the holder's private Ed25519 key (held locally
+4. Sign the input's message with the holder's private key — Ed25519 on the major-1
+   surface, EC P-256 (`ES256`) on the `V3` surface (held locally
    on the edge — never in the verifier; the adapter holds a
    `{module(), term()}` key-handle callback, never the key bytes).
 5. Assemble the compact proof via
@@ -92,7 +93,7 @@ These negatives are load-bearing — each maps to a different repo's job:
 | Role | Repo | Keys it holds | Signs? | Verifies? |
 |---|---|---|---|---|
 | **Authority / issuer** | `bounded_authority` (runtime service) | issuer key | grants at issuance | revocation-sensitive decisions |
-| **Holder / prover** (the edge agent) | **this adapter** | holder (private Ed25519) | all four BAP object kinds — proofs (holder role), anchors + key transitions (role-agnostic), grants (issuer-role instantiation, C1-gated per ADR-0007) | — |
+| **Holder / prover** (the edge agent) | **this adapter** | holder (private key: Ed25519 major-1, P-256 `ES256` via `.V3`) | all four BAP object kinds — proofs (holder role), anchors + key transitions (role-agnostic), grants (issuer-role instantiation, C1-gated per ADR-0007) | — |
 | **Verifier** (the verifier + any third party) | `bounded_authority_protocol` (public package) | none (verifies against published keys) | — | grants, proofs, envelopes, boundary anchors, key transitions |
 
 This is the DPoP-shaped split (RFC 9449): the holder proves possession of a key

@@ -35,7 +35,7 @@ semantically-invalid field against these rows.
 | `:invalid_report` | A required `report` field is missing or of the wrong basic type (`grant_compact`, `operation`, `method`, `target_uri`, `invocation_id`, `cast_arguments`, `nonce`), or `cast_arguments` is `nil`. For `sign_local_loopback_report/3` this ALSO covers the mandatory nonce: an absent, empty, or non-binary `nonce`. | The map against `report()` (or `local_loopback_report()`) in the moduledoc. | Fix the report fields. |
 | `:invalid_anchor` | An `anchor_input` content field is missing, or `chain_hash` is not a binary. | `anchor_id`, `chain_id`, `sequence`, `chain_hash` presence and basic types. | Fix the anchor fields. |
 | `:invalid_grant` | A `grant_input` field is missing or of the wrong basic type. | `issuer`, `grant_id`, `audiences`, `issued_at`/`not_before`/`expires_at` presence and types. | Fix the grant fields. |
-| `:invalid_transition` | A `transition_input` field is missing, or `next_public_key` is not a 32-byte Ed25519 key (adapter-checked). | `transition_id`, `chain_id`, `effective_at`, `next_key_id`, `next_public_key`. | Fix the transition fields. |
+| `:invalid_transition` | A `transition_input` field is missing, or `next_public_key` is not the surface's key shape (32-byte Ed25519 on major 1; a valid 65-byte P-256 point on `V3` — adapter-checked). | `transition_id`, `chain_id`, `effective_at`, `next_key_id`, `next_public_key`. | Fix the transition fields. |
 
 The `{:producer_error, :invalid}` row covers, among others: a `chain_hash` that is not
 32 bytes or a zero hash at a nonzero `sequence`; an inverted grant time window; a

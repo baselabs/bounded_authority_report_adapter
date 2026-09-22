@@ -105,6 +105,19 @@ must return the closed `{:ok, binary} | {:error, term}` contract, and a TIMEOUT 
 exited callback to `:invalid_key_handle` / `:signing_failed` rather than crashing your
 caller, so return errors explicitly whenever you can.
 
+**The P-256 sibling (the `V3` surface, ADR-0021).** The same recipe serves
+`BoundedAuthorityReportAdapter.V3` with a P-256-backed handle, with THREE
+suite-specific duties: `public_key/1` returns the 65-byte uncompressed-SEC1
+point (`0x04 || x || y`); `sign/2` returns the RFC 7518 §3.4 RAW `r || s`
+form (exactly 64 bytes) — convert your HSM's DER output first (decode the
+SEQUENCE to `(r, s)` and re-encode as two padded big-endian 32-byte
+integers); and `thumbprint/1` uses the EC RFC 7638 preimage
+(`{"crv":"P-256","kty":"EC","x":X,"y":Y}`). Low-S is the adapter's duty —
+it normalizes a high-S return — but a custodian that can emit low-S
+directly should. Run `mix bounded_authority_report_adapter.doctor
+--handle MyApp.HsmHandle --live` to preflight either surface (`--major 1`
+or `--major 3` applies that surface's strict key-type gate).
+
 ```elixir
 defmodule MyApp.HsmHandle do
   @moduledoc """

@@ -58,7 +58,7 @@
       <div class="actor verifier"><svg class="ic"><use href="#i-shield"/></svg><span>Verifier</span><small>check_envelope/2</small></div>
     </div>
     <ul class="badges">
-      <li>hex 0.6.3</li><li>CI green on macOS · Linux · Windows</li><li>telemetry: closed, value-free</li>
+      <li>hex 0.7.0</li><li>CI green on macOS · Linux · Windows</li><li>telemetry: closed, value-free</li>
     </ul>
   </div>
 </section>
@@ -82,7 +82,7 @@
   <table class="signers">
     <thead><tr><th>Function</th><th>Object</th><th>Role</th></tr></thead>
     <tbody>
-      <tr><td><code>sign_report/3</code></td><td>holder proof — the grant passes through untouched</td><td><span class="role-badge holder">holder</span></td></tr>
+      <tr><td><code>sign_report/3</code></td><td>holder proof — the grant passes through untouched (major 1, Ed25519; the <code>BoundedAuthorityReportAdapter.V3</code> surface signs the same four objects over ES256/P-256)</td><td><span class="role-badge holder">holder</span></td></tr>
       <tr><td><code>sign_local_loopback_report/3</code></td><td>local-loopback application proof (<code>ba+loopback-proof</code>)</td><td><span class="role-badge holder">holder</span></td></tr>
       <tr><td><code>sign_anchor/3</code></td><td>boundary anchor</td><td><span class="role-badge">role-agnostic</span></td></tr>
       <tr><td><code>sign_key_transition/3</code></td><td>key transition</td><td><span class="role-badge">role-agnostic</span></td></tr>

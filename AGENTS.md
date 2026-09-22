@@ -13,8 +13,7 @@ glue (ADR-0006; holder-side by default, issuer-side for grants). It takes a
 signing input, signs via the handle's local key, assembles the compact via the
 public `bounded_authority_protocol` (BAP) package. It signs proofs, grants,
 boundary anchors, and key transitions; it does NOT verify, does NOT transport,
-does NOT persist, and is NOT the runtime. The package is public on Hex at 0.5.0 and
-this source repository is public. The separate `bounded_authority` runtime is a
+does NOT persist, and is NOT the runtime. The package is public on Hex and this source repository is public. The separate `bounded_authority` runtime is a
 private commercial application: it is not a public Hex package, is not currently
 published to private Hex because no paid private-package subscription exists, and is
 never a dependency of this library. Any future private Hex release requires an active
@@ -77,7 +76,8 @@ adding them to the library's `mix.exs` trips the wall red.
 
 ## Protocol version discipline + the drift probe
 
-BAP is consumed from **Hex** (`== 0.3.0`). A protocol version bump is a
+BAP is consumed from **Hex** (the exact pin lives in `mix.exs` + the wall test —
+never restated here, per ADR-0010 decision 5: a prose pin rots on the next bump). A protocol version bump is a
 deliberate, reviewed change — the wall test pins the LOCKED version
 (`@protocol_locked_version`) and the requirement in the same commit, so a bare
 `mix deps.update bounded_authority_protocol` (which reconciles lock + deps in

@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.7.0] — 2026-09-22
+
+### Added — the ES256 signing surface (B2, ADR-0021)
+
+- `BoundedAuthorityReportAdapter.V3`: the contract-major-3 sibling of the
+  major-1 surface — `sign_report/3`, `sign_grant/3`, `sign_anchor/3`, and
+  `sign_key_transition/3` over BAP's `BAP3-ES256-SHA256` suite (BAP 0.5.1,
+  BAP ADR 0035: EC P-256 keys, RFC 7518 §3.4 raw `r || s` signatures,
+  `ES256` headers, `BAP3-*` separators). Major selection is the module name.
+- The key-type discriminator: each major's resolvers accept exactly their
+  suite's key shape — 32-byte Ed25519 on the major-1 entry points, the
+  65-byte on-curve uncompressed-SEC1 P-256 point on `V3` (validated through
+  the protocol package's certified arithmetic) — and reject the other
+  direction with `:invalid_key_handle` before `sign/2` is reached.
+- Producer-owned low-S normalization in the `V3` tail, with the order
+  pinned (raw scalar range check before the conditional subtraction): a
+  handle returning a high-S spelling still yields conforming compacts; DER
+  returns and out-of-range scalars close as `:signing_failed`. The ECDSA
+  wrong-key guard is decorrelated from BAP's verifier and proven against it
+  by a differential-agreement test.
+- `mix bounded_authority_report_adapter.doctor` learns both key types and
+  both majors: `--major 1|3` applies that surface's strict key-type gate,
+  the `--live` probe verifies with the key's own suite algorithm (a high-S
+  return is an advisory naming the adapter's normalization), and a
+  thumbprint over the wrong RFC 7638 preimage is a fatal. The install
+  scaffold states both surfaces, both key shapes, and the raw-`r||s` sign
+  contract.
+- The conformance harness executes all three certified corpora (v1 283 /
+  v2 268 / v3 292 = 843 cases) through the pinned package's certified
+  loader and runner, with each corpus's index SHA-256 pinned independently
+  (ADR-0013's one-vector scope superseded by explicit owner direction, as a
+  dated amendment on that ADR).
+
+### Changed — dependencies and one deliberate major-1 tightening
+
+- The protocol pin moves `== 0.4.1` → `== 0.5.1` (ADR-0010's bump
+  evidence in the bump commit; the ES256 activation is deliberate
+  contract-surface adoption under the owner-directed B2 program). mint
+  1.10.0 → 1.10.1 in both locks (EEF-CVE-2026-82672, MEDIUM).
+- `sign_report/3` and `sign_local_loopback_report/3` now reject a
+  `grant_compact` that is not a v1 grant (a v2, v3, or malformed compact)
+  with `{:error, :invalid_report}` at the producer, instead of emitting an
+  envelope that fails downstream at `check_envelope/2`. The v1 signing
+  path is byte-identical for valid v1 inputs (pinned by a byte-identity
+  suite captured before the change). See `docs/upgrading.md`.
+
+
 ## [0.6.3] — 2026-09-17
 
 ### Dependencies

@@ -74,7 +74,8 @@ re-architecture, not a refactor.
 
 ## 5. Cryptographic posture
 
-- **Ed25519** for holder proofs + grants (matches BAP's `alg: EdDSA` closed
+- **Ed25519** on the major-1 surface, **EC P-256 / `ES256`** on the `V3` surface
+  (ADR-0021) for holder proofs + grants (matching each BAP major's closed
   header). The private key is held by the edge agent; only the public key +
   signatures cross the boundary.
 - **Deterministic signing inputs** from BAP (`proof_signing_input`,

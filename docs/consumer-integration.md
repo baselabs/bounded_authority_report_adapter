@@ -155,7 +155,8 @@ cross-tenant/cross-identity authorization gap; the transport-authenticated ident
 to the verified capability.
 
 **The binding (DPoP-shaped):** the grant is issued to a holder key thumbprint (`cnf.jkt`); the
-identity you authenticate (the reporter) holds an Ed25519 key. Bind them: after `check_envelope`
+identity you authenticate (the reporter) holds a holder key — Ed25519 for major-1
+credentials, EC P-256 for `V3` credentials. Bind them: after `check_envelope`
 succeeds, assert the grant's bound holder thumbprint (`EnvelopeFacts.holder_thumbprint`) equals the
 thumbprint of the authenticated identity's own key. Then a captured envelope verifies ONLY for the
 identity whose key the grant was issued to — a replay under a different identity's api_key is

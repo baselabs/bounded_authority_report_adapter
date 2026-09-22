@@ -1,6 +1,8 @@
 defmodule BoundedAuthorityReportAdapter.Telemetry do
   @moduledoc """
-  The closed, value-free telemetry surface for the five signing entry points.
+  The closed, value-free telemetry surface for the signing entry points (nine
+  across the two suite surfaces; five object KINDS — the axis names the object
+  kind, never the entry point or the major).
 
   The library emits events but does NOT attach a handler — a fresh application
   sees nothing until it attaches one (`:telemetry.attach/4` or a
@@ -38,7 +40,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   @objects [:report, :anchor, :grant, :key_transition, :local_loopback_report]
   @classes [:ok, :invalid_input, :invalid_key_handle, :signing_failed, :producer_error]
 
-  @doc "The closed object axis (one atom per signing entry point)."
+  @doc "The closed object axis (one atom per signing object kind)."
   @spec objects() :: [atom()]
   def objects, do: @objects
 
