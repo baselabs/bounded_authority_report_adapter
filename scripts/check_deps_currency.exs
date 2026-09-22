@@ -39,7 +39,19 @@ defmodule BoundedAuthorityReportAdapter.CheckDepsCurrency do
       )
     end
 
-    System.halt(min(failures, 1))
+    # Raise on drift rather than System.halt/1: halt(0) kills the whole mix
+    # VM, which ended the `mix ci` alias HERE — every later battery step
+    # (format, compile, credo, test, coverage, dialyzer, docs, audits,
+    # package, reproducibility, example) was unreachable locally while CI —
+    # which runs the steps as separate workflow steps — still executed them
+    # (found via the B2 release: local "mix ci green" receipts were partial).
+    # A raise is nonzero for the CI workflow step and non-fatal to nothing on
+    # the success path, where the alias must CONTINUE.
+    if failures > 0 do
+      raise "check-deps-currency: #{failures} resolvable drift finding(s) above (latest-first policy, ADR-0020)"
+    end
+
+    :ok
   end
 
   defp classify({label, extra_args}) do

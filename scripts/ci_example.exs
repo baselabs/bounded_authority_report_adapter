@@ -27,7 +27,11 @@ defmodule BoundedAuthorityReportAdapter.CiExample do
   def run! do
     edge = Path.expand(@edge_dir, File.cwd!())
 
-    unless File.dir?(Path.join(edge, "mix.exs")) do
+    # File.exists?, NOT File.dir?: mix.exs is a FILE, and File.dir?/1 on a
+    # file is false — the old check raised unconditionally and was unreachable
+    # only because the currency script's System.halt ended the alias before
+    # this runner ever executed locally (found in the B2 release battery).
+    unless File.exists?(Path.join(edge, "mix.exs")) do
       raise "ci example runner: #{edge} is not the edge-agent project"
     end
 

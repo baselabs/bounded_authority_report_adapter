@@ -24,7 +24,6 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   @edge_dir "examples/edge_agent"
   @audit_command "mix hex.audit"
   @currency_exs "scripts/check_deps_currency.exs"
-  @currency_step "mix run --no-start #{@currency_exs}"
   @env_guard_step "run --no-start scripts/ci_env_guard.exs"
 
   # The gate battery, in the canonical step order shared by `mix ci` and the

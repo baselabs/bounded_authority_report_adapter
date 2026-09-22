@@ -122,7 +122,7 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
   defp mismatched_major_grant_compact(holder_thumbprint) do
     alias BoundedAuthorityProtocol.V2
 
-    {pub, priv} = TestKeys.issuer_keypair()
+    {_pub, priv} = TestKeys.issuer_keypair()
 
     grant = %V2.Grant{
       key_id: "issuer-2026-07",
