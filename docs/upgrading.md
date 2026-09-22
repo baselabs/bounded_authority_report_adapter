@@ -16,7 +16,8 @@ Migration notes:
   `sign_local_loopback_report/3` now reject a `grant_compact` that is not a
   v1 grant — a v2 or v3 grant, or a malformed compact — with
   `{:error, :invalid_report}` at the producer, instead of emitting an
-  envelope that fails downstream at `check_envelope/2`. Callers that
+  envelope that fails downstream at check_envelope/2 (the protocol package's
+verifier). Callers that
   (deliberately) fed foreign-major grants will see the earlier, cleaner
   error.
 - **v3 handles** return the 65-byte uncompressed-SEC1 public key and the

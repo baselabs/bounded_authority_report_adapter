@@ -19,8 +19,10 @@ operation was slow or failing).
 
 ## The closed axes
 
-Objects (one per signing object KIND — the v3 surface's entry points emit the same
-four standard kinds; local-loopback is the fifth):
+One atom per signing object KIND — the v3 surface's entry points emit the same
+four standard kinds; local-loopback is the fifth.
+
+Objects (one per signing entry point):
 
 | Object | Entry point |
 |---|---|
