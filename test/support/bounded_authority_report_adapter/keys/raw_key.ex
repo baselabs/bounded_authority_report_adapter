@@ -5,8 +5,12 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
   TEST-ONLY reference implementation of the `BoundedAuthorityReportAdapter`
   key-handle behaviour.
 
-  The handle term is a `{public_key, private_key}` tuple of raw 32-byte Ed25519
-  keys. This compiles ONLY under `:test` (via `mix.exs` `elixirc_paths`) — it
+  The handle term is a `{public_key, private_key}` tuple: raw 32-byte
+  Ed25519 keys for the major-1 entry points, or a 65-byte uncompressed-SEC1
+  P-256 public key + P-256 private key for the `V3` entry points (the term's
+  public-key shape selects the suite — the same wire-shape discrimination
+  ADR-0021 applies at the adapter's resolvers). This compiles ONLY under
+  `:test` (via `mix.exs` `elixirc_paths`) — it
   does NOT ship in the artifact.
 
   ## Why test-only (design C5 / strategy §4 / ADR-0014)
@@ -26,7 +30,18 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
 
   @behaviour BoundedAuthorityReportAdapter
 
+  alias BoundedAuthorityReportAdapter.TestKeys
+
   @impl true
+  def sign(message, {public_key, private_key})
+      when is_binary(message) and byte_size(public_key) == 65 do
+    # The v3 shape: a P-256 keypair whose public half is the 65-byte
+    # uncompressed-SEC1 point. The reference producer signs in the v3 wire
+    # form — raw `r || s`, low-S normalized (ADR-0021 Decision 4's posture,
+    # mirrored by the test-only issuer path).
+    {:ok, TestKeys.ec_sign_raw_low_s(message, private_key)}
+  end
+
   def sign(message, {_public_key, private_key}) when is_binary(message) do
     {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
   end
@@ -39,10 +54,12 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
   def public_key(_handle), do: {:error, :invalid_handle}
 
   @impl true
-  def thumbprint({public_key, _private_key}) do
-    {:ok, raw_thumbprint} =
-      Jwk.public_key_thumbprint_raw(public_key, %{})
+  def thumbprint({public_key, _private_key}) when byte_size(public_key) == 65 do
+    {:ok, TestKeys.ec_thumbprint_raw(public_key)}
+  end
 
+  def thumbprint({public_key, _private_key}) do
+    {:ok, raw_thumbprint} = Jwk.public_key_thumbprint_raw(public_key, %{})
     {:ok, raw_thumbprint}
   end
 

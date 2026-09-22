@@ -1,6 +1,7 @@
 defmodule BoundedAuthorityReportAdapter do
   @moduledoc """
-  Universal companion signer to `BoundedAuthorityProtocol`.
+  Universal companion signer to `BoundedAuthorityProtocol` — the MAJOR-1
+  surface (the `BAP1-Ed25519-SHA256` suite).
 
   BAP produces the deterministic signing input for each protocol object (proof,
   grant, boundary anchor, key transition) but refuses to sign — it is a pure
@@ -9,6 +10,12 @@ defmodule BoundedAuthorityReportAdapter do
   local key, and assembles the compact via BAP. The signing tail — resolve the
   key, sign via the handle, verify the signature against the resolved key, assemble
   — is shared across every object the library signs.
+
+  The contract-major-3 sibling lives in `BoundedAuthorityReportAdapter.V3`
+  (the `BAP3-ES256-SHA256` suite: EC P-256 keys, RFC 7518 §3.4 raw `r || s`
+  signatures with low-S normalization, `ES256` headers) — same four
+  instantiations, same key-handle behaviour, selected by module name
+  (ADR-0021). This module's entry points accept Ed25519 key material only.
 
   ## What has landed
 
@@ -39,25 +46,42 @@ defmodule BoundedAuthorityReportAdapter do
   The pattern generalizes to any BAP protocol object; the four standard
   instantiations plus the local-loopback profile sibling are complete.
 
-  ## The key-handle contract (charter §6 invariant 1)
+  ## The key-handle contract (charter §6 invariant 1) — suite-parameterized
 
   The private key NEVER enters this library. Callers supply a `{module(), term()}`
   handle whose module implements the callbacks below. The library calls the handle's
-  callbacks; the private key bytes live in the caller's module/process.
+  callbacks; the private key bytes live in the caller's module/process. The
+  callbacks are shared by both suite surfaces (this module and `.V3`); what the
+  accepted KEY and SIGNATURE shapes are is selected by the entry point's major:
 
-    * `sign/2`, `public_key/1` — required for every signing operation.
-    * `thumbprint/1` — required (exposed for caller-side self-checking).
-    * `key_identity/1` — **optional** (declared via `@optional_callbacks`); required
-      by `sign_anchor/3` and `sign_key_transition/3`, which resolve the key's registry
-      id (`kid`) AND its public key as ONE atomic snapshot (defense-in-depth: prevents a
-      stateful handle from splitting them across a rotation race). A proof-only handle
-      need not implement it.
-    * `signing_identity/1` — **optional**; required only by `sign_grant/3`, which
-      resolves the key's **role** (`:issuer` or `:holder`) AND its registry id AND
-      public key as ONE atomic snapshot. The role gate (C1) + the rotation-race
-      defense both ride this single call: a stateful handle cannot return `:issuer`
-      then rotate to a different key between role resolution and signing. An
-      issuer-role handle implements it; a proof/anchor-only handle need not.
+    * under THIS module (major 1, Ed25519): `public_key/1` and the snapshots
+      return the raw 32-byte Ed25519 public key; `sign/2` returns the 64-byte
+      Ed25519 signature.
+    * under `BoundedAuthorityReportAdapter.V3` (major 3, `ES256`):
+      `public_key/1` and the snapshots return the 65-byte uncompressed-SEC1
+      P-256 point (`0x04 || x || y`; validated on-curve); `sign/2` returns
+      the RFC 7518 §3.4 raw `r || s` form (exactly 64 bytes — a DER return
+      is rejected; low-S is normalized by the adapter, and returning low-S
+      is recommended).
+
+  * `sign/2`, `public_key/1` — required for every signing operation.
+  * `thumbprint/1` — required (exposed for caller-side self-checking). The
+    RFC 7638 preimage is the SUITE'S: the OKP form
+    `{"crv":"Ed25519","kty":"OKP","x":X}` for Ed25519 keys, the EC form
+    `{"crv":"P-256","kty":"EC","x":X,"y":Y}` for P-256 keys (the digest the
+    issuer mints `cnf.jkt` from — a wrong-preimage thumbprint fails every
+    envelope at verification).
+  * `key_identity/1` — **optional** (declared via `@optional_callbacks`); required
+    by `sign_anchor/3` and `sign_key_transition/3`, which resolve the key's registry
+    id (`kid`) AND its public key as ONE atomic snapshot (defense-in-depth: prevents a
+    stateful handle from splitting them across a rotation race). A proof-only handle
+    need not implement it.
+  * `signing_identity/1` — **optional**; required only by `sign_grant/3`, which
+    resolves the key's **role** (`:issuer` or `:holder`) AND its registry id AND
+    public key as ONE atomic snapshot. The role gate (C1) + the rotation-race
+    defense both ride this single call: a stateful handle cannot return `:issuer`
+    then rotate to a different key between role resolution and signing. An
+    issuer-role handle implements it; a proof/anchor-only handle need not.
 
   A test-only reference implementation (`BoundedAuthorityReportAdapter.Keys.RawKey`)
   ships under `test/support/` for local development; production holders implement the
@@ -622,6 +646,7 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp validate_report(report) when is_map(report) do
     with {:ok, grant_compact} <- required_binary(report, :grant_compact),
+         :ok <- matching_grant_major(grant_compact),
          {:ok, operation} <- required_binary(report, :operation),
          {:ok, method} <- required_binary(report, :method),
          {:ok, target_uri} <- required_binary(report, :target_uri),
@@ -644,6 +669,21 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   defp validate_report(_report), do: {:error, :invalid_report}
+
+  # The mixed-major fail-fast, v1 direction (ADR-0021 Decision 8): a v1
+  # proof pairs with a v1 grant, and BAP's proof producer only hashes
+  # grant_compact — without this gate a v3 grant would pass through into an
+  # envelope no verifier accepts. The bounded, signature-free header walk
+  # pins the major via the closed `alg` check (v1: "EdDSA"); anything else
+  # fails HERE as :invalid_report, per this repo's fail-fast principle. This
+  # is the ONE deliberate behavior change on the major-1 surface (previously
+  # such an envelope failed downstream at check_envelope/2).
+  defp matching_grant_major(grant_compact) do
+    case BoundedAuthorityProtocol.V1.untrusted_key_locator(grant_compact, %{}) do
+      {:ok, _locator} -> :ok
+      {:error, :invalid} -> {:error, :invalid_report}
+    end
+  end
 
   # The local-loopback report: the SAME field checks as validate_report/1 (the
   # shared helpers carry every invariant), plus the profile's ONE divergence —
@@ -1032,30 +1072,41 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   @doc """
-  Signs the holder proof for `message` using the holder key behind `handle`.
+  Signs `message` for `handle`'s key and returns the raw 64-byte signature:
+  an Ed25519 signature under this module's (major-1) entry points, the
+  RFC 7518 §3.4 raw `r || s` form under the `.V3` entry points (DER is
+  rejected there — convert before returning; the adapter normalizes low-S).
 
   The holder's callback performs the actual `:crypto.sign`; the adapter never
-  references the private key. Returns the raw 64-byte Ed25519 signature.
+  references the private key.
   """
   @callback sign(message :: binary(), handle :: term()) ::
               {:ok, binary()} | {:error, term()}
 
   @doc """
-  Returns the 32-byte raw Ed25519 public key for the holder key behind `handle`.
+  Returns the handle's raw public key: the 32-byte raw Ed25519 public key
+  under this module's (major-1) entry points, or the 65-byte
+  uncompressed-SEC1 P-256 point (`0x04 || x || y`) under the `.V3` entry
+  points. The wire shape is the key-type discriminator (ADR-0021) — each
+  major's resolvers accept exactly their shape and reject the other.
   """
   @callback public_key(handle :: term()) :: {:ok, binary()} | {:error, term()}
 
   @doc """
-  Returns the RFC 7638 thumbprint (raw 32-byte SHA-256 digest) of the holder
-  public key behind `handle`. Exposed for caller-side self-checking (e.g.
-  asserting the handle matches a grant's `cnf.jkt`); the adapter does NOT
-  enforce thumbprint equality — that is the verifier's job (charter §3).
+  Returns the RFC 7638 thumbprint (raw 32-byte SHA-256 digest) of the
+  handle's public key, over the SUITE'S preimage: the OKP members
+  (`{"crv":"Ed25519","kty":"OKP","x":X}`) for Ed25519 keys, the EC members
+  (`{"crv":"P-256","kty":"EC","x":X,"y":Y}`) for P-256 keys. Exposed for
+  caller-side self-checking (e.g. asserting the handle matches a grant's
+  `cnf.jkt`); the adapter does NOT enforce thumbprint equality — that is
+  the verifier's job (charter §3).
   """
   @callback thumbprint(handle :: term()) :: {:ok, binary()} | {:error, term()}
 
   @doc """
-  Returns the key's identity — its registry `kid` AND its 32-byte raw Ed25519
-  public key — as a single atomic `{key_id, public_key}` snapshot. Required by
+  Returns the key's identity — its registry `kid` AND its raw public key
+  (32-byte Ed25519 under the major-1 entry points; 65-byte P-256 SEC1 under
+  `.V3`) — as a single atomic `{key_id, public_key}` snapshot. Required by
   `sign_anchor/3` and `sign_key_transition/3`, which resolve both in ONE call so a
   stateful handle cannot split `kid` from `public_key` across a rotation race
   (defense-in-depth at sign time; any `sign/2`-vs-snapshot mismatch is then caught by
@@ -1067,8 +1118,9 @@ defmodule BoundedAuthorityReportAdapter do
 
   @doc """
   Returns the key's **signing identity** for a role-gated operation — its **role**
-  (`:issuer` or `:holder`) AND its registry `kid` AND its 32-byte raw Ed25519 public
-  key — as a single atomic `{:role, key_id, public_key}` snapshot. Required only by
+  (`:issuer` or `:holder`) AND its registry `kid` AND its raw public key
+  (32-byte Ed25519 under the major-1 entry points; 65-byte P-256 SEC1 under
+  `.V3`) — as a single atomic `{:role, key_id, public_key}` snapshot. Required only by
   `sign_grant/3`, which both (a) gates on `role == :issuer` (the C1 pre-commitment —
   a handle that declares `:holder`, or omits this callback, is rejected before
   `sign/2`; see `sign_grant/3`'s `@doc` for the precise property — this is

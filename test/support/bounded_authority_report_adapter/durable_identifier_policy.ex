@@ -6,7 +6,21 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                          {"mix.exs", :package_source_ref, ~S(source_ref: "v#{@version}")},
                          {"lib/bounded_authority_report_adapter.ex", :external_wire_module,
                           "BoundedAuthorityProtocol.V1"},
-                         {"docs/consumer-integration.md", :wire_scheme, "ba_protocol_v1"}
+                         {"docs/consumer-integration.md", :wire_scheme, "ba_protocol_v1"},
+                         # ADR-0021 (2026-09-22): the contract-major-3 signing surface's
+                         # enumerated identities — the adapter-owned V3 module, its test
+                         # suite and handles wrapper.
+                         {"lib/bounded_authority_report_adapter/v3.ex", :path, "v3"},
+                         {"lib/bounded_authority_report_adapter/v3.ex", :module,
+                          "BoundedAuthorityReportAdapter.V3"},
+                         {"test/bounded_authority_report_adapter/v3_sign_test.exs", :path,
+                          "v3_sign_test"},
+                         {"test/bounded_authority_report_adapter/v3_sign_test.exs", :module,
+                          "BoundedAuthorityReportAdapter.V3SignTest"},
+                         {"test/support/bounded_authority_report_adapter/v3_test_handles.ex",
+                          :path, "v3_test_handles"},
+                         {"test/support/bounded_authority_report_adapter/v3_test_handles.ex",
+                          :module, "BoundedAuthorityReportAdapter.V3TestHandles"}
                        ])
   @external_v1_paths MapSet.new([
                        "examples/edge_agent/lib/edge_agent.ex",
@@ -17,6 +31,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "examples/edge_agent/test/edge_agent_test.exs",
                        "examples/edge_agent/test/local_loopback_test.exs",
                        "lib/bounded_authority_report_adapter.ex",
+                       "lib/bounded_authority_report_adapter/v3.ex",
                        "scripts/check_package.exs",
                        "test/bounded_authority_report_adapter/bounds_aware_assembly_test.exs",
                        "test/bounded_authority_report_adapter/conformance/tag_test.exs",
@@ -29,7 +44,9 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "test/bounded_authority_report_adapter/sign_key_transition_test.exs",
                        "test/bounded_authority_report_adapter/sign_local_loopback_report_test.exs",
                        "test/bounded_authority_report_adapter/sign_report_test.exs",
+                       "test/bounded_authority_report_adapter/standard_byte_identity_test.exs",
                        "test/bounded_authority_report_adapter/telemetry_test.exs",
+                       "test/bounded_authority_report_adapter/v3_sign_test.exs",
                        "test/bounded_authority_report_adapter_test.exs",
                        "test/support/bounded_authority_report_adapter/conformance/local_profile_case.ex",
                        "test/support/bounded_authority_report_adapter/conformance/vector_case.ex",
@@ -38,6 +55,12 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "test/support/bounded_authority_report_adapter/test_handles.ex",
                        "test/support/test_keys.ex"
                      ])
+  @external_v3_paths MapSet.new([
+                       "lib/bounded_authority_report_adapter/v3.ex",
+                       "test/bounded_authority_report_adapter/v3_sign_test.exs",
+                       "test/support/test_keys.ex"
+                     ])
+
   @non_version_hump_stems ["Base", "Ed", "IPV", "IPv", "Ipv"]
 
   def check(%{path: path, kind: kind, name: name}) do
@@ -45,8 +68,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
       MapSet.member?(@contract_identities, {path, kind, name}) ->
         :ok
 
-      kind == :external_wire_module and name == "BoundedAuthorityProtocol.V1" and
-          MapSet.member?(@external_v1_paths, path) ->
+      kind == :external_wire_module and external_wire_namespace_ok?(name, path) ->
         :ok
 
       version_bearing?(name) ->
@@ -208,6 +230,16 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
       _ -> {node, acc}
     end
   end
+
+  # An externally owned wire namespace (an enumerated BoundedAuthorityProtocol
+  # major) is accepted only at its exact enumerated consuming paths.
+  defp external_wire_namespace_ok?("BoundedAuthorityProtocol.V1", path),
+    do: MapSet.member?(@external_v1_paths, path)
+
+  defp external_wire_namespace_ok?("BoundedAuthorityProtocol.V3", path),
+    do: MapSet.member?(@external_v3_paths, path)
+
+  defp external_wire_namespace_ok?(_other_namespace, _path), do: false
 
   defp version_bearing?(name) do
     Regex.match?(~r/(^|[._\/-])v\d/i, name) or

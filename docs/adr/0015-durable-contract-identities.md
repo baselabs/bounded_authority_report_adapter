@@ -18,6 +18,17 @@ the tracked architecture gate to three enumerated identities:
 - the externally owned `BoundedAuthorityProtocol.V1` wire namespace used by the
   adapter; and
 - `ba_protocol_v1`, the documented persisted scheme label for that wire major.
+- *(Amended 2026-09-22, ADR-0021:)* `lib/bounded_authority_report_adapter/v3.ex` —
+  the adapter-owned `BoundedAuthorityReportAdapter.V3` signing surface (path and
+  module), mirroring the externally owned wire major it serves; and the v3 suite's
+  exact test paths (`v3_sign_test.exs`, `v3_test_handles.exs`, module
+  `BoundedAuthorityReportAdapter.V3SignTest` / `.V3TestHandles`).
+- *(Amended 2026-09-22, ADR-0021:)* `BoundedAuthorityProtocol.V3` joins
+  `BoundedAuthorityProtocol.V1` as an enumerated external wire namespace, accepted
+  only at the exact adapter and test-support paths that consume it
+  (`v3.ex`, `test_keys.ex`, `v3_sign_test.exs`); the V1 namespace's accepted path
+  set gains the three files that now reference the shared producer structs
+  (`v3.ex`, `standard_byte_identity_test.exs`, `v3_sign_test.exs`).
 
 Path, identifier kind, and spelling are part of every allowlist key. The
 externally owned namespace is accepted only at the exact enumerated adapter,

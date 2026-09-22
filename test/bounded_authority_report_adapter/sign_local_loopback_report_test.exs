@@ -314,10 +314,16 @@ defmodule BoundedAuthorityReportAdapter.SignLocalLoopbackReportTest do
   end
 
   describe "malformed inputs" do
-    test "a malformed grant compact fails at the producer (BAP's ath hashing)" do
+    test "a malformed grant compact fails fast as :invalid_report (ADR-0021's major gate)" do
+      # ADR-0021 Decision 8 moved this rejection upstream: the report
+      # validators route grant_compact through the major's bounded header
+      # walk, so a non-JWS (and any wrong-major) grant is :invalid_report
+      # HERE — previously it surfaced downstream as
+      # {:producer_error, :invalid} at BAP's ath hashing. Fail-fast per the
+      # repo's own principle; the malformed grant still reds, earlier.
       report = loopback_report(grant_compact: "not-a-jws")
 
-      assert {:error, {:producer_error, :invalid}} =
+      assert {:error, :invalid_report} =
                sign(report, handle(), %{issued_at: @now - 50, proof_id: "llh-bad-grant"})
     end
 

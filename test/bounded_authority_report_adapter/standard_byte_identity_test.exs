@@ -1,4 +1,4 @@
-defmodule BoundedAuthorityReportAdapter.V1ByteIdentityTest do
+defmodule BoundedAuthorityReportAdapter.StandardByteIdentityTest do
   @moduledoc """
   Byte-level regression oracle for the major-1 surface across the v3 tail
   changes (ADR-0021, adversarial finding 13).
@@ -17,9 +17,17 @@ defmodule BoundedAuthorityReportAdapter.V1ByteIdentityTest do
   use ExUnit.Case, async: true
 
   alias BoundedAuthorityProtocol.V1
-  alias BoundedAuthorityProtocol.V1.{Credentials, ExpectedAnchor, ExpectedGrant,
-                                     ExpectedKeyTransition, ExpectedRequest,
-                                     HistoricalPublicKey, TrustedIssuer}
+
+  alias BoundedAuthorityProtocol.V1.{
+    Credentials,
+    ExpectedAnchor,
+    ExpectedGrant,
+    ExpectedKeyTransition,
+    ExpectedRequest,
+    HistoricalPublicKey,
+    TrustedIssuer
+  }
+
   alias BoundedAuthorityReportAdapter.Keys.RawKey
 
   # The fixed seeded fixture keypair (seed <<7::256>>) and the fixed successor
