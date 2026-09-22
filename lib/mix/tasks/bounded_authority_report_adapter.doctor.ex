@@ -130,8 +130,11 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
     %{fatals: fatals, advisories: advisories}
   end
+
   defp fatals(module, ref, major) do
-    module_fatals(module) ++ callback_fatals(module) ++ public_key_fatals(module, ref, major) ++
+    module_fatals(module) ++
+      callback_fatals(module) ++
+      public_key_fatals(module, ref, major) ++
       thumbprint_fatals(module, ref)
   end
 
@@ -160,38 +163,37 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   defp public_key_fatals(module, ref, major) do
     if Code.ensure_loaded?(module) and function_exported?(module, :public_key, 1) do
       case safe_call(module, :public_key, [ref]) do
-        {:ok, key} ->
-          case classify_public_key(key) do
-            {:ed25519, _} ->
-              if major == 3,
-                do: [wrong_type_fatal(3, "a 32-byte Ed25519 key")],
-                else: []
-
-            {:p256, _} ->
-              if major == 1,
-                do: [wrong_type_fatal(1, "a 65-byte P-256 point")],
-                else: []
-
-            :invalid ->
-              [
-                "public_key/1 must return a 32-byte Ed25519 public key or a valid " <>
-                  "65-byte on-curve P-256 point (0x04 || x || y) for the supplied ref, " <>
-                  "got #{redact(key)}"
-              ]
-          end
-
-        normal when not is_tuple(normal) or elem(normal, 0) != :ok ->
-          [
-            "public_key/1 returned #{redact(normal)} — the contract is " <>
-              "{:ok, public_key}, and the adapter rejects unwrapped returns"
-          ]
-
-        _error ->
-          ["public_key/1 rejected or exited for the supplied ref"]
+        {:ok, key} -> key_shape_fatals(key, major)
+        normal when not is_tuple(normal) or elem(normal, 0) != :ok -> unwrapped_fatal(normal)
+        _error -> ["public_key/1 rejected or exited for the supplied ref"]
       end
     else
       []
     end
+  end
+
+  defp key_shape_fatals(key, major) do
+    case classify_public_key(key) do
+      {:ed25519, _} ->
+        if major == 3, do: [wrong_type_fatal(3, "a 32-byte Ed25519 key")], else: []
+
+      {:p256, _} ->
+        if major == 1, do: [wrong_type_fatal(1, "a 65-byte P-256 point")], else: []
+
+      :invalid ->
+        [
+          "public_key/1 must return a 32-byte Ed25519 public key or a valid " <>
+            "65-byte on-curve P-256 point (0x04 || x || y) for the supplied ref, " <>
+            "got #{redact(key)}"
+        ]
+    end
+  end
+
+  defp unwrapped_fatal(normal) do
+    [
+      "public_key/1 returned #{redact(normal)} — the contract is " <>
+        "{:ok, public_key}, and the adapter rejects unwrapped returns"
+    ]
   end
 
   defp wrong_type_fatal(major, got) do
@@ -206,26 +208,32 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   defp thumbprint_fatals(module, ref) do
     if Code.ensure_loaded?(module) and function_exported?(module, :public_key, 1) and
          function_exported?(module, :thumbprint, 1) do
-      with {:ok, key} <- safe_call(module, :public_key, [ref]),
-           {:ok, expected} <- expected_thumbprint(key),
-           {:ok, actual} <- safe_call(module, :thumbprint, [ref]) do
-        if expected == actual do
-          []
-        else
-          [
-            "thumbprint/1 does not match the RFC 7638 digest derived from public_key/1 " <>
-              "(the suite's preimage: OKP members for Ed25519 keys, EC members for P-256 " <>
-              "keys) — the issuer's cnf.jkt is minted from that digest, so a mismatched " <>
-              "implementation fails every envelope at verification"
-          ]
-        end
-      else
-        # The key shape or callback failure is already reported above.
-        _ -> []
-      end
+      thumbprint_mismatch(module, ref)
     else
       []
     end
+  end
+
+  defp thumbprint_mismatch(module, ref) do
+    with {:ok, key} <- safe_call(module, :public_key, [ref]),
+         {:ok, expected} <- expected_thumbprint(key),
+         {:ok, actual} <- safe_call(module, :thumbprint, [ref]) do
+      thumbprint_verdict(expected, actual)
+    else
+      # The key shape or callback failure is already reported above.
+      _ -> []
+    end
+  end
+
+  defp thumbprint_verdict(expected, actual) when expected == actual, do: []
+
+  defp thumbprint_verdict(_expected, _actual) do
+    [
+      "thumbprint/1 does not match the RFC 7638 digest derived from public_key/1 " <>
+        "(the suite's preimage: OKP members for Ed25519 keys, EC members for P-256 " <>
+        "keys) — the issuer's cnf.jkt is minted from that digest, so a mismatched " <>
+        "implementation fails every envelope at verification"
+    ]
   end
 
   defp expected_thumbprint(key) do
