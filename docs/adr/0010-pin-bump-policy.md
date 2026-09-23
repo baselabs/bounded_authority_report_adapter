@@ -137,6 +137,15 @@ the repos, never cite them from prose.
   enforcement pointer and now cites it.
 - A `lib/`-touching BAP advance — any contract change — can never ride the
    exception: BARA waits for BA (or the user explicitly supersedes this ADR).
+- **SUPERSESSION (2026-09-23, owner order in-session):** the 0.5.1 -> 0.6.0 bump (the
+  `bap-role-attestation/1` profile, consumed by RA11) moved BARA ahead of BA over a
+  `lib/`-touching span by the owner's explicit sequencing decision — BARA aligned first,
+  BA's pin move + issuance leg dispatched to that repo's session by handoff. The
+  user-supersedes clause above is the route taken; the default BARA-waits-for-BA posture
+  resumes for future spans. The span's surface classes are enumerated in the bump commit's
+  CHANGELOG entry (lib/ role-attestation tree + labeled codec kind touches + the v1/v2
+  wrong-width closed-error-shape fix; the attestation-profile corpus; the profile spec +
+  ADR 0036 + requirement map).
 - Corpus growth inside an accepted span is not silent: RA2's round-trip against
   the larger published corpus at the new pin is the acceptance evidence, quoted
   in the bump commit.
