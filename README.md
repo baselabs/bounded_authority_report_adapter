@@ -4,10 +4,11 @@ Holder-side companion signer for the [Bounded Authority
 Protocol](https://hex.pm/packages/bounded_authority_protocol). Current release:
 [0.8.0](https://hex.pm/packages/bounded_authority_report_adapter/0.8.0) — the
 role-attestation release (RA11: the optional BA-attested role gate on `sign_grant/3`, over
-BAP 0.6.0). Registry checksum read back from the registry API and pinned in the
-post-publish docs-currency commit; the 0.7.0 checksum was
-`39ec21ffabe981059b9940d17f86a782e12a9148fddefbf14cc7f4a2c96bfc0d` (identical to its
-tagged-tree build and publish output).
+BAP 0.6.0). Registry checksum
+`e4d5936da55f5ddbbbb86da0c842e377602d1c4902ab7fcbdc9f4c18f39d3288`, read back from the
+registry API and identical to the tagged-tree two-build candidate and the publish output;
+the 0.7.0 checksum was
+`39ec21ffabe981059b9940d17f86a782e12a9148fddefbf14cc7f4a2c96bfc0d`.
 ([GitHub](https://github.com/baselabs/bounded_authority_protocol)). The protocol package produces
 the deterministic signing input for each protocol object (holder proof, boundary anchor, grant,
 key transition) and **refuses to sign**; this library takes a local key handle and a signing input
