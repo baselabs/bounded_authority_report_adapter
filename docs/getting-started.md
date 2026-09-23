@@ -8,7 +8,7 @@ windows-latest lane on the pinned versions (clone → build → test holds on Wi
 package is published on [Hex](https://hex.pm/packages/bounded_authority_report_adapter).
 
 ```elixir
-{:bounded_authority_report_adapter, "~> 0.7.0"}
+{:bounded_authority_report_adapter, "~> 0.8.0"}
 ```
 
 Or scaffold the starter key-handle with [Igniter](https://hexdocs.pm/igniter)

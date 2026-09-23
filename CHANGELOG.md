@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-09-23
+
+Documentation-truth patch: the 0.8.0 package SHIPPED docs/getting-started.md still
+showing the `~> 0.7.0` install pin (the version-literal sweep for 0.8.0 missed it —
+its grep died on a non-matching glob and reported nothing; the tag's supply-chain
+evidence lane caught the drift at `docs_currency_test`'s getting-started pin check,
+and the packaged copy was confirmed stale by unpacking the published tarball). A
+fresh consumer following the shipped getting-started would have resolved 0.7.0.
+No code changes: the pin reads `~> 0.8.0`, the gate battery is green on the patched
+tree, and this patch re-runs the release-package evidence lane on a fresh tag.
+
 ## [0.8.0] — 2026-09-23
 
 The role-attestation release (RA11, ADR-0008 accepted): the first BARA release whose
