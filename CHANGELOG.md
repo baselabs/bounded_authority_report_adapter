@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-09-23
+
+The role-attestation release (RA11, ADR-0008 accepted): the first BARA release whose
+`sign_grant/3` can gate on a BA-asserted, cryptographically-signed role binding, over
+BAP 0.6.0. The gate is optional and additive — absent `:role_attestation` the
+declaration-only C1 gate and every existing verdict are unchanged. V3's
+`sign_grant/3` fails closed on the option (the profile is Ed25519-bound at schema 1).
+
 ### Added — RA11: the BA-attested role gate on `sign_grant/3` (ADR-0008, accepted; BAP 0.6.0)
 
 - `sign_grant/3` gains the optional `:role_attestation` option: when supplied with a

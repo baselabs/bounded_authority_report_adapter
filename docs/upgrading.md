@@ -1,5 +1,27 @@
 # Upgrading
 
+## 0.8.0 — the BA-attested role gate (RA11) and the BAP 0.6.0 pin
+
+0.8.0 adds the optional `:role_attestation` input to `sign_grant/3` (ADR-0008, accepted;
+RA11): a BA-signed `bap-role-attestation/1` compact plus the caller-trusted attestor
+context gate grant signing on the BA-attested role being `"issuer"` and the attested
+subject matching the handle's atomic signing identity — before `sign/2` is ever called.
+The exact protocol pin moves to `0.6.0` (the role-attestation release; additive, no
+verdict changes on existing input).
+
+Migration notes:
+
+- **Nothing changes for callers that do not supply `:role_attestation`.** The
+  declaration-only C1 gate and every existing verdict are unchanged; `mix deps.update`
+  under the new pin is the whole migration for existing consumers.
+- **The gate binds to the handle snapshot, never caller input**: decoy
+  `subject_key_id` / `subject_public_key` keys in the option are ignored, a keyword-list
+  opts form is honored (not silently dropped), and an explicit `nil` is malformed.
+- **V3's `sign_grant/3` fails closed on the option** with `{:error, :invalid_role_attestation}`
+  — the profile is Ed25519-bound at schema 1, so no P-256 subject can be attested under it;
+  the option is the major-1 surface's.
+- **`sbom` (dev/test) moves ~> 0.11** — no consumer impact.
+
 ## 0.7.0 — the ES256 surface (`BoundedAuthorityReportAdapter.V3`) and one v1 tightening
 
 0.7.0 adds the contract-major-3 signing surface (ADR-0021): the same four
