@@ -4,11 +4,14 @@ Date: 2026-08-11
 
 ## Status
 
-**Proposed.** Not yet decided or implemented. Records the strengthening path for the C1
-gate's conceded residual (ADR-0007 §Decision 5) + the three-repo split, so each repo's
-session has the full picture when the program elects to pursue it. Becomes `Accepted` if/when
-a BAP-side `RoleAttestation` design lands and the program commits to one of the trigger
-conditions in §Decision.
+**Accepted** (2026-09-23). The BAP-side design landed as the `bap-role-attestation/1`
+sibling profile (BAP ADR 0036, shipped in BAP 0.6.0 with
+`RoleAttestation.V1.verify_attestation/2`), and the owner committed the program to the
+direction: this repo's piece (RA11 — the `sign_grant/3` attestation gate) landed 2026-09-23;
+BA's issuance piece remains owned in that repo. The charter §3 sharpening in §Context is
+recorded (charter §3 now carries it, landed). The original trigger-condition framing below
+is retained as history; the owner's decision to pursue the direction preceded the
+multi-issuer/audit triggers, on the library-level emit-correctness property (§Context 1).
 
 ## Context
 

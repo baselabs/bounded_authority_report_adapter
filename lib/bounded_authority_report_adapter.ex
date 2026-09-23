@@ -100,6 +100,7 @@ defmodule BoundedAuthorityReportAdapter do
   """
 
   alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopbackHttp
+  alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestationV1
   alias BoundedAuthorityProtocol.V1.Json
   alias BoundedAuthorityReportAdapter.Telemetry
 
@@ -176,7 +177,12 @@ defmodule BoundedAuthorityReportAdapter do
         }
 
   @type grant_opts :: %{
-          optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map()
+          optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map(),
+          optional(:role_attestation) => %{
+            optional(:now) => integer(),
+            compact: binary(),
+            attestor: BoundedAuthorityProtocol.V1.HistoricalPublicKey.t()
+          }
         }
 
   @type grant_compact :: %{grant: binary()}
@@ -184,6 +190,7 @@ defmodule BoundedAuthorityReportAdapter do
   @type grant_sign_error ::
           :invalid_grant
           | :invalid_key_handle
+          | :invalid_role_attestation
           | :signing_failed
           | {:producer_error, :invalid}
 
@@ -474,16 +481,45 @@ defmodule BoundedAuthorityReportAdapter do
   ignored. `holder_thumbprint` IS caller-supplied (the grant's subject — the holder the
   capability is issued to; the issuer knows it at minting).
 
+  ## RA11: the BA-attested role gate (optional; ADR-0008, BAP 0.6.0)
+
+  Supplying `:role_attestation` STRENGTHENS the C1 gate from a handle self-declaration to a
+  BA-asserted, cryptographically-signed role binding. The caller provides the BA-signed
+  attestation compact (`bap-role-attestation/1`) and the trusted attestor context (the BA
+  trust-root, a `BoundedAuthorityProtocol.V1.HistoricalPublicKey`); the gate calls
+  `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` with the expected
+  subject binding taken from the handle's ATOMIC `signing_identity/1` snapshot — NEVER from
+  caller input — so a handle cannot present another key's attestation. BAP proves the BA
+  signature, the subject binding, structural self-attestation rejection, attestation-window
+  containment in the attestor key window, and the half-open `[nbf, exp)` now-window (under
+  the caller's `:bounds`); this gate adds the role requirement (the attested role must be
+  `"issuer"`). The gate fires BEFORE `sign/2` and before any BAP producer call. Absent the
+  option, the declaration-only C1 gate stands unchanged. This is a sign-time GATING verify,
+  not content verification (charter §3 as sharpened by ADR-0008).
+
   ## Options
 
     * `:bounds` — resource ceilings forwarded unchanged to BAP's producer and
       bounds-aware compact assembler (default `%{}`).
+    * `:role_attestation` (optional) — `%{compact: binary(), attestor:
+      BoundedAuthorityProtocol.V1.HistoricalPublicKey.t(), now: integer()}` — the BA-signed
+      role attestation and trust-root consumed by the RA11 gate. `:now` defaults to the
+      sign-time clock (`System.system_time/1`, seconds); supply it explicitly for
+      deterministic evaluation — and treat it as the TRUST INPUT it is: it selects which
+      instant the attestation window must cover, exactly as the attestor trust-root does;
+      a caller-chosen `:now` inside a stale attestation's window accepts that attestation
+      by that choice. Extra keys (including decoy `subject_key_id` /
+      `subject_public_key`) are ignored — the subject binding is always the handle
+      snapshot's.
 
   ## Errors (closed-atom set — no key material or grant content in errors)
 
     * `:invalid_grant` — a required grant field is missing or malformed.
     * `:invalid_key_handle` — the handle is malformed, lacks `signing_identity/1`, the
       resolved role is not `:issuer`, or the snapshot returned an invalid value.
+    * `:invalid_role_attestation` — the `:role_attestation` option is malformed, or BAP's
+      `verify_attestation/2` rejected it (BA signature, subject binding, self-attestation,
+      window containment, now-window) or the attested role is not `"issuer"`.
     * `:signing_failed` — `sign/2` rejected, returned a non-64-byte signature, violated
       the `{:ok, _} | {:error, _}` contract, or the signature did not verify against the
       snapshot's `public_key`.
@@ -495,11 +531,90 @@ defmodule BoundedAuthorityReportAdapter do
     Telemetry.sign_span(:grant, fn -> do_sign_grant(grant_input, key_handle, opts) end)
   end
 
+  # RA11 (ADR-0008; BAP 0.6.0 `bap-role-attestation/1`): the BA-attested role gate. A
+  # SECOND sign-time gating verify — charter §3 as sharpened by ADR-0008 ("BARA does
+  # sign-time gating verifies (wrong-key, role-attestation); it does not do content
+  # verification"). The caller supplies the BA-signed attestation compact and the trusted
+  # attestor context (the BA trust-root, `HistoricalPublicKey`); the EXPECTED subject
+  # binding is the handle's atomic `signing_identity/1` snapshot — never caller input — so
+  # a handle cannot present another key's attestation (the lying-handle defeat). BAP's
+  # `verify_attestation/2` proves the BA signature, the subject binding, structural
+  # self-attestation rejection, window containment, and the half-open now-window under the
+  # caller's bounds; this gate adds the role check (the attested role must be "issuer").
+  # Absent option: the declaration-only C1 gate stands unchanged. Any failure here — a
+  # malformed option shape, a verify failure, a non-issuer role — is the single closed
+  # `{:error, :invalid_role_attestation}`, fired BEFORE `sign/2` (the counting-handle
+  # tripwire) and before any BAP producer call.
+  # The gate reads the RAW opts, before normalize_opts/1 — the normalizer's benign
+  # default for a non-map opts (%{}) would silently drop an authorization gate riding in a
+  # keyword list (cross-vendor review B1: a holder-role attestation SIGNED through the
+  # keyword idiom). Resolution order: a map opts yields the value under the key (an
+  # explicit nil is malformed, not absent); a keyword list yields the keyword's value;
+  # anything else cannot carry the option, and the option absent means the gate is off
+  # (the declaration-only C1 gate stands).
+  defp role_attestation_gate(raw_opts, key_id, public_key, bounds)
+       when is_map(raw_opts) and not is_struct(raw_opts) do
+    case Map.fetch(raw_opts, :role_attestation) do
+      {:ok, attestation} ->
+        run_role_attestation_gate(attestation, key_id, public_key, bounds)
+
+      :error ->
+        :ok
+    end
+  end
+
+  defp role_attestation_gate(raw_opts, key_id, public_key, bounds) when is_list(raw_opts) do
+    case Keyword.fetch(raw_opts, :role_attestation) do
+      {:ok, attestation} ->
+        run_role_attestation_gate(attestation, key_id, public_key, bounds)
+
+      :error ->
+        :ok
+    end
+  end
+
+  defp role_attestation_gate(_raw_opts, _key_id, _public_key, _bounds), do: :ok
+
+  defp run_role_attestation_gate(attestation, key_id, public_key, bounds) do
+    with {:ok, {compact, expected}} <-
+           expected_attestation(attestation, key_id, public_key, bounds),
+         {:ok, %RoleAttestationV1.AttestationFacts{role: "issuer"}} <-
+           RoleAttestationV1.verify_attestation(compact, expected) do
+      :ok
+    else
+      _ -> {:error, :invalid_role_attestation}
+    end
+  end
+
+  defp expected_attestation(attestation, key_id, public_key, bounds) do
+    with true <- is_map(attestation),
+         compact when is_binary(compact) <- Map.get(attestation, :compact),
+         attestor <-
+           Map.get(attestation, :attestor),
+         true <- is_struct(attestor, BoundedAuthorityProtocol.V1.HistoricalPublicKey),
+         now <- Map.get(attestation, :now, System.system_time(:second)),
+         true <- is_integer(now) do
+      {:ok,
+       {compact,
+        %RoleAttestationV1.ExpectedAttestation{
+          attestor: attestor,
+          subject_key_id: key_id,
+          subject_public_key: public_key,
+          now: now,
+          bounds: bounds
+        }}}
+    else
+      _ -> :error
+    end
+  end
+
   defp do_sign_grant(grant_input, key_handle, opts) do
+    raw_opts = opts
     opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
 
     with {:ok, {key_id, public_key}} <- resolve_signing_identity(key_handle),
+         :ok <- role_attestation_gate(raw_opts, key_id, public_key, bounds),
          {:ok, grant} <- build_grant(grant_input, key_id),
          {:ok, signing_input} <- produce_grant_signing_input(grant, bounds),
          {:ok, grant_compact} <-

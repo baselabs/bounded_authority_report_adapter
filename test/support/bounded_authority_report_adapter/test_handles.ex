@@ -447,6 +447,41 @@ defmodule GrantHolderCountingHandle do
   def sign_call_count, do: Process.get(@key) || 0
 end
 
+defmodule GrantIssuerCountingHandle do
+  alias BoundedAuthorityProtocol.V1.Jwk
+
+  @moduledoc """
+  The RA11 tripwire for the role-attestation gate: an ISSUER-role handle whose sign/2 counts
+  calls. When the BA-attestation gate rejects (holder-role attestation, foreign subject
+  binding, wrong trust-root, expired window), sign_grant MUST fail BEFORE sign/2 —
+  sign_call_count/0 stays 0. (The issuer-role mirror of GrantHolderCountingHandle.)
+  """
+  @behaviour BoundedAuthorityReportAdapter
+  @key {__MODULE__, :sign_count}
+  @issuer_kid "issuer-2026-07"
+
+  @impl true
+  def signing_identity({public_key, _private_key}),
+    do: {:ok, {:issuer, @issuer_kid, public_key}}
+
+  @impl true
+  def sign(message, {_public_key, private_key}) do
+    Process.put(@key, (Process.get(@key) || 0) + 1)
+    {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
+  end
+
+  @impl true
+  def public_key({public_key, _private_key}), do: {:ok, public_key}
+
+  @impl true
+  def thumbprint({public_key, _private_key}) do
+    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    {:ok, raw}
+  end
+
+  def sign_call_count, do: Process.get(@key) || 0
+end
+
 defmodule GrantRolelessHandle do
   alias BoundedAuthorityProtocol.V1.Jwk
 

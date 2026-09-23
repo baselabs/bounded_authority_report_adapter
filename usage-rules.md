@@ -9,7 +9,7 @@
    `public_key/1`, `thumbprint/1`, `key_identity/1`, `signing_identity/1`). If you find
    yourself passing key bytes INTO the adapter, the integration is wrong — see
    [Getting started](docs/getting-started.md).
-3. `sign_grant/3`'s role gate is declaration-rejection, NOT cryptographic role separation.
+3. `sign_grant/3`'s role gate is declaration-rejection by default; with the optional `:role_attestation` input (RA11) it is BA-asserted cryptographic role binding through BAP's `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2`.
    A handle whose `signing_identity/1` does not resolve `{:issuer, _, _}` is rejected with
    `:invalid_key_handle` BEFORE `sign/2` is called — but a handle that consistently lies
    (returns `:issuer` while holding a holder key) passes the gate. Key-role separation is

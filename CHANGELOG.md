@@ -1,5 +1,34 @@
 # Changelog
 
+## [Unreleased]
+
+### Added — RA11: the BA-attested role gate on `sign_grant/3` (ADR-0008, accepted; BAP 0.6.0)
+
+- `sign_grant/3` gains the optional `:role_attestation` option: when supplied with a
+  BA-signed `bap-role-attestation/1` compact and the caller-trusted attestor context (a
+  `BoundedAuthorityProtocol.V1.HistoricalPublicKey` trust-root), the gate calls
+  `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` with the expected
+  subject binding taken from the handle's atomic `signing_identity/1` snapshot — never
+  caller input — and requires the BA-attested role to be `"issuer"`. The gate fires before
+  `sign/2` and before any producer call; any failure (malformed option, BA signature,
+  subject binding, self-attestation, window containment, now-window, non-issuer role) is the
+  single closed `{:error, :invalid_role_attestation}`. Absent the option, the
+  declaration-only C1 gate is unchanged. Charter §3's sign-time-gating-verify nuance is
+  landed (ADR-0008's sharpening).
+- The BAP pin moves `== 0.5.1` -> `== 0.6.0` (the role-attestation release) in the one-commit
+  discipline: the mix.exs requirement, both wall attributes, and both locks. The full
+  0.5.1..0.6.0 span, enumerated and classified (reviewer-verified against the two Hex
+  packages): `lib/` — the new `role_attestation/` tree (the feature this slice consumes),
+  the labeled `compact_jws`/`signing_input` kind touches, and the v1/v2
+  wrong-width-signature closed-error-shape fix (error shape only, verdicts unchanged);
+  `priv/conformance/attestation-profiles/role-attestation/v1/` — the certified 40-case
+  profile corpus (executed through the dependency by `RoleAttestationCorpusTest`, the
+  RA12 discipline); `spec/` + `docs/` — the profile spec, BAP ADR 0036, and the REQ-RA1
+  requirement map. This is BARA ahead of BA over a `lib/`-touching span by the owner's
+  explicit 2026-09-23 sequencing order (BARA first, BA by handoff) — the user-supersedes
+  route ADR-0010 names, recorded as a dated SUPERSESSION note in that ADR; BA's pin move
+  and issuance leg are owned in that repo.
+
 ## [0.7.0] — 2026-09-22
 
 ### Added — the ES256 signing surface (B2, ADR-0021)

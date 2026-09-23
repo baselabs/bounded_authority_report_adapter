@@ -51,7 +51,7 @@ on `sign_grant/3` rejects handles that do not DECLARE `:issuer` — it cannot ve
 key the holder actually holds. Consequence if you rely on it for separation: a handle
 that mis-declares (or a holder key labelled issuer) signs grants the gate happily passes;
 the verifier's `TrustedIssuer` key check is the real boundary. Custody must keep issuer
-keys in issuer custody — the gate is declaration-rejection, not cryptography.
+keys in issuer custody — the gate is declaration-rejection unless the caller supplies a BA-signed `:role_attestation` (RA11), which strengthens it to a cryptographic role binding.
 
 **Misuse: extending telemetry metadata with values.** A key id in an event label is key
 material in every sink downstream (logs, metric labels, dashboards). Consequence: the

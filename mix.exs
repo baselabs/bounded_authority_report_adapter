@@ -122,7 +122,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # identity this adapter compiles against (ADR-0010's bump policy +
       # ADR-0017's exact-pin rationale). A bare `mix deps.update` on it reds
       # the dependency wall by design; a bump is a reviewed, one-commit move.
-      {:bounded_authority_protocol, "== 0.5.1"},
+      {:bounded_authority_protocol, "== 0.6.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # The install task (lib/mix/tasks) uses Igniter when present; the file
       # compiles to a Mix.raise fallback without it.
@@ -134,7 +134,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       # CycloneDX SBOM generation for the tag-push supply-chain workflow.
-      {:sbom, "~> 0.10", only: [:dev, :test], runtime: false}
+      {:sbom, "~> 0.11", only: [:dev, :test], runtime: false}
     ]
   end
 

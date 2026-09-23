@@ -224,17 +224,31 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   end
 
   defp do_sign_grant(grant_input, key_handle, opts) do
+    raw_opts = opts
     opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
 
-    with {:ok, {key_id, public_key}} <- resolve_signing_identity(key_handle),
-         {:ok, grant} <- build_grant(grant_input, key_id),
-         {:ok, signing_input} <- produce_grant_signing_input(grant, bounds),
-         {:ok, grant_compact} <-
-           sign_and_assemble(key_handle, signing_input, public_key, bounds) do
-      {:ok, %{grant: grant_compact}}
+    # The role-attestation gate option is the v1 surface's (RA11); the bap-role-attestation/1
+    # profile is Ed25519-bound at schema 1, so no P-256 subject key can be attested under it.
+    # A supplied option FAILS CLOSED rather than being silently ignored (cross-vendor review
+    # M3 — silent-accept is the wrong failure mode for an unsupportable security option) —
+    # checked on the RAW opts so the keyword-list idiom cannot slip past the normalizer (B1).
+    if option_present?(raw_opts, :role_attestation) do
+      {:error, :invalid_role_attestation}
+    else
+      with {:ok, {key_id, public_key}} <- resolve_signing_identity(key_handle),
+           {:ok, grant} <- build_grant(grant_input, key_id),
+           {:ok, signing_input} <- produce_grant_signing_input(grant, bounds),
+           {:ok, grant_compact} <-
+             sign_and_assemble(key_handle, signing_input, public_key, bounds) do
+        {:ok, %{grant: grant_compact}}
+      end
     end
   end
+
+  defp option_present?(opts, key) when is_map(opts), do: Map.has_key?(opts, key)
+  defp option_present?(opts, key) when is_list(opts), do: Keyword.has_key?(opts, key)
+  defp option_present?(_opts, _key), do: false
 
   @doc """
   Signs a v3 boundary anchor — a durable chain checkpoint under the ES256

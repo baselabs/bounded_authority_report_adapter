@@ -69,7 +69,7 @@ These negatives are load-bearing — each maps to a different repo's job:
   protocol package. The verifier verifies; this adapter signs. Conflating
   the two puts the signer in the verifier's trust boundary. *(Nuance — the
   adapter DOES run sign-time gating verifies: the wrong-key guard on every sign
-  path, and a role-attestation gate if RA11 lands — per ADR-0008, those gate
+  path, and a role-attestation gate since RA11 (landed 2026-09-23) — per ADR-0008, those gate
   the SIGNING so a mis-signed artifact fails loudly at the signing boundary;
   they never verify the artifact's content, which stays the verifier's job via
   BAP.)*
