@@ -37,12 +37,7 @@ jobs:
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: "1.20.2"
-          # Major-only resolution (the green CI matrix lanes' convention): the exactly
-          # pinned 29.0.3 ubuntu build served to runners shipped a broken :ssh (its
-          # :ssh_app.start/2 crashed inside sbom 0.11's ensure_all_started chain during
-          # the v0.8.1 evidence run, while the same task + flags + OTP 29.0.3 pass on
-          # the dev machine in both MIX_ENVs). Latest-29.x sidesteps the bad build.
-          otp-version: "29"
+          otp-version: "29.0.3"
 
       - name: Install dependencies
         run: mix deps.get
