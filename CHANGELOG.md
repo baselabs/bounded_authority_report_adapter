@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-09-24
+
+Documentation-truth patch: the 0.8.1 package SHIPPED README.md still showing the
+`~> 0.6.0` install pin — three minors stale, the same defect class 0.8.1 was cut to
+fix for getting-started, missed because the docs-currency tripwire gated only
+getting-started (the tripwire now covers the README's install block too). A fresh
+consumer following the shipped README resolved 0.6.x. Beyond the pin, this patch
+ships the full docs-corpus standards-review sweep (README, charter, upgrading,
+consumer-integration, telemetry, errors, ROADMAP, the examples READMEs): the
+upgrading guide's 0.6.0 section misstated its own protocol pin (`== 0.4.1`; 0.6.0
+shipped `== 0.4.0`), the loopback profile's provenance was misattributed to BAP
+0.4.0 (it is 0.3.0's), the charter under-counted the landed instantiations (the
+local-loopback signer was omitted), the telemetry/errors copy said "four entry
+points" over five-row tables, and the upgrading stability-contract link targeted a
+nonexistent anchor. Cross-reference census: every ADR/RA citation, relative doc
+link, and module/function reference in the public corpus resolves, and the README's
+registry checksums were re-verified against the published tarballs. One
+moduledoc article fix in lib/ (documentation-only). No code, API, or
+dependency-requirement changes.
+
 ## [0.8.1] — 2026-09-23
 
 Documentation-truth patch: the 0.8.0 package SHIPPED docs/getting-started.md still
