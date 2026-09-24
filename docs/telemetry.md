@@ -1,8 +1,10 @@
 # Sign telemetry
 
-The adapter emits a closed, value-free telemetry surface for its four signing
-entry points (`sign_report/3`, `sign_anchor/3`, `sign_grant/3`,
-`sign_key_transition/3`). The library does NOT attach a handler — a fresh
+The adapter emits a closed, value-free telemetry surface for its signing entry
+points — nine across the two suite surfaces (`BoundedAuthorityReportAdapter`
+and `.V3`), five object KINDS: the object axis names the object kind, never the
+entry point or the major (local-loopback is the fifth kind, major-1 only). The
+library does NOT attach a handler — a fresh
 application sees nothing until it attaches one.
 
 ## Events

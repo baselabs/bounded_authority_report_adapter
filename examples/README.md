@@ -34,8 +34,8 @@ repo root and open the URL), then **Run All**. The setup cell pulls this repo + 
 ### What you'll see (verified output)
 
 ```
-🎟️ issuer-signed grant minted (529 bytes). It authorizes holder-thumbprint TrI1g9he… to perform operation "report_demo".
-✍️ adapter signed the PROOF (678 bytes), binding the grant to this report. The grant passed through untouched.
+🎟️ issuer-signed grant minted. It authorizes the holder (by raw thumbprint) to perform operation "report_demo".
+✍️ adapter signed the PROOF, binding the grant to this report. The grant passed through untouched.
 ✅ VERIFIED — the grant is genuine, the proof matches this report, the holder is the one the grant was issued to.
 ✅ tampered proof REJECTED — one flipped byte breaks the signature
 ✅ stranger's proof REJECTED — the proof must come from the holder the grant was issued to

@@ -1,7 +1,7 @@
 # edge_agent — a runnable end-to-end reference (ROADMAP RA9)
 
 A minimal but real Elixir app that proves the adapter works in a deployment: an
-**edge agent** signs a application report with `BoundedAuthorityReportAdapter.sign_report/3`
+**edge agent** signs an application report with `BoundedAuthorityReportAdapter.sign_report/3`
 and POSTs it over HTTP to a **receiver** that verifies the envelope via
 `BoundedAuthorityProtocol.V1.check_envelope/2`. No database, no Docker, no other
 project running — the whole capability loop runs in one app.
@@ -99,8 +99,9 @@ the library's `mix.exs`, so the library's dependency-direction wall (RA3, which
 scans `lib`/`test/support`/`mix.exs`/`mix.lock` — **not `examples/`**) stays green.
 See the repo-root [`AGENTS.md`](../../AGENTS.md) for the full operational picture.
 
-- **Bandit ≥ 1.12:** `:ip`/`:port`/`:scheme` go at the TOP LEVEL of the Bandit
-  child spec, not nested under `:options:`. The old shape raises
+- **Bandit ≥ 0.7.6:** `:ip`/`:port`/`:scheme` go at the TOP LEVEL of the Bandit
+  child spec, not nested under `:options:` (nested options were removed in
+  0.7.6). The old shape raises
   `Unsupported key(s) in top level config: [:options]` at server start (it passes
   `mix compile` and fails at runtime).
 - **Test-file warnings surface only at `mix test` time**, not `mix compile` — this

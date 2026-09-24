@@ -1,5 +1,15 @@
 # Upgrading
 
+Per-version notes, newest first. For the protocol package's own release notes, see its
+CHANGELOG; this page covers THIS library's releases.
+
+## 0.8.1 — the documentation-truth patch
+
+Documentation-only: the 0.8.0 package shipped docs/getting-started.md still showing
+the `~> 0.7.0` install pin; 0.8.1 republishes with the pin reading `~> 0.8.0`. No
+code, API, or dependency change — nothing for a consumer to do beyond preferring
+0.8.1's docs.
+
 ## 0.8.0 — the BA-attested role gate (RA11) and the BAP 0.6.0 pin
 
 0.8.0 adds the optional `:role_attestation` input to `sign_grant/3` (ADR-0008, accepted;
@@ -47,11 +57,6 @@ verifier). Callers that
   convert at the handle). See `docs/recipes.md`'s P-256 sibling and the
   doctor's `--major 3` gate.
 
-
-
-Per-version notes, newest first. For the protocol package's own release notes, see its
-CHANGELOG; this page covers THIS library's releases.
-
 ## 0.6.3
 
 The protocol pin moves to `bounded_authority_protocol == 0.4.1` — the 2026-09-17 protocol
@@ -92,11 +97,11 @@ both mix projects; dev-only dependency bumps: `dialyxir` 1.4.8, `ex_doc` 0.40.4
 
 ## 0.6.0
 
-The protocol dependency now selects `bounded_authority_protocol == 0.4.1` exactly (the
-2026-09-17 bump to the protocol's 0.4.1 — a wire-identical tooling/docs patch)
-(from `== 0.3.0`). BAP 0.4.0 is additive — the v2 contract-major lands beside the
-byte-frozen v1 profile — so this is a package-resolution break for consumers retaining
-BAP 0.3.x, with zero adapter behavior change. The four signing APIs, return shapes,
+The protocol dependency now selects `bounded_authority_protocol == 0.4.0` exactly
+(from `== 0.3.0`; released 2026-09-14). BAP 0.4.0 is additive — the v2 contract-major
+lands beside the byte-frozen v1 profile — so this is a package-resolution break for
+consumers retaining BAP 0.3.x, with zero adapter behavior change. (The protocol's
+0.4.1 — a wire-identical tooling/docs patch — arrived with BARA 0.6.3 below.) The four signing APIs, return shapes,
 key-handle contract, telemetry, and produced V1 wire forms are unchanged.
 
 Run `mix deps.get` and confirm your lock contains one BAP 0.4.0 entry. Do not
@@ -137,7 +142,7 @@ override BARA back to BAP 0.1.x or retain parallel BAP lines.
 ## 0.3.0
 
 Pre-1.0 feature release carrying everything the proposed
-[stability contract](#the-10-stability-contract) enumerates: the value-free
+[stability contract](#the-proposed-10-stability-contract) enumerates: the value-free
 telemetry surface, the gate battery (coverage floor, dialyzer, doc warnings,
 dependency audits), the package boundary check, the three-cell CI matrix, the
 full guide set, the Igniter installer, the doctor preflight, and the
@@ -163,16 +168,17 @@ consumer use and the surface settles (owner direction, 2026-08-26). When 1.0 is
 cut, the following becomes the PUBLIC SURFACE — breaking changes to it then
 require a major version (SemVer §4's pre-1.0 carve-out ends):
 
-- The four signing functions and their return shapes:
+- The five signing functions and their return shapes:
   `sign_report/3` → `{:ok, %{grant: binary, proof: binary}}`,
+  `sign_local_loopback_report/3` → `{:ok, %{grant: binary, proof: binary}}`,
   `sign_anchor/3` → `{:ok, %{anchor: binary}}`,
   `sign_grant/3` → `{:ok, %{grant: binary}}`,
   `sign_key_transition/3` → `{:ok, %{key_transition: binary}}`,
-  and their `@spec` input maps (`report()`, `anchor_input()`, `grant_input()`,
-  `transition_input()` + the opts maps).
+  and their `@spec` input maps (`report()`, `local_loopback_report()`,
+  `anchor_input()`, `grant_input()`, `transition_input()` + the opts maps).
 - The four closed error sets — `sign_error/0`, `anchor_sign_error/0`, `grant_sign_error/0`,
   `transition_sign_error/0` — including the fixed `{:producer_error, :invalid}` tuple
-  shape.
+  shape (the local-loopback entry point shares `sign_error/0`).
 - The key-handle behaviour: `sign/2`, `public_key/1`, `thumbprint/1`, `key_identity/1`,
   `signing_identity/1` and their `{:ok, _} | {:error, _}` contracts.
 - The telemetry surface: `BoundedAuthorityReportAdapter.Telemetry`'s public functions

@@ -113,7 +113,7 @@ declaration-only C1 gate and every existing verdict are unchanged. V3's
   package (never the reverse), and the protocol package's README describes this adapter as its
   holder-side companion.
 
-## 0.6.2 — 2026-09-17
+## [0.6.2] — 2026-09-17
 
 ### Added — Windows CI lane + cross-platform developer surface (owner standard, 2026-09-16)
 
@@ -151,7 +151,7 @@ declaration-only C1 gate and every existing verdict are unchanged. V3's
   Livebook was swept for version claims (none present) and its setup comment already
   corrected in 0.6.1 (BAP resolves from public hex.pm).
 
-## 0.6.1 — 2026-09-16
+## [0.6.1] — 2026-09-16
 
 ### Changed — repository toolchain hygiene (no library-code or runtime-dep change)
 

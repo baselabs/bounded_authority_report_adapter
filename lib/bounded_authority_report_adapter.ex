@@ -19,7 +19,7 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## What has landed
 
-    * **Proof signing** (`sign_report/3`, RA1) — binds an issuer-signed grant to a
+    * **Proof signing** (`sign_report/3`, RA1) — binds an issuer-signed grant to an
       application report by producing a holder proof, returning the `{grant, proof}`
       envelope the verifier verifies via `check_envelope/2`.
     * **Boundary-anchor signing** (`sign_anchor/3`, RA4) — signs a boundary anchor
@@ -215,7 +215,7 @@ defmodule BoundedAuthorityReportAdapter do
           | {:producer_error, :invalid}
 
   @doc """
-  Binds an issuer-signed grant to a application report by producing a holder proof.
+  Binds an issuer-signed grant to an application report by producing a holder proof.
 
   Returns `{:ok, %{grant: grant_compact, proof: proof_compact}}` — the grant is
   the pass-through of `report.grant_compact` (issuer-signed, untouched); the

@@ -1,7 +1,8 @@
 # Charter — Bounded Authority Report Adapter
 
-**Status:** Governing — reconciled 2026-08-24 to the shipped four-instantiation
-API and public-source boundary · **Authority:** the public
+**Status:** Governing — reconciled 2026-08-24 to the shipped API and public-source
+boundary (amended since for the local-loopback signer, the role-attestation
+gate, and the `V3` ES256 surface) · **Authority:** the public
 `bounded_authority_protocol` API, protocol corpus, and verifier contract.
 
 ## 1. The problem
@@ -20,11 +21,13 @@ transport credential alone cannot forge authority or re-purpose a proof.
 ## 2. What this adapter does
 
 This library is BAP's universal companion signer (ADR-0006): it signs BAP
-protocol objects via a local key-handle. Four instantiations have landed —
+protocol objects via a local key-handle. Five instantiations have landed —
 proof signing (`sign_report/3`, RA1, this section), boundary-anchor signing
 (`sign_anchor/3`, RA4, §5), grant signing (`sign_grant/3`, RA7 — the
-issuer-role instantiation, ADR-0007), and key-transition signing
-(`sign_key_transition/3`, RA8 — ADR-0009). This section describes the
+issuer-role instantiation, ADR-0007), key-transition signing
+(`sign_key_transition/3`, RA8 — ADR-0009), and local-loopback proof signing
+(`sign_local_loopback_report/3`, RA12 — the byte-distinct development-listener
+profile, ADR-0018). This section describes the
 proof/envelope flow; each extension carries its own ADR.
 
 **In the envelope, the adapter signs the holder proof — and only the holder
@@ -80,7 +83,7 @@ These negatives are load-bearing — each maps to a different repo's job:
 - **It is not a transport.** Transport remains outside the library. This adapter
   envelopes a request before it is sent; how the envelope crosses a process or
   network boundary is the caller's concern.
-- **Publication does not widen its role.** The package is public on Hex at 0.5.0,
+- **Publication does not widen its role.** The package is public on Hex,
   and its source is public. It is still only a signer and gains no verifier,
   runtime, transport, persistence, or custody authority from publication. The
   separate BA runtime remains a private commercial application and is not
@@ -93,7 +96,7 @@ These negatives are load-bearing — each maps to a different repo's job:
 | Role | Repo | Keys it holds | Signs? | Verifies? |
 |---|---|---|---|---|
 | **Authority / issuer** | `bounded_authority` (runtime service) | issuer key | grants at issuance | revocation-sensitive decisions |
-| **Holder / prover** (the edge agent) | **this adapter** | holder (private key: Ed25519 major-1, P-256 `ES256` via `.V3`) | all four BAP object kinds — proofs (holder role), anchors + key transitions (role-agnostic), grants (issuer-role instantiation, C1-gated per ADR-0007) | — |
+| **Holder / prover** (the edge agent) | **this adapter** | holder (private key: Ed25519 major-1, P-256 `ES256` via `.V3`) | every BAP object kind — proofs (holder role, plus the local-loopback profile sibling), anchors + key transitions (role-agnostic), grants (issuer-role instantiation, C1-gated per ADR-0007) | — |
 | **Verifier** (the verifier + any third party) | `bounded_authority_protocol` (public package) | none (verifies against published keys) | — | grants, proofs, envelopes, boundary anchors, key transitions |
 
 This is the DPoP-shaped split (RFC 9449): the holder proves possession of a key

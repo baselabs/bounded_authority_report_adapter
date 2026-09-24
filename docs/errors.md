@@ -4,7 +4,9 @@ Every entry point returns either `{:ok, map}` or `{:error, reason}` where `reaso
 closed atom (or one fixed tuple). There is no value-echoing: no key ids, no message
 bytes, no report content ever appear in an error — an atom is the whole story.
 
-The four error sets are identical except for their per-object input atom:
+The four error `@type` sets are identical except for their per-object input
+atom, and the five major-1 entry points share them as mapped below (the
+local-loopback entry point reuses `sign_error/0`):
 
 | Entry point | Input atom | @type |
 |---|---|---|

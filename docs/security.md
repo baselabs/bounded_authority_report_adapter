@@ -49,7 +49,7 @@ close it; not spending it is choosing the window.
 **Misuse: trusting `signing_identity/1`'s declaration as role separation.** The C1 gate
 on `sign_grant/3` rejects handles that do not DECLARE `:issuer` — it cannot verify which
 key the holder actually holds. Consequence if you rely on it for separation: a handle
-that mis-declares (or a holder key labelled issuer) signs grants the gate happily passes;
+that mis-declares (or a holder key labeled issuer) signs grants the gate happily passes;
 the verifier's `TrustedIssuer` key check is the real boundary. Custody must keep issuer
 keys in issuer custody — the gate is declaration-rejection unless the caller supplies a BA-signed `:role_attestation` (RA11), which strengthens it to a cryptographic role binding.
 

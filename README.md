@@ -1,17 +1,17 @@
 # Bounded Authority Report Adapter
 
 Holder-side companion signer for the [Bounded Authority
-Protocol](https://hex.pm/packages/bounded_authority_protocol). Current release:
+Protocol](https://hex.pm/packages/bounded_authority_protocol)
+([source](https://github.com/baselabs/bounded_authority_protocol)). Current release:
 [0.8.1](https://hex.pm/packages/bounded_authority_report_adapter/0.8.1) — a
-documentation-truth patch over 0.8.0, the role-attestation release (RA11: the optional
-BA-attested role gate on `sign_grant/3`, over BAP 0.6.0): the shipped getting-started's
-install pin. Registry checksum
+documentation-truth patch over 0.8.0, the role-attestation release: the optional
+BA-attested role gate on `sign_grant/3`, over BAP 0.6.0. Registry checksum
 `fc3ae2ddf75e4f51c626f8fd955e3adf8250931ba1af914701944b72ea473654`, read back from the
 registry API and identical to the tagged-tree two-build candidate and the publish output;
 prior checksums — 0.8.0
 `e4d5936da55f5ddbbbb86da0c842e377602d1c4902ab7fcbdc9f4c18f39d3288`, 0.7.0
 `39ec21ffabe981059b9940d17f86a782e12a9148fddefbf14cc7f4a2c96bfc0d`.
-([GitHub](https://github.com/baselabs/bounded_authority_protocol)). The protocol package produces
+([Source](https://github.com/baselabs/bounded_authority_report_adapter)). The protocol package produces
 the deterministic signing input for each protocol object (holder proof, boundary anchor, grant,
 key transition) and **refuses to sign**; this library takes a local key handle and a signing input
 and produces the signed compact form. **The private key never enters the library** — callers supply
@@ -29,7 +29,7 @@ verifier's side of the contract) is documented in
 ```elixir
 def deps do
   [
-    {:bounded_authority_report_adapter, "~> 0.6.0"}
+    {:bounded_authority_report_adapter, "~> 0.8.0"}
   ]
 end
 ```
@@ -118,8 +118,10 @@ separate mix project with its own deps and CI job — develop it from inside tha
 
 ## Telemetry
 
-The four signing entry points emit a closed, value-free telemetry surface (two events,
-atoms-only metadata — never key material, message bytes, or report content):
+The signing entry points — nine across the two suite surfaces (this module and
+`BoundedAuthorityReportAdapter.V3`), five object kinds — emit a closed, value-free
+telemetry surface (two events, atoms-only metadata — never key material, message bytes,
+or report content):
 
 - `[:bounded_authority_report_adapter, :sign, :start]` — `%{count: 1}`, `%{object: o}`
 - `[:bounded_authority_report_adapter, :sign, :stop]` — `%{duration: d}`,

@@ -3,7 +3,7 @@
 This is the **universal consumer contract**: how any verifier consumes a `{grant, proof}` envelope
 produced by `BoundedAuthorityReportAdapter.sign_report/3`. The verifier depends **only on the public
 `bounded_authority_protocol` package** — never on this adapter (the dependency-direction wall).
-A application verifier is the first consumer; the contract is general.
+An application verifier is the first consumer; the contract is general.
 
 > **Runnable reference:** the repository's `examples/edge_agent` app implements this whole
 > contract end-to-end — a `Plug`/Bandit receiver (`EdgeAgent.Receiver`) that retains the raw body,
@@ -194,7 +194,7 @@ alongside the §8 identity binding.
 
 ## 10. The local-loopback profile (development listeners)
 
-For a verifier serving plain HTTP on the *literal loopback interface*, BAP 0.4.0
+For a verifier serving plain HTTP on the *literal loopback interface*, BAP 0.3.0
 defines a byte-distinct sibling profile (`bap-application-proof/local-loopback-http/1`,
 protected `typ: ba+loopback-proof`). The signer-side entry is the adapter's
 `sign_local_loopback_report/3`; the consumer-side surface is
