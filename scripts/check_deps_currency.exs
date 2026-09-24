@@ -20,6 +20,16 @@
 #
 # Both the direct-dependency table and `--all` (transitives) are classified:
 # a resolvable transitive drift is drift.
+#
+# TRANSITIVE ROWS GET A RESOLVER PROBE (2026-09-24): hex.outdated --all cannot
+# see through a path dep's requirement — the adapter's exact protocol pin
+# renders "Update possible" in the example app's table while the library's
+# own direct table renders "Update not possible" for the same locked version.
+# For a row whose package is not a direct dep, the resolver is the oracle:
+# `mix deps.update <pkg>` runs against a snapshot of mix.lock; the row is
+# drift only if the locked version actually moves (the snapshot is restored —
+# the gate never mutates the lock). A probe that itself fails keeps the row
+# classified as drift: the gate fails closed on a broken probe.
 
 defmodule BoundedAuthorityReportAdapter.CheckDepsCurrency do
   @moduledoc false
@@ -66,7 +76,7 @@ defmodule BoundedAuthorityReportAdapter.CheckDepsCurrency do
       IO.puts(:stderr, out)
       :no_table
     else
-      drift = capture_rows(out, @drift_row)
+      {drift, renderer_noise} = split_resolvable(capture_rows(out, @drift_row))
       rejected = capture_rows(out, @rejected_row)
 
       if drift != [] do
@@ -76,6 +86,16 @@ defmodule BoundedAuthorityReportAdapter.CheckDepsCurrency do
         )
 
         Enum.each(drift, &IO.puts(:stderr, &1))
+      end
+
+      if renderer_noise != [] do
+        IO.puts(
+          :stderr,
+          "check-deps-currency [#{label}]: renderer noise — \"Update possible\" on a " <>
+            "parent-pinned transitive (resolver probe could not move it; reported, not failed):"
+        )
+
+        Enum.each(renderer_noise, &IO.puts(:stderr, &1))
       end
 
       if rejected != [] do
@@ -89,6 +109,53 @@ defmodule BoundedAuthorityReportAdapter.CheckDepsCurrency do
       end
 
       if drift == [], do: :ok, else: :drift
+    end
+  end
+
+  # "Update possible" splits by resolvability: a DIRECT dep's row is taken as
+  # rendered (hex.outdated evaluated this project's own requirement against
+  # it); a TRANSITIVE row is proven by the resolver probe — the renderer
+  # cannot see a path dep's internal requirement (the header note's case).
+  # The fail-closed direction is deliberate: an unreadable project config or
+  # a crashed probe keeps the row in the drift list.
+  defp split_resolvable(rows) do
+    direct =
+      (Mix.Project.config()[:deps] || [])
+      |> Enum.map(&"#{elem(&1, 0)}")
+      |> MapSet.new()
+
+    Enum.split_with(rows, fn row ->
+      pkg = row |> String.split(~r/\s+/, parts: 2) |> hd()
+      MapSet.member?(direct, pkg) or probe_moves_lock?(pkg)
+    end)
+  end
+
+  # Oracle for a transitive "Update possible" row: can the resolver actually
+  # move the locked version? The lock is snapshotted and restored around the
+  # probe; a nonzero probe exit keeps the row classified as drift (fail
+  # closed — a broken probe must never downgrade drift to noise).
+  defp probe_moves_lock?(pkg) do
+    original = File.read!("mix.lock")
+
+    try do
+      {_output, status} = mix_run(["deps.update", pkg])
+
+      cond do
+        status != 0 ->
+          true
+
+        true ->
+          locked_version(File.read!("mix.lock"), pkg) != locked_version(original, pkg)
+      end
+    after
+      File.write!("mix.lock", original)
+    end
+  end
+
+  defp locked_version(lock, pkg) do
+    case Regex.run(~r/"#{pkg}": \{:hex, :#{pkg}, "([^"]+)"/, lock) do
+      [_, version] -> version
+      nil -> nil
     end
   end
 
@@ -115,16 +182,16 @@ defmodule BoundedAuthorityReportAdapter.CheckDepsCurrency do
 
   # `mix` is a .cmd shim on Windows and cannot be spawned directly — route
   # through cmd /c there (feedback_cross_platform_capability_is_required).
-  defp mix_out!(args) do
+  defp mix_out!(args), do: mix_run(args) |> elem(0)
+
+  defp mix_run(args) do
     {command, args} =
       case :os.type() do
         {:win32, _} -> {"cmd", ["/c", "mix" | args]}
         _ -> {"mix", args}
       end
 
-    case System.cmd(command, args, stderr_to_stdout: true, env: [{"MIX_ENV", "test"}]) do
-      {output, _status} -> output
-    end
+    System.cmd(command, args, stderr_to_stdout: true, env: [{"MIX_ENV", "test"}])
   end
 end
 

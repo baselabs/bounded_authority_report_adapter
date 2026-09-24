@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-16
-- Relates to: [ADR-0010](0010-pin-bump-policy.md) (the one deliberate pin
+- Relates to: [ADR-0010](0010-pin-bump-policy.md) (the deliberate protocol pin
   this gate deliberately does NOT float), [ADR-0011](0011-two-project-structure.md)
   (the gate runs per mix project)
 
@@ -26,9 +26,14 @@ anchored on a hard `$` silently fails open on padded rows.
 1. **Latest-first policy**: every resolver-updatable dependency sits at the
    latest version its declared requirement admits. Anything not at latest is
    a deliberate pin with an inline reason in `mix.exs` (identity contract,
-   major jump pending, or resolver conflict). The one deliberate pin in this
-   repo is `bounded_authority_protocol == 0.4.0` — ADR-0010's bump policy
-   owns it; the currency gate never floats it.
+   major jump pending, or resolver conflict). The deliberate pins in this
+   repo are `bounded_authority_protocol`'s exact requirement — ADR-0010's
+   bump policy owns it, and the version itself lives in `mix.exs` + the wall
+   test, never restated here (ADR-0010 decision 5's no-prose-pin rule;
+   at authoring it read `== 0.4.0`) — and, since 2026-09-23, `sbom == 0.10.0`
+   (dev/test only: 0.11 pulls `hex_core` 0.19, whose `.app` starts `:ssh` —
+   incomplete on GitHub's OTP runner images; `mix.exs`'s inline reason is
+   authoritative). The currency gate never floats either.
 2. **`scripts/check_deps_currency.exs`** (run via `mix run --no-start` — an
    `.exs`, not the original `.sh`, so the gate runs on every OS lane;
    `feedback_cross_platform_capability_is_required`) enforces
@@ -41,7 +46,18 @@ anchored on a hard `$` silently fails open on padded rows.
    "Update not possible" rows are resolver-rejected pins and are REPORTED
    with each package's requirement chain (`mix hex.outdated <pkg>`), not
    failed; a run where no table renders is an UNVERIFIED currency state and
-   exits nonzero — an unverified state must never pass.
+   exits nonzero — an unverified state must never pass. *(Amended 2026-09-24:
+   "Update possible" rows on TRANSITIVE packages are verified by a resolver
+   probe — `mix deps.update <pkg>` against a lock snapshot; the row is
+   classified drift only if the locked version actually moves, the snapshot
+   is restored (the gate never mutates the lock), and a failed probe keeps
+   the row classified as drift (fail closed). The renderer cannot see
+   through a path dep's internal requirement: BAP 0.6.1's publication
+   rendered the example job's protocol row "Update possible" behind the
+   adapter's exact pin while the library's own direct table correctly
+   rendered "Update not possible" — the probe closes that false positive
+   without weakening genuine transitive drift, which the probe promotes to
+   drift exactly as before.)*
 3. The gate runs in both CI jobs (after dependency install) and in both
    project sections of `mix ci`, so the local parity alias and the workflow
    fail together on the same drift.

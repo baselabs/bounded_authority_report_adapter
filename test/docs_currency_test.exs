@@ -8,8 +8,9 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
       against the adapter's exported functions, its behaviour callbacks, or a
       named module;
     * the README's Documentation index matches the ex_doc extras list;
-    * the dep requirement shown in getting-started is satisfied by the current
-      package version.
+    * the dep requirements shown in getting-started AND the README's install
+      block are satisfied by the current package version (the README's pin
+      drifted three releases before this tripwire covered it).
 
   Mutation-proven: deleting an atom row from errors.md and renaming a function
   in usage-rules.md each red the suite (demonstrated in the slice's red log).
@@ -152,14 +153,17 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
            "ex_doc extras not linked anywhere in the README: #{inspect(unlinked)}"
   end
 
-  test "the dep requirement in getting-started accepts the current version" do
-    doc = File.read!("docs/getting-started.md")
+  test "the dep requirements in getting-started and the README accept the current version" do
     version = Mix.Project.config()[:version]
 
-    [_, requirement] = Regex.run(~r/\{:bounded_authority_report_adapter, "~> ([\d.]+)"\}/, doc)
+    for path <- ["docs/getting-started.md", "README.md"] do
+      doc = File.read!(path)
 
-    assert Version.match?(version, "~> #{requirement}"),
-           "getting-started shows ~> #{requirement} but the package version is #{version}"
+      [_, requirement] = Regex.run(~r/\{:bounded_authority_report_adapter, "~> ([\d.]+)"\}/, doc)
+
+      assert Version.match?(version, "~> #{requirement}"),
+             "#{path} shows ~> #{requirement} but the package version is #{version}"
+    end
   end
 
   ## helpers

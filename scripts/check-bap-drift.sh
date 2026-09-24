@@ -182,6 +182,12 @@ if [ -n "$hex_latest" ] && [ "$hex_latest" != "?" ] && [ "$hex_latest" != "$lock
   newest_commit="$(
     printf '%s\n' "$remote_refs" | awk -v t="refs/tags/v$hex_latest^{}" '$2 == t {print $1}'
   )"
+  # Lightweight-tag fallback (same as the locked-version lookup above): the
+  # peeled ^{} ref exists only for annotated tags; v0.6.1 ships lightweight,
+  # and without this the release verdict read UNVERIFIED for a span both
+  # commits of which were locally diffable.
+  [ -z "$newest_commit" ] &&
+    newest_commit="$(printf '%s\n' "$remote_refs" | awk -v t="refs/tags/v$hex_latest" '$2 == t {print $1}')"
 
   if [ -n "$newest_commit" ] && [ -n "$locked_commit" ] && have_span "$locked_commit" "$newest_commit"; then
     lib_files="$(lib_span "$locked_commit" "$newest_commit")"
