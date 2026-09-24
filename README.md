@@ -5,8 +5,12 @@ Protocol](https://hex.pm/packages/bounded_authority_protocol)
 ([source](https://github.com/baselabs/bounded_authority_protocol)). Current release:
 [0.8.2](https://hex.pm/packages/bounded_authority_report_adapter/0.8.2) — a
 documentation-truth patch: the shipped README install pin and the docs-corpus
-version/reference sweep, over 0.8.1. Registry checksum read back from the registry
-API and pinned in the post-publish docs-currency commit; prior checksums — 0.8.1
+version/reference sweep, over 0.8.1. Registry checksum
+`7f4dc9c37cbd9fe33a98aa0da70581976f41e6ce129fa487534f94887f4ba3e5`, read back from the
+registry tarball and identical to the tagged-tree local build candidate and the publish
+output (the supply-chain lane's CI-built archive carries the same shipped files with a
+different archive enumeration order — the machine-local readdir signature, also present
+in the 0.8.1 evidence); prior checksums — 0.8.1
 `fc3ae2ddf75e4f51c626f8fd955e3adf8250931ba1af914701944b72ea473654`, 0.8.0
 `e4d5936da55f5ddbbbb86da0c842e377602d1c4902ab7fcbdc9f4c18f39d3288`, 0.7.0
 `39ec21ffabe981059b9940d17f86a782e12a9148fddefbf14cc7f4a2c96bfc0d`.
