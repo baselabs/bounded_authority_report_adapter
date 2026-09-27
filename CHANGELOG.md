@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- CI: runs on Linux only; macOS/Windows jobs removed. Developer portability is unchanged.
+
 ## [0.8.2] — 2026-09-24
 
 Documentation-truth patch: the 0.8.1 package SHIPPED README.md still showing the

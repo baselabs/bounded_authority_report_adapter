@@ -3,6 +3,11 @@
 - Status: Accepted
 - Date: 2026-09-16
 
+**Amended September 26, 2026:** the macOS and Windows CI legs this ADR required are
+withdrawn by owner rule; CI runs on Linux only. Developer portability across macOS,
+Linux and Windows stays a requirement of the developer setup, proven on a developer
+machine.
+
 ## Context
 
 The repository built on whatever toolchain happened to be on PATH. The only
@@ -65,12 +70,12 @@ intended.
 4. The CI matrix carries one lane per supported major — 1.18/27.3.4.14,
    1.19/28.5.0.3, 1.20.2/29.0.3 — the three lanes the matrix already ran;
    this ADR moves them from hand-chosen to lockstep-bound to the enforced
-   set. Amended 2026-09-16 (same day, owner direction): the matrix also
-   carries a `windows-latest` lane on the pinned versions (1.20.2/29.0.3) —
-   the owner's cross-platform standard is that clone → build → test holds on
-   Windows, and CI is what proves it. The OS dimension is CI-side (like
-   checkout/setup-beam); `mix ci`'s local parity claim covers the pinned
-   Unix lane only.
+   set. CI runs on Linux only; `mix ci`'s local parity claim covers the
+   pinned lane. (Struck by the September 26, 2026 amendment above: this
+   decision briefly also required a `windows-latest` CI lane on the pinned
+   versions, treating the OS dimension as CI-side. That requirement is
+   withdrawn — clone-build-test portability on macOS and Windows is proven
+   on a developer machine, not by a CI leg.)
 
 ## Rejected alternatives
 
