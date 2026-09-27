@@ -106,10 +106,10 @@ version move. A probe, not a gate — not part of `mix ci`.
 CI (`.github/workflows/ci.yml`) runs **two jobs**: `gate` (the library: deps · currency ·
 format · compile · credo · test · gate battery) and `example` (the example app: deps ·
 currency · advisory audit, then the same four build steps, run from
-`examples/edge_agent/`). Both must stay green on the full matrix: one lane per supported
-OTP major 27–29 (ADR-0019; 25/26 are excluded: BAP's codecs decode through `:json`, OTP
-27+ stdlib) PLUS a `windows-latest` lane on the pinned versions (owner standard,
-2026-09-16: clone → build → test must hold on Windows). The Livebook
+`examples/edge_agent/`). Both must stay green on the full matrix: one Linux lane per
+supported OTP major 27-29 (ADR-0019; 25/26 are excluded: BAP's codecs decode through
+`:json`, OTP 27+ stdlib). CI never adds macOS or Windows lanes: portability across
+macOS, Linux and Windows is a property of the developer setup, not a CI leg. The Livebook
 (`examples/report_envelope_roundtrip.livemd`) is NOT run in CI — its round-trip is
 covered by the library's `sign_report_test.exs`.
 
@@ -124,7 +124,7 @@ name — NO POSIX `env(1)` re-exec, so the alias is cross-platform
 like a failed CI job. It is the zero-spend stand-in while Actions can't run
 (Actions live again as of 2026-08-26 — the full matrix + supply-chain runs green) and doubles as the one-command
 pre-push check; workflow steps NOT reproduced locally: checkout/setup-beam (asdf
-here) and the OS matrix dimension (the windows-latest lane is CI-side).
+here).
 
 ## Per-file floor on EVERY touched file (the RA7 lesson)
 
