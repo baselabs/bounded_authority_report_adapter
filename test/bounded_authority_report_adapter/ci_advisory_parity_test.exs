@@ -181,20 +181,28 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     end
   end
 
-  test "both jobs run the full compatibility matrix (every supported OTP major + the windows lane)" do
+  test "both jobs run the full compatibility matrix on Linux (every supported OTP major)" do
     # A dropped matrix cell narrows CI coverage silently (a lane that never
     # runs looks green by absence) — pin the exact cells per job and that
-    # setup-beam actually consumes the matrix variables. The windows-latest
-    # cell is the owner's cross-platform standard (2026-09-16): clone → build
-    # → test must hold on Windows, proven by CI on the pinned versions.
+    # setup-beam actually consumes the matrix variables. CI is Linux only
+    # (owner rule, 2026-09-26): developer portability across macOS, Linux, and
+    # Windows is a developer-setup property, never a CI lane.
     workflow = File.read!(".github/workflows/ci.yml")
+
+    for runner <- ["windows-", "macos-"] do
+      refute String.contains?(workflow, runner),
+             "ci.yml must not run a #{runner}* lane (CI is Linux only)"
+
+      planted = String.replace(workflow, "ubuntu-latest", runner <> "latest", global: false)
+      assert String.contains?(planted, runner), "the #{runner} guard fixture changed nothing"
+    end
+
     [gate_job, example_job] = String.split(workflow, "\n  example:", parts: 2)
 
     lanes = [
       {"ubuntu-latest", "1.18.4", "27.3.4.14"},
       {"ubuntu-latest", "1.19.5", "28.5.0.3"},
-      {"ubuntu-latest", "1.20.2", "29.0.3"},
-      {"windows-latest", "1.20.2", "29.0.3"}
+      {"ubuntu-latest", "1.20.2", "29.0.3"}
     ]
 
     for {job_name, job} <- [{"gate", gate_job}, {"example", example_job}] do
