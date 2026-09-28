@@ -1,6 +1,6 @@
 # AGENTS.md — working in this repo as an AI coding agent
 
-Operational instructions for any agent (forge track or otherwise) editing this
+Operational instructions for any agent editing this
 repository. This is the *how to work here* doc; `docs/charter.md` is the authority
 model, `docs/strategy.md` is the dependency/release posture, `docs/ROADMAP.md` is
 the build arc. Read this FIRST, then the charter/strategy for the *why*.
@@ -191,12 +191,12 @@ by construction. Do not reach for an `encode`; the body is bytes that already ex
 - Surgical pathspecs: `git commit -o <files>` (or explicit paths). **Never
   `git add -A`** — the retired local-harness tree (process state, gitignored) and `.zcode/` would ride.
 - the retired local-harness tree was gitignored except its manifests (all removed from the repository and history 2026-09-14)
-  (tracked-when-present). The commit MESSAGE is the audit trail for forge work
+  (tracked-when-present). The commit MESSAGE is the audit trail for this work
   (the retired local-harness tree artifacts don't ship).
 - Single tree on `master`, no feature branches unless the user says otherwise.
 - Never `git stash`.
 
-## Forge track calibration
+## Track calibration
 
 - **T2** for the crypto signing surfaces (`lib/bounded_authority_report_adapter.ex`,
   any `sign_*/3`, the key-handle contract, conformance) — manifest-declared

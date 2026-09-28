@@ -92,7 +92,7 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
   # CREDENTIALS (never copied into temp trees); `examples/` is a separate mix
   # project the root archive build does not touch (and its nested deps/_build
   # would double the copy for nothing).
-  @copy_excludes ~w(_build deps .git .forge .zcode .kimosabe artifacts cover doc
+  @copy_excludes ~w(_build deps .git .zcode .kimosabe artifacts cover doc
                     graphify-out erl_crash.dump .env .claude .expert .serena
                     .elixir_ls .lexical examples)
 

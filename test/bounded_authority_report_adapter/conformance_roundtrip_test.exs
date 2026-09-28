@@ -378,7 +378,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
 
   describe "bar (iv): defect-injection non-vacuity (RED-first)" do
     # The protected mutation: a tampered proof must go RED. A suite of green
-    # paths passes over a broken contract (the forge tripwire rule); the
+    # paths passes over a broken contract (the tripwire rule); the
     # defect-injection tests prove the harness is not vacuously green. Each
     # injected defect is proven RED; the un-tampered envelope is green.
 

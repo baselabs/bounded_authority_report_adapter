@@ -204,7 +204,7 @@ declaration-only C1 gate and every existing verdict are unchanged. V3's
   duplicated shipped 0.3.0 content); the Livebook setup comment's claim that BAP is
   fetched from a "private git remote" is corrected (it resolves from public hex.pm);
   the notebook's cells were executed end-to-end (8 cells, all pinned verdicts).
-- The retired local-harness (forge-era) artifact tree — still tracked at tip in this
+- The retired local-harness artifact tree — still tracked at tip in this
   repository — is removed from the working tree and from the entire git history
   (owner-executed rewrite, 2026-09-14; the surviving content differs from pre-rewrite tips by
   exactly those five paths). Live documentation references to the tree are neutralized.
