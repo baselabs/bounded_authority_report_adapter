@@ -5,7 +5,10 @@ Protocol](https://hex.pm/packages/bounded_authority_protocol)
 ([source](https://github.com/baselabs/bounded_authority_protocol)). Current release:
 [0.9.0](https://hex.pm/packages/bounded_authority_report_adapter/0.9.0), the
 content-assertion release: `sign_content_assertion/3` over BAP 0.7.0's
-`bap-content-assertion/1` profile. Prior checksums — 0.8.2
+`bap-content-assertion/1` profile. Registry checksum
+`fdaedbf9e58c615aebc253145d8e43c09a64fd9596792a65a79d1e6261589496`, read back from the
+registry API and identical to the two-build reproducible candidate of the tagged tree;
+prior checksums — 0.8.2
 `7f4dc9c37cbd9fe33a98aa0da70581976f41e6ce129fa487534f94887f4ba3e5`, 0.8.1
 `fc3ae2ddf75e4f51c626f8fd955e3adf8250931ba1af914701944b72ea473654`, 0.8.0
 `e4d5936da55f5ddbbbb86da0c842e377602d1c4902ab7fcbdc9f4c18f39d3288`, 0.7.0
