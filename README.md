@@ -1,46 +1,17 @@
 # Bounded Authority Report Adapter
 
-Holder-side companion signer for the [Bounded Authority
-Protocol](https://hex.pm/packages/bounded_authority_protocol)
-([source](https://github.com/baselabs/bounded_authority_protocol)). Current release:
-[0.9.0](https://hex.pm/packages/bounded_authority_report_adapter/0.9.0), the
-content-assertion release: `sign_content_assertion/3` over BAP 0.7.0's
-`bap-content-assertion/1` profile. Registry checksum
-`fdaedbf9e58c615aebc253145d8e43c09a64fd9596792a65a79d1e6261589496`, read back from the
-registry API and identical to the two-build reproducible candidate of the tagged tree;
-prior checksums — 0.8.2
-`7f4dc9c37cbd9fe33a98aa0da70581976f41e6ce129fa487534f94887f4ba3e5`, 0.8.1
-`fc3ae2ddf75e4f51c626f8fd955e3adf8250931ba1af914701944b72ea473654`, 0.8.0
-`e4d5936da55f5ddbbbb86da0c842e377602d1c4902ab7fcbdc9f4c18f39d3288`, 0.7.0
-`39ec21ffabe981059b9940d17f86a782e12a9148fddefbf14cc7f4a2c96bfc0d`.
-([Source](https://github.com/baselabs/bounded_authority_report_adapter)). The protocol package produces
-the deterministic signing input for each protocol object (holder proof, boundary anchor, grant,
-key transition) and **refuses to sign**; this library takes a local key handle and a signing input
-and produces the signed compact form. **The private key never enters the library** — callers supply
-a `{module(), term()}` handle whose module implements the signing callbacks against their own
-custody (an HSM, a KMS, or an in-process key in test). The protocol package's README describes
-this adapter as its holder-side companion; the dependency is one-directional (this adapter depends
-on the protocol package, never the reverse).
+[![Hex](https://img.shields.io/hexpm/v/bounded_authority_report_adapter.svg)](https://hex.pm/packages/bounded_authority_report_adapter)
+[![Docs](https://img.shields.io/badge/hexdocs-reference-blue.svg)](https://hexdocs.pm/bounded_authority_report_adapter)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Verifiers depend only on the protocol package, never on this adapter. Consuming an envelope (the
-verifier's side of the contract) is documented in
-[docs/consumer-integration.md](docs/consumer-integration.md).
+The Elixir signer for the [Bounded Authority Protocol](https://hex.pm/packages/bounded_authority_protocol).
 
-## Content assertions
+The protocol package builds the exact bytes to sign for every protocol object, verifies
+them, and never signs. This library does the signing: you give it a key handle that
+reaches your own key custody (an HSM, a KMS, or an in-process key for development) and it
+returns the signed compact form. **The private key never enters the library.**
 
-`sign_content_assertion/3` signs BAP's standalone `bap-content-assertion/1` profile
-(protocol 0.7.0). It returns `{:ok, %{content_assertion: compact}}` from the twelve caller
-payload members `jti`, `iss`, `aud`, `sub`, `profile`, `profile_digest`, `content_digest`,
-`gen`, `prev`, `iat`, `nbf`, and `exp`. The three digests are raw 32-byte values. BAP fixes
-the wire version, and the handle's atomic `key_identity/1` supplies the protected key
-identifier.
-
-The signer calls BAP's typed producer and assembler through its shared wrong-key guard.
-It requires no grant or role attestation and interprets no content or schema. A signature
-establishes neither trusted issuance nor authority: consumers supply the trusted key, the
-expected context, the content digest, time and bounds to BAP's `verify_assertion/2`, then
-apply their own policy and durable lineage checks. See
-[ADR-0022](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0022-content-assertion-signing.md).
+Verifiers depend only on the protocol package, never on this one.
 
 ## Installation
 
@@ -52,124 +23,164 @@ def deps do
 end
 ```
 
-## What it is
+Requires Elixir 1.18, 1.19 or 1.20 on Erlang/OTP 27 through 29.
 
-An edge agent proves a request is authorized — not merely transport-authenticated — by presenting a
-**grant + proof envelope**: an issuer-signed capability grant plus a holder proof signed by the
-agent's own key. This adapter is what the agent calls to *produce* that envelope. It signs the
-proof; the grant arrives issuer-signed and passes through untouched. The receiver verifies the
-envelope with the protocol package's `check_envelope/2` and gets back cryptographic facts.
+## Quick start
 
-The signer is universal across the four protocol objects, each through one shared signing tail:
+A key handle is a `{module, term}` pair. The module implements the
+`BoundedAuthorityReportAdapter` callbacks against your key store:
+
+```elixir
+defmodule MyApp.HolderKey do
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  def sign(message, ref), do: {:ok, MyApp.Custody.sign_ed25519(ref, message)}
+
+  @impl true
+  def public_key(ref), do: {:ok, MyApp.Custody.public_key(ref)}
+
+  @impl true
+  def thumbprint(ref),
+    do: BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(MyApp.Custody.public_key(ref), %{})
+
+  @impl true
+  def key_identity(ref), do: {:ok, {"holder-key-1", MyApp.Custody.public_key(ref)}}
+
+  @impl true
+  def signing_identity(ref), do: {:ok, {:holder, "holder-key-1", MyApp.Custody.public_key(ref)}}
+end
+```
+
+An agent proves one request by signing a holder proof over an issuer-signed grant:
+
+```elixir
+{:ok, %{grant: grant, proof: proof}} =
+  BoundedAuthorityReportAdapter.sign_report(
+    %{
+      grant_compact: grant_from_issuer,
+      operation: "transfer",
+      method: "POST",
+      target_uri: "https://api.example.test/invoke",
+      invocation_id: "123e4567-e89b-42d3-a456-426614174000",
+      cast_arguments: {:object, [{"amount", {:integer, 5000}}]},
+      nonce: "challenge-001"
+    },
+    {MyApp.HolderKey, :holder},
+    %{}
+  )
+```
+
+The resource verifies `grant` and `proof` with the protocol package's
+`BoundedAuthorityProtocol.V1.check_envelope/2` and gets cryptographic facts back, never an
+authorization decision. [Getting started](docs/getting-started.md) walks the whole loop,
+including the verifier side.
+
+## What it signs
 
 | Function | Object | Role |
 |---|---|---|
-| `sign_report/3` | holder proof (the grant passes through) | holder |
-| `sign_local_loopback_report/3` | local-loopback application proof (`ba+loopback-proof`) | holder |
-| `sign_anchor/3` | boundary anchor | role-agnostic |
-| `sign_key_transition/3` | key transition | role-agnostic |
-| `sign_grant/3` | grant | issuer-only, structurally gated |
+| `sign_report/3` | holder proof (the grant passes through unchanged) | holder |
+| `sign_local_loopback_report/3` | local-loopback development proof (`ba+loopback-proof`) | holder |
+| `sign_grant/3` | capability grant | issuer only |
+| `sign_anchor/3` | consumption-chain boundary anchor | any |
+| `sign_key_transition/3` | historical-key transition | any |
+| `sign_content_assertion/3` | content assertion (`ba+content-assertion`) | any |
 
-The role gate is load-bearing: a holder handle **cannot** sign a grant. Only a handle that resolves
-the issuer role may, so an agent can never mint its own capability.
+`BoundedAuthorityReportAdapter.V3` provides `sign_report/3`, `sign_grant/3`,
+`sign_anchor/3` and `sign_key_transition/3` for the ES256 suite (contract-major 3). The
+key's shape selects the suite: 32-byte Ed25519 keys for the functions above, 65-byte
+P-256 keys for `V3`.
 
-## The local-loopback profile (development listeners)
+Every function returns `{:ok, map}` or `{:error, reason}` with a closed set of reasons and
+no values in errors. See [Errors](docs/errors.md).
 
-`sign_local_loopback_report/3` is the explicit holder-side signer for BAP's byte-distinct
-`bap-application-proof/local-loopback-http/1` profile — plain HTTP on the *literal* loopback
-interface (`http://127.0.0.1` / `http://[::1]` only, exactly spelled). It exists for development
-listeners where TLS is impossible; the proof it produces carries `typ: ba+loopback-proof` and is
-rejected by the standard verifier, just as a standard `dpop+jwt` proof is rejected by the profile's
-verifier — the two families never mix.
+## Safety properties
 
-Three things this profile is NOT:
+- **Key custody stays with you.** Every handle callback may reach a remote custodian.
+- **Wrong-key guard.** Every signature is verified against the handle's public key before
+  it is returned; a custodian that signs with the wrong key fails as `:signing_failed`.
+- **Role gate.** `sign_grant/3` signs only when the handle resolves the issuer role, so a
+  holder can never mint its own capability. It can additionally require an
+  authority-signed role attestation.
+- **Explicit profiles.** The local-loopback and content-assertion profiles are selected by
+  calling their functions; nothing is inferred from URIs, headers or the environment.
+- **Signing is not authorization.** The verifier decides what a signature proves;
+  trusted keys, replay protection and policy stay with the verifying host.
 
-- **Not equivalent to HTTPS.** Loopback HTTP has no confidentiality and no server authentication;
-  it is not process isolation either.
-- **Not inferable.** The profile is chosen by calling the function — there is no option on
-  `sign_report/3` and no detection from the URI, headers, or environment.
-- **Not the verifier's whole job.** The verifying host owns nonce reservation, replay control, the
-  listener-derived target, policy, and effects. This library signs; BAP verifies.
+## Content assertions
 
-The nonce is mandatory (a non-empty binary — on the verify side it is the listener's own single-use challenge), and only canonical literal-loopback targets sign —
-`localhost`, `127.0.0.2`, `0x7f.1`, `[::ffff:127.0.0.1]`, uppercase schemes, queries, fragments,
-HTTPS, and every other spelling fail closed. See the
-[recipe](docs/recipes.md#recipe-the-local-loopback-development-listener); the
-`examples/edge_agent` app runs the flow over real IPv4 and IPv6 sockets.
+`sign_content_assertion/3` signs a standalone assertion that binds the SHA-256 digest of
+exact content bytes to an issuer, audience, lineage subject, semantic profile, validity
+window and predecessor:
 
-**See it run, self-contained (no database, no Docker):** the repository's `examples/` directory
-carries a Livebook demo that plays issuer → holder → verifier in one notebook, and an `edge_agent`
-app that runs the full loop over real HTTP (agent signs and POSTs; receiver verifies via
-`check_envelope`). Both prove a tampered or wrong-key proof is rejected.
+```elixir
+{:ok, digest} = BoundedAuthorityProtocol.ContentAssertion.V1.content_digest(content_bytes, %{})
 
-## Key custody
+{:ok, %{content_assertion: compact}} =
+  BoundedAuthorityReportAdapter.sign_content_assertion(
+    %{
+      jti: "urn:example:assertion:1",
+      iss: "urn:example:issuer",
+      aud: "urn:example:audience",
+      sub: "urn:example:lineage:document-1",
+      profile: "urn:example:profile:document/1",
+      profile_digest: profile_digest,
+      content_digest: digest,
+      gen: 1,
+      prev: <<0::256>>,
+      iat: now,
+      nbf: now,
+      exp: now + 3600
+    },
+    {MyApp.HolderKey, :holder},
+    %{}
+  )
+```
 
-The library never holds a key. A caller passes a `{module, ref}` handle; the module implements
-`sign/2`, `public_key/1`, and `thumbprint/1` (plus optional identity callbacks) against its own key
-store. Every sign path ends in a verify-against-the-public-key guard, so a misconfigured signer
-fails loudly rather than emitting an unverifiable signature. A production holder points the handle
-at an HSM or KMS; the in-memory reference handle used in tests compiles only in the test
-environment and never ships.
+The signer does not read or interpret the content. The consumer verifies with
+`BoundedAuthorityProtocol.ContentAssertion.V1.verify_assertion/2`, supplying the trusted
+key, the expected context and the digest of the bytes it holds.
+
+## Telemetry
+
+Each signing call emits `[:bounded_authority_report_adapter, :sign, :start | :stop]` with
+atom-only metadata: the object kind and a result class. No key material, message bytes or
+content appears. A sustained `:signing_failed` rate means custody is misconfigured. See
+[Telemetry](docs/telemetry.md).
+
+## Documentation
+
+- [Getting started](docs/getting-started.md): first sign, then a production key handle.
+- [Usage rules](usage-rules.md): the integration contract as a checklist.
+- [Errors](docs/errors.md): every error reason and what to check.
+- [Recipes](docs/recipes.md): HSM and KMS handles, a Plug consumer, the loopback listener.
+- [Security model](docs/security.md): trust boundaries and named misuses.
+- [Telemetry](docs/telemetry.md): events, result classes and alerting.
+- [Consumer integration](docs/consumer-integration.md): the verifier side of the contract.
+- [Upgrading](docs/upgrading.md): per-version migration notes.
+- [Changelog](CHANGELOG.md): release notes.
+- [Contributing](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md).
+
+Runnable examples live in the repository's `examples/` directory: a Livebook that plays
+issuer, holder and verifier, and an `edge_agent` app that runs the full loop over HTTP.
 
 ## Development
 
 ```bash
 mix deps.get
-mix ci
+MIX_ENV=test mix ci
 ```
 
-`mix ci` reproduces the CI pipeline locally: dependency resolution plus the latest-first
-currency gate (ADR-0020), format, warnings-as-errors compilation, Credo, and the
-full test suite (including the conformance round-trip against the protocol package's published
-oracle vectors and the dependency-direction wall), the coverage floor, dialyzer, doc warnings,
-both advisory audits, the package-boundary and reproducibility gates — for both the library and
-the example app, and a transport advisory fails the local and GitHub entry points alike.
-GitHub CI runs one lane per supported OTP major, on Linux only. Developer portability across
-macOS, Linux, and Windows is a property of the developer setup (portable tooling,
-`.gitattributes`, no POSIX-only scripts in the gates), proven on a developer machine, not a CI leg.
-
-Requires Elixir `~> 1.18` — supported minors 1.18/1.19/1.20 — on Erlang/OTP 27 through 29
-(the majors on which the stack compiles — the protocol package's codecs decode through OTP
-27's `:json` module, so 25/26 are out; enforced at compile time by the repository's own
-`config/config.exs`, never shipped to consumers — ADR-0019). Developed on
-1.20 / OTP 29. The runnable `examples/edge_agent` app is a
-separate mix project with its own deps and CI job — develop it from inside that directory.
-
-## Telemetry
-
-The signing entry points — ten across the two suite surfaces (this module and
-`BoundedAuthorityReportAdapter.V3`), six object kinds — emit a closed, value-free
-telemetry surface (two events, atoms-only metadata — never key material, message bytes,
-or report content):
-
-- `[:bounded_authority_report_adapter, :sign, :start]` — `%{count: 1}`, `%{object: o}`
-- `[:bounded_authority_report_adapter, :sign, :stop]` — `%{duration: d}`,
-  `%{object: o, result_class: c}`
-
-No handler is attached by default. The event/class tables, alerting guidance
-(`:signing_failed` rate = custody misconfiguration), and an attach example live in
-[`docs/telemetry.md`](docs/telemetry.md).
-
-## Documentation
-
-- [Getting started](docs/getting-started.md) — first sign in minutes, then the path to a
-  production key handle.
-- [Usage rules](usage-rules.md) — the flat imperative list of the integration contract.
-- [Errors](docs/errors.md) — every closed-atom error, its meaning, and what to check.
-- [Recipes](docs/recipes.md) — HSM/KMS key handles, a Plug consumer, porting the
-  signing side beyond Elixir.
-- [Security model](docs/security.md) — trust boundaries and the named misuses.
-- [Telemetry](docs/telemetry.md) — the value-free sign events and the custody alarm.
-- [Consumer integration](docs/consumer-integration.md) — the verifier side: raw bytes,
-  identity binding, the nonce ledger.
-- [Changelog](CHANGELOG.md) — release by release.
-- [Upgrading](docs/upgrading.md) — per-version notes and the 1.0 stability contract.
-- [Contributing](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md).
+`mix ci` runs the same checks as CI: formatting, compilation with warnings as errors,
+Credo, the test suite (including a conformance round-trip against the protocol's
+published vectors), coverage, Dialyzer, documentation, advisory audits, and the package
+and reproducibility checks, for the library and the example app.
 
 ## Security
 
-See [`SECURITY.md`](SECURITY.md) for the vulnerability-reporting process.
+Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
