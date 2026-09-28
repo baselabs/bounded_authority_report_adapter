@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.9.1] — 2026-09-28
+
+Documentation-truth release: the 0.9.0 package shipped the pre-rewrite README.
+The library-user README rewrite landed on master minutes after the 0.9.0
+publish, and a Hex release keeps the README frozen in its tarball from publish
+time, so the registry page kept showing the release-log prose the rewrite had
+removed. This release carries the rewritten README, so the registry page and
+the repository match.
+
+The registry-checksum ledger moves here from the README: the ladder read as
+release-log prose at the top of the README and was removed by the rewrite,
+which also orphaned the 0.9.0 pin made after that publish. Each value is the
+SHA-256 of the published tarball, read back from the registry API:
+
+| Version | Registry checksum |
+|---|---|
+| 0.9.0 | `fdaedbf9e58c615aebc253145d8e43c09a64fd9596792a65a79d1e6261589496` |
+| 0.8.2 | `7f4dc9c37cbd9fe33a98aa0da70581976f41e6ce129fa487534f94887f4ba3e5` |
+| 0.8.1 | `fc3ae2ddf75e4f51c6268f8fd955e3adf8250931ba1af914701944b72ea473654` |
+| 0.8.0 | `e4d5936da55f5ddbbbb86da0c842e377602d1c4902ab7fcbdc9f4c18f39d3288` |
+| 0.7.0 | `39ec21ffabe981059b9940d17f86a782e12a9148fddefbf14cc7f4a2c96bfc0d` |
+
+This release's own checksum is read back after publish and added by the
+docs-currency commit that follows it. No code, API, or dependency changes; the
+protocol pin stays `== 0.7.0`.
+
 ## [0.9.0] — 2026-09-28
 
 The content-assertion release: `sign_content_assertion/3` over BAP 0.7.0.
