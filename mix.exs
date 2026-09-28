@@ -1,7 +1,7 @@
 defmodule BoundedAuthorityReportAdapter.MixProject do
   use Mix.Project
 
-  @version "0.8.2"
+  @version "0.9.0"
   @source_url "https://github.com/baselabs/bounded_authority_report_adapter"
 
   def project do
@@ -119,10 +119,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # (lib/bounded_authority_report_adapter/telemetry.ex).
       {:telemetry, "~> 1.3"},
       # DELIBERATE EXACT PIN, never floated: BAP's version IS the wire-contract
-      # identity this adapter compiles against (ADR-0010's bump policy +
+      # identity this adapter compiles against (ADR-0023's bump policy +
       # ADR-0017's exact-pin rationale). A bare `mix deps.update` on it reds
       # the dependency wall by design; a bump is a reviewed, one-commit move.
-      {:bounded_authority_protocol, "== 0.6.0"},
+      {:bounded_authority_protocol, "== 0.7.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # The install task (lib/mix/tasks) uses Igniter when present; the file
       # compiles to a Mix.raise fallback without it.

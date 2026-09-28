@@ -47,7 +47,7 @@
     never extend it with key material ([Telemetry](docs/telemetry.md)).
 11. Pin the protocol dependency and treat a version bump as a reviewed change — the
     dependency-direction wall pins the locked version, and a silent `mix deps.update`
-    crosses an unreviewed protocol span (ADR-0010).
+    crosses an unreviewed protocol span (ADR-0023).
 12. Production handles never come from this library. The `{pub, priv}` reference handle
     in the source repo's `test/support/` is TEST-ONLY and deliberately not shipped in the
     package — shipping it would pave the road to exactly the custody failure the separate
@@ -66,3 +66,15 @@ See [Getting started](docs/getting-started.md), [Errors](docs/errors.md),
    target. Loopback HTTP is not equivalent to HTTPS — see
    [Recipes](docs/recipes.md#recipe-the-local-loopback-development-listener).
 
+## Content assertions
+
+`sign_content_assertion/3` takes the exact twelve caller payload fields documented
+in the README; digests are raw 32-byte values. Supply a key handle implementing
+atomic `key_identity/1` and `sign/2`. The protected key identifier is signer-owned;
+caller-supplied identity aliases do not override it. The signer does not consume a
+role attestation, inspect the external content, resolve trust, or evaluate policy.
+The consumer must verify the compact with BAP using explicitly expected identifiers,
+profile/content digests, public key window, time and bounds. Parsing or signing
+is not authorization, and pairwise successor verification does not prevent replay
+without consumer-owned durable state. See
+[ADR-0022](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0022-content-assertion-signing.md).

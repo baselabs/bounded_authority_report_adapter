@@ -1,9 +1,10 @@
 # Sign telemetry
 
 The adapter emits a closed, value-free telemetry surface for its signing entry
-points — nine across the two suite surfaces (`BoundedAuthorityReportAdapter`
-and `.V3`), five object KINDS: the object axis names the object kind, never the
-entry point or the major (local-loopback is the fifth kind, major-1 only). The
+points — ten across the two suite surfaces (`BoundedAuthorityReportAdapter`
+and `.V3`), six object KINDS: the object axis names the object kind, never the
+entry point or the major. Local-loopback and content assertion are major-1 profile
+siblings. The
 library does NOT attach a handler — a fresh
 application sees nothing until it attaches one.
 
@@ -22,7 +23,7 @@ operation was slow or failing).
 ## The closed axes
 
 One atom per signing object KIND — the v3 surface's entry points emit the same
-four standard kinds; local-loopback is the fifth.
+four standard kinds; local-loopback and content assertion are separate kinds.
 
 Objects (one per signing entry point):
 
@@ -33,13 +34,14 @@ Objects (one per signing entry point):
 | `:grant` | `sign_grant/3` |
 | `:key_transition` | `sign_key_transition/3` |
 | `:local_loopback_report` | `sign_local_loopback_report/3` |
+| `:content_assertion` | `sign_content_assertion/3` |
 
 Result classes (the classified outcome of a span):
 
 | Class | Meaning | What to alert on |
 |---|---|---|
 | `:ok` | The signing round-trip returned `{:ok, _}`. | Baseline; alert on rate DROPS. |
-| `:invalid_input` | The caller-supplied object failed validation (`:invalid_report`, `:invalid_anchor`, `:invalid_grant`, or `:invalid_transition`). | Rate = caller input quality. Not a custody problem. |
+| `:invalid_input` | The caller-supplied object failed validation (`:invalid_report`, `:invalid_anchor`, `:invalid_grant`, `:invalid_transition`, or `:invalid_content_assertion`). | Rate = caller input quality. Not a custody problem. |
 | `:invalid_key_handle` | The key handle is malformed, or a handle callback (`public_key/1`, `key_identity/1`, `signing_identity/1`) rejected / returned an invalid value / exited. | Rate = handle wiring or custody-endpoint health. |
 | `:signing_failed` | `sign/2` rejected, violated its contract, returned a non-64-byte signature, OR the signature did not verify against the resolved public key (wrong-key). | Rate = **custody misconfiguration** — the highest-priority signal this surface offers; a sustained nonzero rate means the handle is signing with the wrong key or failing outright. |
 | `:producer_error` | The protocol's producer or assembler rejected the signing input (bounds, field constraints). | Rate = caller input quality against the protocol contract. |

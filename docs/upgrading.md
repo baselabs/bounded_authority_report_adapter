@@ -3,6 +3,26 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 0.9.0 — content assertions and the BAP 0.7.0 pin
+
+0.9.0 adds `sign_content_assertion/3` (ADR-0022) for BAP's standalone
+`bap-content-assertion/1` profile, and the exact protocol pin moves to `0.7.0`, the release
+that carries that profile.
+
+Migration notes:
+
+- **Existing entry points behave as before.** The pin move is additive for this library's
+  existing calls; `mix deps.update bounded_authority_report_adapter` is the whole migration.
+- **Identifier admission is unchanged by this pin move.** BAP 0.7.0 changes no existing
+  profile's bytes or verdicts.
+- **New closed error `:invalid_content_assertion`** for malformed options or missing or
+  wrongly typed input members of `sign_content_assertion/3`; telemetry adds the
+  `:content_assertion` object and maps that error to `:invalid_input`.
+- **Code that builds `%BoundedAuthorityProtocol.V1.Bounds{}` literally** must add the new
+  `content_bytes` key (a BAP 0.7.0 change); override maps are unaffected.
+- **Pin policy:** BARA now follows published BAP releases directly (ADR-0023); the
+  authority runtime adopts BAP and BARA on its own schedule.
+
 ## 0.8.1 — the documentation-truth patch
 
 Documentation-only: the 0.8.0 package shipped docs/getting-started.md still showing

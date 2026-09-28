@@ -8,7 +8,7 @@ Accepted. Records RA2's acceptance posture (in force since 2026-08-09); until
 now the decision lived only in the ROADMAP RA2 row and the harness itself —
 the retired local-harness conformance-surfaces manifest pointed at "ROADMAP RA2 + charter §6" as its
 authority, not an ADR. Authored when the 2026-08-17 alignment audit listed the
-gap. Couples to ADR-0010 (the pin-bump policy's corpus clause).
+gap. Couples to the pin-bump policy's corpus clause (ADR-0010, now ADR-0023).
 
 ## Context
 
@@ -41,7 +41,7 @@ The corpus is the only oracle whose green MEANS "BAP accepts what BARA produces.
    consumes BAP as a pinned dep and does not re-run BAP's suite. A vector file
    or corpus class OUTSIDE `grant-holder-proof.json` is therefore NOT
    automatically exercised by BARA's harness — a bump whose span adds one is
-   surfaced by ADR-0010's surface-class enumeration, where extending this
+   surfaced by the bump commit's span enumeration (ADR-0023 Decision 3), where extending this
    harness to consume it is a deliberate decision, never an accident.
    *(Scope operator-reaffirmed 2026-08-24: one vector. The protocol's corpus
    estate is churning — SDK-graduation ADRs, a moving `lib/`, releases days
@@ -67,7 +67,7 @@ The corpus is the only oracle whose green MEANS "BAP accepts what BARA produces.
    the corpus proves BARA consumes BAP's format; the round-trip proves BARA
    produces it.
 4. **Re-verified at EVERY pin bump** — the vector at the new pin is the oracle
-   for the new pin. This is ADR-0010's corpus clause from the consumption side:
+   for the new pin. This is the pin-bump policy's corpus clause (ADR-0023) from the consumption side:
    growth of the consumed vector inside an accepted bump span is admitted only
    with this harness green at the new ref (within the vector, growth can only
    ADD cases — a stricter oracle, never a relaxation; growth in the corpus's
@@ -84,5 +84,5 @@ The corpus is the only oracle whose green MEANS "BAP accepts what BARA produces.
   (the retired conformance-verify runner, layer-iii; not yet wired into CI — the ops
   follow-on it records).
 - BARA's green is deliberately defined by ANOTHER repo's published artifacts:
-  that coupling is the point (strategy §7), and ADR-0010 governs when the pin
+  that coupling is the point (strategy §7), and ADR-0023 governs when the pin
   may move.

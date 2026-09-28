@@ -54,18 +54,18 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # carries the Hex tuple (not a git ref) — the wall asserts BOTH below.
   #
   # A protocol version bump is a deliberate, reviewed change: raise @protocol_requirement
-  # here in the same commit that bumps the dep in mix.exs, and the SemVer bump is governed
-  # by docs/adr/0010-pin-bump-policy.md (a wire/verification change is a protocol
+  # here in the same commit that bumps the dep in mix.exs; when the pin moves is governed
+  # by docs/adr/0023-pin-follows-bap-releases.md (a wire/verification change is a protocol
   # contract-major; an additive change is a minor).
   @protocol_app "bounded_authority_protocol"
-  @protocol_requirement "== 0.6.0"
+  @protocol_requirement "== 0.7.0"
 
   # The LOCKED version — the guard against silent lock drift. The exact requirement above
   # selects the authority suite's recertified protocol identity. A version bump is a
   # deliberate, reviewed change — the same commit raises the mix.exs requirement, BOTH wall
   # attributes, and the lock; this attribute makes the lock half mechanically loud instead
   # of trusted.
-  @protocol_locked_version "0.6.0"
+  @protocol_locked_version "0.7.0"
 
   defp requirement_tracks_locked_version?(requirement, locked_version) do
     requirement == "== #{locked_version}"

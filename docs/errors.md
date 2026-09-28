@@ -4,8 +4,8 @@ Every entry point returns either `{:ok, map}` or `{:error, reason}` where `reaso
 closed atom (or one fixed tuple). There is no value-echoing: no key ids, no message
 bytes, no report content ever appear in an error — an atom is the whole story.
 
-The four error `@type` sets are identical except for their per-object input
-atom, and the five major-1 entry points share them as mapped below (the
+The five error `@type` sets are identical except for their per-object input
+atom, and the six major-1 entry points share them as mapped below (the
 local-loopback entry point reuses `sign_error/0`):
 
 | Entry point | Input atom | @type |
@@ -15,6 +15,7 @@ local-loopback entry point reuses `sign_error/0`):
 | `sign_anchor/3` | `:invalid_anchor` | `anchor_sign_error/0` |
 | `sign_grant/3` | `:invalid_grant` | `grant_sign_error/0` |
 | `sign_key_transition/3` | `:invalid_transition` | `transition_sign_error/0` |
+| `sign_content_assertion/3` | `:invalid_content_assertion` | `content_assertion_sign_error/0` |
 
 ## The shared atoms
 
@@ -38,6 +39,7 @@ semantically-invalid field against these rows.
 | `:invalid_anchor` | An `anchor_input` content field is missing, or `chain_hash` is not a binary. | `anchor_id`, `chain_id`, `sequence`, `chain_hash` presence and basic types. | Fix the anchor fields. |
 | `:invalid_grant` | A `grant_input` field is missing or of the wrong basic type. | `issuer`, `grant_id`, `audiences`, `issued_at`/`not_before`/`expires_at` presence and types. | Fix the grant fields. |
 | `:invalid_role_attestation` | The optional `:role_attestation` input to `sign_grant/3` is malformed, or BAP's `verify_attestation/2` rejected it (BA signature, subject binding, self-attestation, window containment, now-window) or the BA-attested role is not `"issuer"` (RA11). | The compact is a BA-signed `bap-role-attestation/1`; the attestor context is the BA trust-root covering the attestation window at `now`; the attested subject is exactly the handle's atomic signing identity. | Fix the attestation input or the trust-root. The gate binds to the handle snapshot, never to caller-supplied subject values. |
+| `:invalid_content_assertion` | The options are not a plain map, or a `sign_content_assertion/3` input member (`jti`, `iss`, `aud`, `sub`, `profile`, `profile_digest`, `content_digest`, `gen`, `prev`, `iat`, `nbf`, `exp`) is missing or of the wrong basic type. | The input map against `content_assertion_input()`; digests are raw binaries, integers for `gen`/`iat`/`nbf`/`exp`. | Fix the input fields or pass options as a map. Digest widths, the genesis rule, and the time window are the protocol's checks and surface as `{:producer_error, :invalid}`. |
 | `:invalid_transition` | A `transition_input` field is missing, or `next_public_key` is not the surface's key shape (32-byte Ed25519 on major 1; a valid 65-byte P-256 point on `V3` — adapter-checked). | `transition_id`, `chain_id`, `effective_at`, `next_key_id`, `next_public_key`. | Fix the transition fields. |
 
 The `{:producer_error, :invalid}` row covers, among others: a `chain_hash` that is not

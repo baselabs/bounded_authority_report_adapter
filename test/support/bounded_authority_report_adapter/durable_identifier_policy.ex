@@ -42,6 +42,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "test/bounded_authority_report_adapter/durable_identifier_policy_test.exs",
                        "test/bounded_authority_report_adapter/local_loopback_corpus_test.exs",
                        "test/bounded_authority_report_adapter/sign_anchor_test.exs",
+                       "test/bounded_authority_report_adapter/sign_content_assertion_test.exs",
                        "test/bounded_authority_report_adapter/sign_grant_test.exs",
                        "test/bounded_authority_report_adapter/sign_key_transition_test.exs",
                        "test/bounded_authority_report_adapter/sign_local_loopback_report_test.exs",

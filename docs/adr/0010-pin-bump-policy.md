@@ -4,7 +4,12 @@ Date: 2026-08-17
 
 ## Status
 
-Accepted. Records the pin-alignment rationale behind the v0.1.0 bump (`5782634`,
+**Superseded by [ADR-0023](0023-pin-follows-bap-releases.md) (September 28, 2026, owner
+decision): BARA's pin follows published BAP releases directly; no BA pin or validation
+gates a BARA release.** The text below is kept as the historical record of the retired
+alignment policy; its surface-enumeration discipline continues in ADR-0023 Decision 3.
+
+Originally accepted. Records the pin-alignment rationale behind the v0.1.0 bump (`5782634`,
 2026-08-12) and EXTENDS it with new policy: that bump verified the empty-`lib/`
 condition (quoted in its commit message) but did NOT enumerate the span's surface
 classes — and its own class list was wrong both ways (it claimed conformance-corpus

@@ -52,10 +52,9 @@ with dep-removal and form-precise regex RED proofs.
   bumping/deleting the protocol dep reds the test.
 - The BAP pin in `mix.exs` is the explicit ref that gates when an adapter bump
   is required (if BAP's vectors change, this adapter's conformance test goes red
-  — the coupling is intentional). *(Amended 2026-08-17: the pin's
-  alignment-with-BA posture — default alignment, a verifiability-gated
-  BARA-ahead exception — is governed by [ADR-0010](0010-pin-bump-policy.md),
-  which extends this ADR.)*
+  — the coupling is intentional). *(Amended 2026-08-17 and 2026-09-28: when the pin
+  moves is governed by [ADR-0023](0023-pin-follows-bap-releases.md), which superseded
+  the BA-alignment policy of ADR-0010.)*
 - Transports stay protocol-free: this adapter is called *by* the edge agent, not
   embedded in the transport libraries.
 
@@ -64,6 +63,6 @@ with dep-removal and form-precise regex RED proofs.
 ADR 0004 superseded the original private-git release posture on 2026-08-20. The
 same dependency-direction decision now uses the public BAP Hex package: `mix.exs`
 declares the compatible range, `mix.lock` records the exact resolved release,
-and the structural wall checks both identities. ADR 0010 governs release
-alignment. This amendment changes the dependency identity mechanism, not the
+and the structural wall checks both identities. ADR 0023 governs when the pin
+moves. This amendment changes the dependency identity mechanism, not the
 accepted one-way boundary recorded above.

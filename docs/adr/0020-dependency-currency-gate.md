@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-16
-- Relates to: [ADR-0010](0010-pin-bump-policy.md) (the deliberate protocol pin
+- Relates to: [ADR-0023](0023-pin-follows-bap-releases.md) (the deliberate protocol pin
   this gate deliberately does NOT float), [ADR-0011](0011-two-project-structure.md)
   (the gate runs per mix project)
 
@@ -27,9 +27,9 @@ anchored on a hard `$` silently fails open on padded rows.
    latest version its declared requirement admits. Anything not at latest is
    a deliberate pin with an inline reason in `mix.exs` (identity contract,
    major jump pending, or resolver conflict). The deliberate pins in this
-   repo are `bounded_authority_protocol`'s exact requirement — ADR-0010's
-   bump policy owns it, and the version itself lives in `mix.exs` + the wall
-   test, never restated here (ADR-0010 decision 5's no-prose-pin rule;
+   repo are `bounded_authority_protocol`'s exact requirement — the pin-bump
+   policy (ADR-0023) owns it, and the version itself lives in `mix.exs` + the wall
+   test, never restated here (the no-prose-pin rule, ADR-0023 Decision 2;
    at authoring it read `== 0.4.0`) — and, since 2026-09-23, `sbom == 0.10.0`
    (dev/test only: 0.11 pulls `hex_core` 0.19, whose `.app` starts `:ssh` —
    incomplete on GitHub's OTP runner images; `mix.exs`'s inline reason is

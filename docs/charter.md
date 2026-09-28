@@ -30,6 +30,11 @@ issuer-role instantiation, ADR-0007), key-transition signing
 profile, ADR-0018). This section describes the
 proof/envelope flow; each extension carries its own ADR.
 
+The content-assertion extension (`sign_content_assertion/3`, ADR-0022, since 0.9.0)
+adds a role-agnostic, digest-bound assertion through the same signing tail. It
+uses BAP's explicit standalone profile and atomic key identity; it does not add
+content interpretation, schema validation, trust resolution, or authorization.
+
 **In the envelope, the adapter signs the holder proof — and only the holder
 proof.** Concretely, a holder calls this adapter with an issuer-signed grant and
 an application request, and the adapter returns the grant + proof envelope:

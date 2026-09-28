@@ -9,7 +9,7 @@ proven on a developer machine, not a CI leg. The package is published on
 [Hex](https://hex.pm/packages/bounded_authority_report_adapter).
 
 ```elixir
-{:bounded_authority_report_adapter, "~> 0.8.0"}
+{:bounded_authority_report_adapter, "~> 0.9.0"}
 ```
 
 Or scaffold the starter key-handle with [Igniter](https://hexdocs.pm/igniter)

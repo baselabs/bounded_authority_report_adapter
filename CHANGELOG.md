@@ -1,8 +1,41 @@
 # Changelog
 
-## [Unreleased]
+## [0.9.0] — 2026-09-28
 
-- CI: runs on Linux only; macOS/Windows jobs removed. Developer portability is unchanged.
+The content-assertion release: `sign_content_assertion/3` over BAP 0.7.0.
+
+### Added
+
+- `sign_content_assertion/3` (ADR-0022): signs BAP's standalone `bap-content-assertion/1`
+  profile from the caller's twelve payload members through BAP's typed producer and
+  profile assembler, with the protected key identifier taken from the handle's atomic
+  `key_identity/1` and the shared wrong-key guard. Options must be a plain map.
+- The closed `:invalid_content_assertion` error and the value-free `:content_assertion`
+  telemetry object (its input error maps to `:invalid_input`).
+- ADR-0023: the protocol pin follows published BAP releases directly. It supersedes
+  ADR-0010's alignment with the authority runtime's pin; no consumer's pin gates a BARA
+  release. `scripts/check-bap-drift.sh` no longer reads any consumer repository.
+
+### Changed
+
+- The exact protocol pin moves `== 0.6.0` → `== 0.7.0` (requirement, both wall
+  attributes, both locks; locked checksum
+  `777c606660727781ba03b742e7a7785f2655814048fe365f415b3a0c7253e0a8`). Span evidence per
+  ADR-0023 Decision 3, from the protocol repository over `v0.6.0..v0.7.0`:
+  - full span: 101 files changed, 9,287 insertions, 238 deletions (docs, ADRs, CI,
+    the content-assertion corpus, scripts, the cross-language SDKs, tests);
+  - `lib/`: 10 files, 627 insertions, 13 deletions — the new
+    `content_assertion/v1` tree (six files, additive), the `content_bytes` bound in
+    `v1/bounds.ex` (additive; `%Bounds{}` enforces the key), the `:content_assertion`
+    signing-input kind in `v1/signing_input.ex` and its header admission in
+    `v1/compact_jws.ex` (additive), and the 0.6.2 role-attestation codec rewrite
+    (compiled-purity repair, no verdict change); `mix.exs` changes no dependency;
+  - corpus sweep: the nine new `attestation-profiles/content-assertion/v1` files and
+    BAP's corpus test; the consumed vector `v1/vectors/grant-holder-proof.json` is
+    unchanged, and RA2's round-trip is green at the new pin.
+- CI runs on Linux only; macOS and Windows jobs are removed. Developer portability is
+  unchanged. The CI-parity test pins the Linux lanes and rejects macOS and Windows
+  runners.
 
 ## [0.8.2] — 2026-09-24
 

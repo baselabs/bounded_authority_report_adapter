@@ -1,7 +1,7 @@
 defmodule BoundedAuthorityReportAdapter.Telemetry do
   @moduledoc """
-  The closed, value-free telemetry surface for the signing entry points (nine
-  across the two suite surfaces; five object KINDS — the axis names the object
+  The closed, value-free telemetry surface for the signing entry points (ten
+  across the two suite surfaces; six object KINDS — the axis names the object
   kind, never the entry point or the major).
 
   The library emits events but does NOT attach a handler — a fresh application
@@ -37,7 +37,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
 
   # The single source of truth for both axes. docs/telemetry.md's tables are
   # diffed against these by telemetry_test.exs — a drift reds the suite.
-  @objects [:report, :anchor, :grant, :key_transition, :local_loopback_report]
+  @objects [:report, :anchor, :grant, :key_transition, :local_loopback_report, :content_assertion]
   @classes [:ok, :invalid_input, :invalid_key_handle, :signing_failed, :producer_error]
 
   @doc "The closed object axis (one atom per signing object kind)."
@@ -116,7 +116,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
     _kind, _reason -> {:error, :telemetry_invalid}
   end
 
-  # The closed classification. The four per-object input errors collapse to
+  # The closed classification. The per-object input errors collapse to
   # :invalid_input; error VALUES never ride along. The catch-all is unreachable
   # per the entry points' closed @specs — an off-spec shape is a signing-path
   # anomaly, never classified as success.
@@ -125,6 +125,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   defp classify({:error, :invalid_anchor}), do: :invalid_input
   defp classify({:error, :invalid_grant}), do: :invalid_input
   defp classify({:error, :invalid_transition}), do: :invalid_input
+  defp classify({:error, :invalid_content_assertion}), do: :invalid_input
   defp classify({:error, :invalid_key_handle}), do: :invalid_key_handle
   defp classify({:error, :signing_failed}), do: :signing_failed
   defp classify({:error, {:producer_error, :invalid}}), do: :producer_error

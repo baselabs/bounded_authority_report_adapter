@@ -112,3 +112,13 @@ vectors: if a reviewed BAP release changes the consumed surface in a way this
 adapter's output no longer matches, the adapter's test goes red. That coupling
 is intentional; the BAP Hex requirement and resolved lock in this repository
 are the explicit identities that gate an adapter bump.
+
+## 8. Following protocol releases
+
+`sign_content_assertion/3` (0.9.0, [ADR-0022](adr/0022-content-assertion-signing.md))
+shows the release order this library follows: BAP publishes a release with its own
+normative contract, certified corpus, and independent SDK agreement; BARA moves its exact
+pin to that published release and qualifies the adoption with its own suite
+([ADR-0023](adr/0023-pin-follows-bap-releases.md)). No consumer's pin or schedule is a
+precondition; consumers, including the authority runtime, adopt BAP and BARA releases on
+their own schedule.

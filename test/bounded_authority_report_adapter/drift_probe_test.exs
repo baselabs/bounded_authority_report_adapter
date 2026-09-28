@@ -4,16 +4,14 @@ defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
   # The stub harness intercepts git/curl via POSIX exec of shebang scripts;
   # Git Bash on Windows resolves through to the real tools instead, so the
   # stubs never intercept and the WITHHELD-verdict assertions cannot hold
-  # there. The probe ITSELF runs on Windows (the first windows-lane run
-  # shows real verdicts from the real tools) — only this stub-exec harness
-  # is POSIX. Skipped via a compile-time @moduletag on {:win32, :nt} —
-  # named, not silent: the exclusion is declared in the workflow's gate-job
-  # comment (feedback_cross_platform_capability_is_required). (Neither a
+  # there. The probe ITSELF runs on Windows developer machines — only this
+  # stub-exec harness is POSIX. Skipped via a compile-time @moduletag on
+  # {:win32, :nt}, named rather than silent. (Neither a
   # custom-attribute "tag" — collected under its own name, so the nested
   # skip never fires — nor setup_all {:skip, reason} — unsupported: any
   # non-{:ok, _} return invalidates the module and reds the run — works.)
   if :os.type() == {:win32, :nt} do
-    @moduletag skip: "POSIX stub-exec harness only — named in ci.yml"
+    @moduletag skip: "POSIX stub-exec harness only"
   end
 
   setup do
@@ -47,48 +45,27 @@ defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
     refute output =~ "is the latest stable"
   end
 
-  test "the BA pin parser selects bounded_authority_protocol rather than an earlier git ref",
+  test "the probe reads no consumer repository, even when one is checked out beside it",
        context do
+    # ADR-0023: no consumer's pin gates a BARA bump, so the probe never reads one. A
+    # sibling checkout carrying a protocol pin must leave no trace in the output.
     write_executable!(Path.join(context.bin, "curl"), "#!/bin/sh\nexit 1\n")
 
-    ba = Path.join(context.base, "bounded_authority")
-    File.mkdir_p!(ba)
+    consumer = Path.join(context.base, "bounded_authority")
+    File.mkdir_p!(consumer)
+    File.write!(Path.join(consumer, "mix.exs"), ~S|{:bounded_authority_protocol, "== 0.2.0"}|)
 
     File.write!(
-      Path.join(ba, "mix.exs"),
-      """
-      {:unrelated, git: "https://example.invalid/other.git", ref: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
-      {:bounded_authority_protocol,
-       git: "https://github.com/baselabs/bounded_authority_protocol.git",
-       ref: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
-      """
-    )
-
-    {output, 0} = run_probe(context)
-
-    assert output =~ "BA:      pins bbbbbbbbbbbb"
-    refute output =~ "BA:      pins aaaaaaaaaaaa"
-  end
-
-  test "the BA pin parser reports an exact Hex protocol dependency", context do
-    write_executable!(Path.join(context.bin, "curl"), "#!/bin/sh\nexit 1\n")
-
-    ba = Path.join(context.base, "bounded_authority")
-    File.mkdir_p!(ba)
-
-    File.write!(
-      Path.join(ba, "mix.exs"),
-      ~S|{:bounded_authority_protocol, "== 0.2.0"}|
-    )
-
-    File.write!(
-      Path.join(ba, "mix.lock"),
+      Path.join(consumer, "mix.lock"),
       ~S|%{"bounded_authority_protocol" => {:hex, :bounded_authority_protocol, "0.2.0"}}|
     )
 
     {output, 0} = run_probe(context)
 
-    assert output =~ "BA:      pins bounded_authority_protocol 0.2.0 from Hex"
+    assert output =~ "BARA:    locks bounded_authority_protocol"
+    refute output =~ "0.2.0"
+    refute output =~ ~r/^BA:/m
+    refute output =~ "ALIGNMENT"
   end
 
   defp run_probe(context) do

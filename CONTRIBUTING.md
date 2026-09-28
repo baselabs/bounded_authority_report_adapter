@@ -48,8 +48,8 @@ Surgical pathspecs — `git commit -o <files>` or explicit paths, never `git add
 A `bounded_authority_protocol` version bump is a deliberate, reviewed change — the wall
 test pins the locked version, and a bare `mix deps.update` reds the gate by design. Every
 bump moves the requirement + both wall attributes + both locks in ONE commit, with the
-span's `lib/` delta classified per the pin-bump policy (ADR-0010, in the repository's
-`docs/adr/`; the ADRs are repo documentation and are not shipped in the package).
+span enumerated and its `lib/` delta classified per the pin-bump policy (ADR-0023, in the
+repository's `docs/adr/`; the ADRs are repo documentation and are not shipped in the package).
 
 ## Docs
 

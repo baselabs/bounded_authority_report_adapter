@@ -43,8 +43,8 @@ defmodule BoundedAuthorityReportAdapter do
       selection is the FUNCTION NAME — never an option, never inferred from the
       URI, headers, environment, or a failed producer call.
 
-  The pattern generalizes to any BAP protocol object; the four standard
-  instantiations plus the local-loopback profile sibling are complete.
+  `sign_content_assertion/3` adds BAP's standalone digest-bound content-assertion
+  profile through the same tail (ADR-0022).
 
   ## The key-handle contract (charter §6 invariant 1) — suite-parameterized
 
@@ -72,7 +72,7 @@ defmodule BoundedAuthorityReportAdapter do
     issuer mints `cnf.jkt` from — a wrong-preimage thumbprint fails every
     envelope at verification).
   * `key_identity/1` — **optional** (declared via `@optional_callbacks`); required
-    by `sign_anchor/3` and `sign_key_transition/3`, which resolve the key's registry
+    by `sign_anchor/3`, `sign_key_transition/3`, and `sign_content_assertion/3`, which resolve the key's registry
     id (`kid`) AND its public key as ONE atomic snapshot (defense-in-depth: prevents a
     stateful handle from splitting them across a rotation race). A proof-only handle
     need not implement it.
@@ -100,6 +100,7 @@ defmodule BoundedAuthorityReportAdapter do
   """
 
   alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopbackHttp
+  alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertionV1
   alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestationV1
   alias BoundedAuthorityProtocol.V1.Json
   alias BoundedAuthorityReportAdapter.Telemetry
@@ -210,6 +211,33 @@ defmodule BoundedAuthorityReportAdapter do
 
   @type transition_sign_error ::
           :invalid_transition
+          | :invalid_key_handle
+          | :signing_failed
+          | {:producer_error, :invalid}
+
+  @type content_assertion_input :: %{
+          jti: binary(),
+          iss: binary(),
+          aud: binary(),
+          sub: binary(),
+          profile: binary(),
+          profile_digest: binary(),
+          content_digest: binary(),
+          gen: integer(),
+          prev: binary(),
+          iat: integer(),
+          nbf: integer(),
+          exp: integer()
+        }
+
+  @type content_assertion_opts :: %{
+          optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map()
+        }
+
+  @type content_assertion_compact :: %{content_assertion: binary()}
+
+  @type content_assertion_sign_error ::
+          :invalid_content_assertion
           | :invalid_key_handle
           | :signing_failed
           | {:producer_error, :invalid}
@@ -700,6 +728,57 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
+  @doc """
+  Signs a standalone digest-bound content assertion with an atomic key identity.
+
+  The caller supplies `jti`, `iss`, `aud`, `sub`, `profile`, `profile_digest`,
+  `content_digest`, `gen`, `prev`, `iat`, `nbf`, and `exp`. Digests are raw
+  32-byte values. The protected key identifier comes only from `key_identity/1`;
+  caller identity aliases and version fields are ignored. No grant, role
+  declaration, or role attestation is required for this non-authorizing object.
+
+  BAP owns the typed producer, semantic validation, deterministic bytes and
+  compact assembly. The adapter checks input scalar shapes, signs the produced
+  message, and applies its shared wrong-key guard against the snapshot public key.
+  It does not interpret content, schemas, trust, successor history or authority.
+  `:bounds` is forwarded unchanged to both producer and assembler; omitted bounds
+  use `%{}`. Options must be a plain map; malformed options fail closed.
+
+  Returns `{:ok, %{content_assertion: compact}}`. Closed errors are
+  `:invalid_content_assertion` for malformed options or missing or incorrectly typed input fields,
+  `:invalid_key_handle` for key-identity failure, `:signing_failed` for signing or
+  wrong-key failure, and `{:producer_error, :invalid}` for BAP rejection.
+  """
+  @spec sign_content_assertion(content_assertion_input(), key_handle(), content_assertion_opts()) ::
+          {:ok, content_assertion_compact()} | {:error, content_assertion_sign_error()}
+  def sign_content_assertion(assertion_input, key_handle, opts \\ %{}) do
+    Telemetry.sign_span(:content_assertion, fn ->
+      do_sign_content_assertion(assertion_input, key_handle, opts)
+    end)
+  end
+
+  defp do_sign_content_assertion(assertion_input, key_handle, opts)
+       when is_map(opts) and not is_struct(opts) do
+    bounds = Map.get(opts, :bounds, %{})
+
+    with {:ok, {key_id, public_key}} <- resolve_key_identity(key_handle),
+         {:ok, assertion} <- build_content_assertion(assertion_input, key_id),
+         {:ok, signing_input} <- produce_content_assertion_signing_input(assertion, bounds),
+         {:ok, compact} <-
+           sign_and_assemble(
+             key_handle,
+             signing_input,
+             public_key,
+             bounds,
+             &ContentAssertionV1.assemble_compact/3
+           ) do
+      {:ok, %{content_assertion: compact}}
+    end
+  end
+
+  defp do_sign_content_assertion(_assertion_input, _key_handle, _opts),
+    do: {:error, :invalid_content_assertion}
+
   # ---------------------------------------------------------------------------
   # The shared signing tail (the universal-companion primitive).
   #
@@ -1143,6 +1222,42 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
+  defp build_content_assertion(input, key_id) when is_map(input) do
+    binary_fields = [:jti, :iss, :aud, :sub, :profile, :profile_digest, :content_digest, :prev]
+    integer_fields = [:gen, :iat, :nbf, :exp]
+
+    if Enum.all?(binary_fields, &is_binary(Map.get(input, &1))) and
+         Enum.all?(integer_fields, &is_integer(Map.get(input, &1))) do
+      {:ok,
+       %ContentAssertionV1.ContentAssertion{
+         attestor_key_id: key_id,
+         jti: input.jti,
+         iss: input.iss,
+         aud: input.aud,
+         sub: input.sub,
+         profile: input.profile,
+         profile_digest: input.profile_digest,
+         content_digest: input.content_digest,
+         gen: input.gen,
+         prev: input.prev,
+         iat: input.iat,
+         nbf: input.nbf,
+         exp: input.exp
+       }}
+    else
+      {:error, :invalid_content_assertion}
+    end
+  end
+
+  defp build_content_assertion(_input, _key_id), do: {:error, :invalid_content_assertion}
+
+  defp produce_content_assertion_signing_input(assertion, bounds) do
+    case ContentAssertionV1.assertion_signing_input(assertion, bounds) do
+      {:ok, signing_input} -> {:ok, signing_input}
+      {:error, :invalid} -> {:error, {:producer_error, :invalid}}
+    end
+  end
+
   defp sign_via_handle({module, handle}, message) do
     # `key_handle` shape is validated upstream by resolve_public_key/1 (the only
     # path here is through the `with` after a successful resolve), so the handle
@@ -1165,7 +1280,7 @@ defmodule BoundedAuthorityReportAdapter do
   # value-echoing BadMapError inside Map.get/3 — the closed-atom error discipline. opts is
   # caller-supplied config (bounds windows, timestamps); a non-map is a type violation per
   # every *_opts() @spec, and the defaults are a safe fallback. Applied to every sign_*
-  # entry point — the same contract everywhere.
+  # entry point that uses this legacy normalizer. Content assertion rejects malformed opts.
   defp normalize_opts(opts) when is_map(opts), do: opts
   defp normalize_opts(_opts), do: %{}
 
@@ -1234,7 +1349,7 @@ defmodule BoundedAuthorityReportAdapter do
   Returns the key's identity — its registry `kid` AND its raw public key
   (32-byte Ed25519 under the major-1 entry points; 65-byte P-256 SEC1 under
   `.V3`) — as a single atomic `{key_id, public_key}` snapshot. Required by
-  `sign_anchor/3` and `sign_key_transition/3`, which resolve both in ONE call so a
+  `sign_anchor/3`, `sign_key_transition/3`, and `sign_content_assertion/3`, which resolve both in ONE call so a
   stateful handle cannot split `kid` from `public_key` across a rotation race
   (defense-in-depth at sign time; any `sign/2`-vs-snapshot mismatch is then caught by
   the `verify_signature` guard). **Optional** callback — a proof-only handle (used

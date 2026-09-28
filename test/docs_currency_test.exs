@@ -19,7 +19,13 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
   use ExUnit.Case, async: true
 
   @adapter BoundedAuthorityReportAdapter
-  @error_types [:sign_error, :anchor_sign_error, :grant_sign_error, :transition_sign_error]
+  @error_types [
+    :sign_error,
+    :anchor_sign_error,
+    :grant_sign_error,
+    :transition_sign_error,
+    :content_assertion_sign_error
+  ]
 
   test "every docs/errors.md table atom exists in a lib error @type and vice versa" do
     lib_source = File.read!("lib/bounded_authority_report_adapter.ex")

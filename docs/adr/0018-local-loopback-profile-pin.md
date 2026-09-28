@@ -1,6 +1,7 @@
 # ADR 0018: The local-loopback profile pin (BAP 0.2.0 → 0.3.0)
 
-- Status: Accepted
+- Status: Accepted; the alignment policy it made an exception to is retired by
+  [ADR-0023](0023-pin-follows-bap-releases.md) (September 28, 2026)
 - Date: 2026-08-31
 - Extends: [ADR-0010](0010-pin-bump-policy.md) (records a deliberate,
   owner-authorized exception to its alignment default for this one bump)
