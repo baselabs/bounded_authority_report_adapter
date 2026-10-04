@@ -109,7 +109,9 @@ currency · advisory audit, then the same four build steps, run from
 `examples/edge_agent/`). Both must stay green on the full matrix: one Linux lane per
 supported OTP major 27-29 (ADR-0019; 25/26 are excluded: BAP's codecs decode through
 `:json`, OTP 27+ stdlib). CI never adds macOS or Windows lanes: portability across
-macOS, Linux and Windows is a property of the developer setup, not a CI leg. The Livebook
+macOS and Linux is a property of the developer setup, not a CI leg; Windows developers
+use WSL2 (clone inside the WSL filesystem, not under `/mnt/c`), the Linux path, and no
+native-Windows developer path is maintained (owner direction, October 4, 2026). The Livebook
 (`examples/report_envelope_roundtrip.livemd`) is NOT run in CI — its round-trip is
 covered by the library's `sign_report_test.exs`.
 

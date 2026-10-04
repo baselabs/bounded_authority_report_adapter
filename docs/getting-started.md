@@ -4,8 +4,9 @@
 on Erlang/OTP 27 through 29 (the protocol package's codecs decode through OTP 27's `:json`
 module, so OTP 25/26 are unsupported; the repository refuses to compile outside the set —
 ADR-0019). CI runs one lane per supported major — 1.18/27, 1.19/28, 1.20/29 — on Linux only.
-Developer portability across macOS, Linux, and Windows is a property of the developer setup,
-proven on a developer machine, not a CI leg. The package is published on
+Developer portability across macOS and Linux is a property of the developer setup,
+proven on a developer machine, not a CI leg; Windows developers use WSL2 (clone inside the WSL
+filesystem, not under `/mnt/c`), which is the Linux path. The package is published on
 [Hex](https://hex.pm/packages/bounded_authority_report_adapter).
 
 ```elixir
