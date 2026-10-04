@@ -3,6 +3,12 @@
 - Status: Accepted
 - Date: 2026-09-16
 
+**Amended October 4, 2026:** owner direction, "no more windows only builds must use
+WSL": the required developer platforms are macOS and Linux. A Windows developer works in
+WSL2 with the clone inside the WSL filesystem, which is the Linux path; no native-Windows developer path is maintained. Where this record requires or describes Windows
+developer portability, read macOS and Linux. CI stays Linux only; the rest of the
+decision is unchanged.
+
 **Amended September 26, 2026:** the macOS and Windows CI legs this ADR required are
 withdrawn by owner rule; CI runs on Linux only. Developer portability across macOS,
 Linux and Windows stays a requirement of the developer setup, proven on a developer
