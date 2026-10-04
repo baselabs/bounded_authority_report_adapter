@@ -24,8 +24,8 @@ jobs:
     # by config/config.exs, ADR-0019: {27..29}; OTP 25/26 are excluded: images
     # exist but the protocol package's codecs decode through :json, which
     # enters stdlib in OTP 27); every cell runs the identical battery.
-    # Developer portability (macOS, Linux, Windows) is a property of the
-    # developer setup, not a CI leg.
+    # Developer portability (macOS and Linux; Windows developers use WSL2) is
+    # a property of the developer setup, not a CI leg.
     # LOCKSTEP: these lanes move together with the mix.exs elixir range, the
     # config assert's set, and .tool-versions.
     strategy:

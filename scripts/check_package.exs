@@ -99,10 +99,9 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     end
   end
 
-  # Best-effort scratch cleanup with bounded retries: on Windows a lingering
-  # handle from a just-exited child build can make rm_rf raise :eexist — the
-  # gate's VERDICT must never hinge on deleting an ephemeral temp dir (a
-  # final miss warns; the runner's temp dir dies with the machine).
+  # Best-effort scratch cleanup with bounded retries: the gate's VERDICT must
+  # never hinge on deleting an ephemeral temp dir (a final miss warns; the
+  # runner's temp dir dies with the machine).
   defp remove_scratch!(path, retries \\ 3)
 
   defp remove_scratch!(path, 0) do
@@ -158,10 +157,8 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   ## checks
 
   defp check_exact_files!(package_root) do
-    # Recursive File.ls! walk, never Path.wildcard: :filelib.wildcard splits
-    # its pattern on "/" only, so a backslashed Windows temp base
-    # (C:\Users\RUNNER~1\...) matches nothing — the census saw an empty tree
-    # with the files present on disk (first windows-lane runs).
+    # Recursive File.ls! walk, never Path.wildcard: a wildcard skips dotfiles
+    # by default, so a dotfile in the archive would escape the census.
     actual =
       package_root
       |> regular_files_under!()
@@ -452,11 +449,8 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     ]
   end
 
-  # Extract to MEMORY and write files via File — never erl_tar's {:cwd, ...}
-  # filesystem path. On Windows the cwd-directed extraction returned :ok
-  # while extracting nothing (the first windows-lane run's census found an
-  # empty tree); :memory + File.write! has no platform-sensitive path
-  # semantics at all (feedback_cross_platform_capability_is_required).
+  # Extract to MEMORY and write files via File: every census path is joined
+  # under the scratch target by this script, never by erl_tar's {:cwd, ...}.
   defp extract_tar!(archive, target) do
     case :erl_tar.extract(String.to_charlist(archive), [:compressed, :memory]) do
       {:ok, entries} ->
@@ -481,8 +475,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   end
 
   defp unique_tmp_root! do
-    # System.tmp_dir!/0 + a unique name — `mktemp` is a POSIX utility and the
-    # gate runs on Windows lanes too (feedback_cross_platform_capability_is_required).
+    # System.tmp_dir!/0 + a unique name (scratch isolation).
     path =
       Path.join(
         System.tmp_dir!(),
@@ -499,18 +492,8 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     end
   end
 
-  # `mix` is a .cmd shim on Windows and cannot be spawned directly — route
-  # through cmd /c there (feedback_cross_platform_capability_is_required).
-  defp mix_args(arguments) do
-    case :os.type() do
-      {:win32, _} -> {"cmd", ["/c", "mix" | arguments]}
-      _ -> {"mix", arguments}
-    end
-  end
-
   defp run_mix!(arguments, directory, environment) do
-    {command, args} = mix_args(arguments)
-    run!(command, args, directory, environment)
+    run!("mix", arguments, directory, environment)
   end
 
   defp run!(command, arguments, directory, environment) do

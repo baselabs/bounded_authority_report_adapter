@@ -56,9 +56,8 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
     end
   end
 
-  # Best-effort scratch cleanup with bounded retries: on Windows a lingering
-  # handle from a just-exited child build can make rm_rf raise :eexist — the
-  # gate's VERDICT must never hinge on deleting an ephemeral temp dir.
+  # Best-effort scratch cleanup with bounded retries: the gate's VERDICT must
+  # never hinge on deleting an ephemeral temp dir.
   defp remove_scratch!(path, retries \\ 3)
 
   defp remove_scratch!(path, 0) do
@@ -113,8 +112,7 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
     assert_regular_nonempty!(output)
   end
 
-  # System.tmp_dir!/0 + a unique name — `mktemp` is a POSIX utility and the
-  # gate runs on Windows lanes too (feedback_cross_platform_capability_is_required).
+  # System.tmp_dir!/0 + a unique name (scratch isolation).
   defp unique_tmp_root! do
     path =
       Path.join(
@@ -137,17 +135,7 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
     end
   end
 
-  # `mix` is a .cmd shim on Windows and cannot be spawned directly — route
-  # through cmd /c there (feedback_cross_platform_capability_is_required).
-  defp run_mix!(arguments, directory) do
-    {command, args} =
-      case :os.type() do
-        {:win32, _} -> {"cmd", ["/c", "mix" | arguments]}
-        _ -> {"mix", arguments}
-      end
-
-    run!(command, args, directory)
-  end
+  defp run_mix!(arguments, directory), do: run!("mix", arguments, directory)
 
   defp run!(command, arguments, directory) do
     case System.cmd(command, arguments,

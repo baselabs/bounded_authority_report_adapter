@@ -1,11 +1,10 @@
 # Dependency currency check — the latest-first policy gate (ADR-0020).
 #
-# Cross-platform (.exs, run via `mix run --no-start`): the caller-cwd
-# contract is preserved — `mix run` executes in the caller's working
-# directory, so CI invokes it once per project job from that job's working
-# directory and `mix ci` runs it against the library, then the example
-# runner does the same from examples/edge_agent. (The .sh predecessor died
-# with the Windows pickup — feedback_cross_platform_capability_is_required.)
+# An .exs run via `mix run --no-start`: the caller-cwd contract is
+# preserved — `mix run` executes in the caller's working directory, so CI
+# invokes it once per project job from that job's working directory and
+# `mix ci` runs it against the library, then the example runner does the
+# same from examples/edge_agent. (It replaced a .sh predecessor.)
 #
 # Classification is on the RENDERED table, never on the exit code (mix
 # hex.outdated exits nonzero BOTH on drift and on lookup failure):
@@ -180,18 +179,10 @@ defmodule BoundedAuthorityReportAdapter.CheckDepsCurrency do
     end)
   end
 
-  # `mix` is a .cmd shim on Windows and cannot be spawned directly — route
-  # through cmd /c there (feedback_cross_platform_capability_is_required).
   defp mix_out!(args), do: mix_run(args) |> elem(0)
 
   defp mix_run(args) do
-    {command, args} =
-      case :os.type() do
-        {:win32, _} -> {"cmd", ["/c", "mix" | args]}
-        _ -> {"mix", args}
-      end
-
-    System.cmd(command, args, stderr_to_stdout: true, env: [{"MIX_ENV", "test"}])
+    System.cmd("mix", args, stderr_to_stdout: true, env: [{"MIX_ENV", "test"}])
   end
 end
 

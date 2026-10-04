@@ -185,8 +185,9 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     # A dropped matrix cell narrows CI coverage silently (a lane that never
     # runs looks green by absence) — pin the exact cells per job and that
     # setup-beam actually consumes the matrix variables. CI is Linux only
-    # (owner rule, 2026-09-26): developer portability across macOS, Linux, and
-    # Windows is a developer-setup property, never a CI lane.
+    # (owner rule, 2026-09-26): developer portability across macOS and Linux
+    # is a developer-setup property, never a CI lane; Windows developers use
+    # WSL2, the Linux path (owner direction, October 4, 2026).
     workflow = File.read!(".github/workflows/ci.yml")
 
     for runner <- ["windows-", "macos-"] do

@@ -1,11 +1,9 @@
 # `mix ci`'s example-job section — reproduces the workflow's example job
 # step-for-step (deps · currency · advisory audit · the four build steps)
 # from examples/edge_agent, aborting at the first red step like a failed CI
-# job. Runs as one .exs because the old `mix cmd --cd ... env MIX_ENV=test
-# mix ...` shape needed POSIX env(1) AND spawned a bare `mix` (a .cmd shim on
-# Windows) — this runner keeps every step individually spawned, in the
-# workflow's order, through the portable shim
-# (feedback_cross_platform_capability_is_required).
+# job. Runs as one .exs, replacing the old `mix cmd --cd ... env
+# MIX_ENV=test mix ...` shape — this runner keeps every step individually
+# spawned, in the workflow's order.
 
 defmodule BoundedAuthorityReportAdapter.CiExample do
   @moduledoc false
@@ -46,18 +44,11 @@ defmodule BoundedAuthorityReportAdapter.CiExample do
     IO.puts("[example] all steps green")
   end
 
-  # `mix` is a .cmd shim on Windows and cannot be spawned directly — route
-  # through cmd /c there. MIX_ENV rides the environment so every child boots
-  # :test exactly as the workflow's job-level env does.
+  # MIX_ENV rides the environment so every child boots :test exactly as the
+  # workflow's job-level env does.
   defp step!(args, dir) do
-    {command, args} =
-      case :os.type() do
-        {:win32, _} -> {"cmd", ["/c", "mix" | args]}
-        _ -> {"mix", args}
-      end
-
     {_output, status} =
-      System.cmd(command, args,
+      System.cmd("mix", args,
         cd: dir,
         env: [{"MIX_ENV", "test"}],
         into: IO.stream(:stdio, :line),

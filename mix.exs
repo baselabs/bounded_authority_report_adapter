@@ -57,14 +57,12 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   # `mix ci` — local CI parity: reproduces .github/workflows/ci.yml step-for-
   # step on the pinned dev lane (every library-job step + the example job's
   # steps) with zero GitHub Actions spend.
-  # Cross-platform shape (feedback_cross_platform_capability_is_required): NO
-  # POSIX env(1) re-exec — the FIRST step is an env guard that refuses any
-  # boot other than MIX_ENV=test (a :dev compile skips test/support, the RA7
-  # trap) with the per-shell invocation in its message; every later step is a
-  # plain task name. The example job runs through scripts/ci_example.exs (a
-  # `mix cmd --cd` + bare `mix` spawn is POSIX/Windows-brittle), preserving
-  # the step-for-step order and abort-on-first-red semantics. Not reproduced
-  # locally: checkout/setup-beam (asdf here), the OS matrix dimension.
+  # NO env(1) re-exec — the FIRST step is an env guard that refuses any boot
+  # other than MIX_ENV=test (a :dev compile skips test/support, the RA7 trap)
+  # with the invocation in its message; every later step is a plain task
+  # name. The example job runs through scripts/ci_example.exs, preserving the
+  # step-for-step order and abort-on-first-red semantics. Not reproduced
+  # locally: checkout/setup-beam (asdf here), the OTP matrix dimension.
   defp aliases do
     [
       ci: [

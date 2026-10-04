@@ -1,18 +1,7 @@
 defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
   use ExUnit.Case, async: true
 
-  # The stub harness intercepts git/curl via POSIX exec of shebang scripts;
-  # Git Bash on Windows resolves through to the real tools instead, so the
-  # stubs never intercept and the WITHHELD-verdict assertions cannot hold
-  # there. The probe ITSELF runs on Windows developer machines — only this
-  # stub-exec harness is POSIX. Skipped via a compile-time @moduletag on
-  # {:win32, :nt}, named rather than silent. (Neither a
-  # custom-attribute "tag" — collected under its own name, so the nested
-  # skip never fires — nor setup_all {:skip, reason} — unsupported: any
-  # non-{:ok, _} return invalidates the module and reds the run — works.)
-  if :os.type() == {:win32, :nt} do
-    @moduletag skip: "POSIX stub-exec harness only"
-  end
+  # The stub harness intercepts git/curl via POSIX exec of shebang scripts.
 
   setup do
     base =
