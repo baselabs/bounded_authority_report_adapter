@@ -75,12 +75,12 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "format --check-formatted",
         "compile --warnings-as-errors",
         "credo --strict",
-        "test",
         # The gate battery (parity with the sibling-standard batteries): coverage
         # floor, dialyzer (PLT + analysis under :test so test/support/ is in the
         # paths — the RA7 lesson), doc warnings, and the LIBRARY's own advisory
         # audits (the example job has always audited its own lock; the library's
-        # lock is now audited too).
+        # lock is now audited too). `test --cover` is the only test step: Mix runs a task once per
+        # invocation, so a plain "test" before it made this step a silent no-op locally.
         "test --cover",
         "dialyzer",
         "docs --warnings-as-errors",

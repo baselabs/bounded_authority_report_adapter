@@ -122,13 +122,18 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     refute mutated_gate =~ workflow_pattern, "workflow adjacency survives a dropped currency step"
   end
 
-  test "mix ci runs the gate battery in the canonical order after the plain test step" do
+  test "mix ci runs the gate battery in the canonical order right after credo, with no plain test step" do
     root_mix = File.read!("mix.exs") |> strip_comments()
 
     assert root_mix =~
-             ~r|"test",\s*#{alias_battery_pattern()}|,
+             ~r|"credo --strict",\s*#{alias_battery_pattern()}|,
            "mix ci must run the gate battery (coverage floor, dialyzer, docs warnings, " <>
-             "the library's own audits) in the canonical order immediately after the test step"
+             "the library's own audits) in the canonical order immediately after credo"
+
+    # Mix runs a task once per invocation: a plain "test" before "test --cover" turns the
+    # coverage step, and with it the coverage floor, into a silent no-op.
+    refute root_mix =~ ~r|"test",|,
+           "mix ci must not run a plain \"test\" step: it would skip \"test --cover\""
   end
 
   test "the GitHub gate job runs the same battery steps in the same order" do
