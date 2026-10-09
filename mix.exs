@@ -65,6 +65,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   # locally: checkout/setup-beam (asdf here), the OTP matrix dimension.
   defp aliases do
     [
+      "sbom.generate": ["run --no-start scripts/generate_release_sbom.exs"],
       ci: [
         "run --no-start scripts/ci_env_guard.exs",
         # job: gate (the library)
@@ -131,16 +132,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
-      # CycloneDX SBOM generation for the tag-push supply-chain workflow.
-      # Deliberate pin (ADR-0020 §1): sbom 0.11 pulls hex_core 0.19, whose .app lists
-      # :ssh among its start applications — the offline CycloneDX task then drags ssh in at
-      # app start, and GitHub's ubuntu-24.04 OTP images ship an incomplete ssh-6.0.2 whose
-      # :ssh_app module is absent (the v0.8.0/v0.8.1 release-evidence runs crashed there,
-      # while the same task/flags/MIX_ENVs pass on the full local OTP 29.0.3). Re-pin to the
-      # last end-to-end-working sbom until hex_core drops the ssh requirement (or the runner
-      # images ship complete OTP); the exact == keeps the currency gate's row
-      # resolver-rejected with this reason attached.
-      {:sbom, "== 0.10.0", only: [:dev, :test], runtime: false}
+      # CycloneDX generation uses sbom.generate: mix run --no-start starts only
+      # sbom's dependency applications except code-only hex_core, then its
+      # supervisor and CLI. This avoids hex_core's :ssh application dependency.
+      {:sbom, "~> 0.11.0", only: [:dev, :test], runtime: false}
     ]
   end
 

@@ -65,10 +65,9 @@ jobs:
         run: sha256sum "bounded_authority_report_adapter-${VERSION}.tar" > SHA256SUMS
 
       - name: Generate CycloneDX SBOM
-        run: |
-          mix sbom.cyclonedx --only prod --exclude-system-dependencies \
-            --classification library --schema 1.6 --format json \
-            --output artifacts/release.cdx.json --force
+        run: mix sbom.generate
+        env:
+          MIX_ENV: test
 
       - name: Upload release evidence for attestation
         uses: actions/upload-artifact@v4

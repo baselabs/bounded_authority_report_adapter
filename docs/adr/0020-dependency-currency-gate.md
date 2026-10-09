@@ -30,10 +30,13 @@ anchored on a hard `$` silently fails open on padded rows.
    repo are `bounded_authority_protocol`'s exact requirement — the pin-bump
    policy (ADR-0023) owns it, and the version itself lives in `mix.exs` + the wall
    test, never restated here (the no-prose-pin rule, ADR-0023 Decision 2;
-   at authoring it read `== 0.4.0`) — and, since 2026-09-23, `sbom == 0.10.0`
-   (dev/test only: 0.11 pulls `hex_core` 0.19, whose `.app` starts `:ssh` —
-   incomplete on GitHub's OTP runner images; `mix.exs`'s inline reason is
-   authoritative). The currency gate never floats either.
+   at authoring it read `== 0.4.0`). The currency gate never floats it.
+   The former `sbom == 0.10.0` pin is superseded: `mix sbom.generate` runs
+   through `mix run --no-start`, starts sbom's dependency applications except
+   code-only `hex_core`, starts its supervisor, and calls its CLI. The contract
+   test checks real generation with `hex_core` and `:ssh` stopped.
+   This permits sbom 0.11 and the protobuf JSON recursion fix in 0.17.1
+   without changing the production dependency set.
 2. **`scripts/check_deps_currency.exs`** (run via `mix run --no-start` — an
    `.exs`, not the original `.sh`, so the gate runs on every OS lane;
    `feedback_cross_platform_capability_is_required`) enforces
