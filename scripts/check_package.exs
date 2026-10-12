@@ -208,7 +208,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     Enum.each(expected, fn {key, expected_value} ->
       actual_value = metadata |> Map.get(key) |> decode_metadata()
 
-      unless actual_value == expected_value do
+      unless normalize_metadata(key, actual_value) == normalize_metadata(key, expected_value) do
         fail!(
           "Hex metadata #{key} must be #{inspect(expected_value)}, " <>
             "got #{inspect(actual_value)}"
@@ -216,6 +216,15 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
       end
     end)
   end
+
+  # Each requirement is a key/value list whose field order carries no meaning:
+  # Hex 2.5.2 writes the fields sorted by key (deterministic tarballs, hex_core
+  # 0.20.0), earlier releases in insertion order. Requirement order and every
+  # field value stay exact.
+  defp normalize_metadata("requirements", requirements) when is_list(requirements),
+    do: Enum.map(requirements, &Enum.sort/1)
+
+  defp normalize_metadata(_key, value), do: value
 
   defp decode_metadata(value) when is_binary(value), do: value
   defp decode_metadata(value) when is_list(value), do: Enum.map(value, &decode_metadata/1)
