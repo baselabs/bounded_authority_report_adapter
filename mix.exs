@@ -135,7 +135,13 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # CycloneDX generation uses sbom.generate: mix run --no-start starts only
       # sbom's dependency applications except code-only hex_core, then its
       # supervisor and CLI. This avoids hex_core's :ssh application dependency.
-      {:sbom, "~> 0.11.0", only: [:dev, :test], runtime: false}
+      {:sbom, "~> 0.11.0", only: [:dev, :test], runtime: false},
+      # EEF-CVE-2026-103502 (hex_core < 0.20.0: no TLS verification on OTP 24/25) is
+      # fixed in hex_core 0.20.0, but sbom 0.11.0 still requires ~> 0.19.0. sbom calls
+      # only hex_core.default_config/0, hex_api_package.get/2 and
+      # hex_api_release.get/3, unchanged in 0.20.0. Drop this override once an sbom
+      # release accepts hex_core 0.20.
+      {:hex_core, "~> 0.20.0", only: [:dev, :test], runtime: false, override: true}
     ]
   end
 
