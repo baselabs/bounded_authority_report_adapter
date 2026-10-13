@@ -1,8 +1,9 @@
 # Changelog
 
-## [0.10.0] — unreleased
+## [0.10.0] — 2026-10-13
 
-Strict Ed25519 key acceptance and signature self-check, over BAP 0.8.0.
+Strict Ed25519 key acceptance and signature self-check, over BAP 0.8.0. Security advisory:
+[GHSA-q9hh-mwwh-6cg6](https://github.com/baselabs/bounded_authority_report_adapter/security/advisories/GHSA-q9hh-mwwh-6cg6).
 
 ### Security
 
@@ -21,9 +22,20 @@ Strict Ed25519 key acceptance and signature self-check, over BAP 0.8.0.
 ### Changed
 
 - The exact protocol pin moves `== 0.7.0` → `== 0.8.0` (requirement, both wall attributes,
-  both locks). BAP 0.8.0 adds the public `BoundedAuthorityProtocol.Ed25519` module this
-  release calls. No new error atom: the existing `:invalid_key_handle` and
-  `:signing_failed` carry the new refusals.
+  both locks; locked checksum
+  `b5598cc5ba25f6ff4a2b55dab619bc2419b1d90cce9be3b1d4330d55a6da0bdb`). BAP 0.8.0 adds the
+  public `BoundedAuthorityProtocol.Ed25519` module this release calls. No new error atom: the
+  existing `:invalid_key_handle` and `:signing_failed` carry the new refusals. Span evidence
+  per ADR-0023 Decision 3, from the protocol repository over `v0.7.0..v0.8.0`:
+  - full span: 288 files changed, 12,713 insertions, 1,125 deletions (docs, ADRs, CI,
+    the strict-Ed25519 corpus, scripts, the cross-language SDKs, tests);
+  - `lib/`: 15 files, 668 insertions, 46 deletions — the new public
+    `BoundedAuthorityProtocol.Ed25519` module (additive), the strict rule wired into every
+    Ed25519 verify site and key-acceptance point (verdicts change only from accept to reject,
+    on weak keys and points), and the strict-corpus conformance loader and runner (additive);
+    `mix.exs` changes no runtime dependency;
+  - corpus sweep: the new `strict-ed25519` corpus is additive; the consumed vector
+    `v1/vectors/grant-holder-proof.json` is unchanged.
 
 ## [0.9.1] — 2026-09-28
 
