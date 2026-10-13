@@ -259,6 +259,19 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     assert Enum.any?(advisories, &(&1 =~ "--live probe" and &1 =~ "wrong-key"))
   end
 
+  test "RED: --live on a handle whose signatures fail the strict self-check trips the advisory" do
+    seed = :crypto.strong_rand_bytes(32)
+
+    assert %{fatals: [], advisories: advisories} =
+             Doctor.check(
+               BoundedAuthorityReportAdapter.StrictEd25519Handles.NonceZero,
+               seed,
+               true
+             )
+
+    assert Enum.any?(advisories, &(&1 =~ "--live probe" and &1 =~ "wrong-key"))
+  end
+
   test "--live is skipped with a note when fatals exist" do
     assert %{fatals: [_ | _], advisories: advisories} = Doctor.check(NoSignHandle, :ref, true)
     assert Enum.any?(advisories, &(&1 =~ "--live skipped"))

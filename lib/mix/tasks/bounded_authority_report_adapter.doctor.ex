@@ -402,7 +402,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   # {:ok, high_s?} on a verified probe; :error (the wrong-key advisory) on any
   # rejection or backend raise — the doctor's mirror of the adapter's v3 tail.
   defp probe_verdict({:ed25519, public_key}, message, signature) do
-    if :crypto.verify(:eddsa, :none, message, signature, [public_key, :ed25519]) do
+    if BoundedAuthorityProtocol.Ed25519.verify_strict(message, signature, public_key) do
       {:ok, false}
     else
       :error
