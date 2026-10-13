@@ -3,6 +3,13 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## Unreleased — protocol dependency is a range
+
+The protocol requirement moves from the exact `== 0.8.0` to `~> 0.8.0`: the floor is the
+release that carries the strict Ed25519 rule, and the ceiling is the next protocol minor.
+No API, wire or error change. If your application locks `bounded_authority_protocol` at a
+0.8.x release, `mix deps.get` resolves it alongside this package without an override.
+
 ## 0.10.0 — strict Ed25519 key acceptance and the BAP 0.8.0 pin
 
 0.10.0 moves the exact protocol pin to `0.8.0`, the release that adds

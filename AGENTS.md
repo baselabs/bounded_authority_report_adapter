@@ -76,17 +76,20 @@ adding them to the library's `mix.exs` trips the wall red.
 
 ## Protocol version discipline + the drift probe
 
-BAP is consumed from **Hex** (the exact pin lives in `mix.exs` + the wall test —
-never restated here, per ADR-0023 decision 2: a prose pin rots on the next bump). A protocol version bump is a
-deliberate, reviewed change — the wall test pins the LOCKED version
-(`@protocol_locked_version`) and the requirement in the same commit, so a bare
-`mix deps.update bounded_authority_protocol` (which reconciles lock + deps in
-one quiet step — Mix's own consistency check only catches a lock/dep
-MISMATCH, not a reconciled drift) reds the gate. The example app's lock is
-pinned to parity with the library's by its own test. Every bump moves the
-mix.exs requirement + both wall attributes + BOTH locks in one commit, with
-the span enumerated and its `lib/` delta classified per ADR-0023. BARA follows
-published BAP releases directly; no consumer's pin gates a bump.
+BAP is consumed from **Hex**. `mix.exs` declares a RANGE with a security floor
+(owner ruling October 6, 2026, ADR-0023 amendment: libraries declare ranges, only
+applications lock exact versions), `mix.lock` records the exact
+resolved version, and the wall test pins both (`@protocol_requirement`, `@protocol_floor`,
+`@protocol_ceiling`, `@protocol_locked_version`). The values live in those files and are
+not restated here (ADR-0023 decision 2: a prose pin rots on the next bump). A bare
+`mix deps.update bounded_authority_protocol` reconciles lock + deps in one quiet step
+(Mix's own consistency check only catches a lock/dep MISMATCH, not a reconciled drift), so
+the wall's `@protocol_locked_version` reds the gate until the move is reviewed. The example
+app's lock is pinned to parity with the library's by its own test. Raising the floor or the
+ceiling moves the mix.exs requirement + the wall's range attributes + BOTH locks in one
+commit; adopting a newer release inside the range moves `@protocol_locked_version` + BOTH
+locks. Either way the span is enumerated and its `lib/` delta classified per ADR-0023. BARA
+follows published BAP releases directly; no consumer's pin gates a bump.
 
 **`scripts/check-bap-drift.sh`** — the one-command ecosystem check: what we
 lock vs what hex.pm publishes vs BAP main (read-only: `ls-remote`

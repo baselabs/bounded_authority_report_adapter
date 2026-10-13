@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The protocol dependency is now a range with a security floor, `~> 0.8.0`, replacing the
+  exact `== 0.8.0` (owner ruling, October 6, 2026; amendment to ADR-0023). Libraries declare
+  ranges and only applications lock exact versions. The floor is BAP 0.8.0, which carries the
+  strict Ed25519 rule this library calls, so BAP 0.7.x never resolves; the ceiling is the next
+  protocol minor (exclusive). Both project locks stay at BAP 0.8.0 and no wire byte, API or
+  error atom changes. An application can now resolve this package alongside any BAP 0.8.x
+  release. The dependency wall asserts the range shape (floor, ceiling, locked version) and
+  fails on a requirement that admits 0.7.x, on an exact pin, and on a range that crosses the
+  ceiling.
+
 ## [0.10.0] — 2026-10-13
 
 Strict Ed25519 key acceptance and signature self-check, over BAP 0.8.0. Security advisory:

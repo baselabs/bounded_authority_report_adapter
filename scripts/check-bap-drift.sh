@@ -2,7 +2,8 @@
 # check-bap-drift.sh — one-command ecosystem drift check for the protocol dependency.
 #
 # What BARA compiles against is a deliberate, reviewed choice (ADR-0023: the pin follows
-# published BAP releases; the wall test's version clauses keep it exact). This probe
+# published BAP releases; the requirement is a range with a security floor and the wall
+# test's clauses pin the range shape and the locked version). This probe
 # answers, READ-ONLY, the three questions every bump or audit session needs:
 #
 #   1. what BARA locks + requires          (this repo's mix.lock / mix.exs)

@@ -26,7 +26,8 @@ its own suite against the exact published package.
 1. **BARA follows published BAP releases directly.** BARA may move its protocol pin to
    any published BAP release. No other repository's pin, validation, or schedule is a
    precondition. BA adopts BAP and BARA releases on its own schedule.
-2. **The pin stays exact and deliberate.** The pin is the pair: the exact requirement in
+2. **The pin stays exact and deliberate.** *(Amended October 6, 2026: the requirement is now
+   a range with a security floor; see the amendment below.)* The pin is the pair: the exact requirement in
    `mix.exs` and the locked version in `mix.lock`. A bump moves the requirement, both
    dependency-wall attributes, and both project locks (library and example app) in one
    commit. The pin is read from those files, never restated in prose.
@@ -52,3 +53,35 @@ its own suite against the exact published package.
 - BA's pin may trail BARA's. That is a BA adoption task, owned in that repository.
 - ADR-0010 remains in the repository as the historical record of the retired policy and
   of the surface-enumeration discipline that Decision 3 keeps.
+
+## Amendment, October 6, 2026: a range with a security floor
+
+Owner ruling, October 6, 2026: libraries declare dependency ranges with a security floor,
+and only applications lock exact versions in `mix.lock`. This amends Decision 2 only; every
+other decision above stands.
+
+- **Decision 2 amended.** The requirement in `mix.exs` is a range, not an exact pin:
+  `~> 0.8.0`. The floor (0.8.0) is the first protocol release that carries the strict
+  Ed25519 verification rule BARA calls, so no 0.7.x release may resolve. The ceiling is the
+  next protocol minor, exclusive. The pin is now the pair: the requirement range in
+  `mix.exs` and the exact locked version in `mix.lock`, which this repository still holds
+  at one reviewed version because it is also the tree the suite runs against.
+- **What moves a requirement.** Raising the floor (a new security fix BARA depends on) or
+  the ceiling (adopting the next protocol minor) edits `mix.exs`, the dependency wall's
+  `@protocol_requirement`, `@protocol_floor` and `@protocol_ceiling`, and both locks in one
+  commit. Adopting a newer release inside the range moves only the locks and the wall's
+  `@protocol_locked_version`.
+- **The wall.** `test/bounded_authority_report_adapter/dependency_direction_test.exs`
+  asserts the range shape instead of an exact string: the declared requirement admits the
+  floor and later releases below the ceiling, admits nothing below the floor or at the
+  ceiling, and admits the locked version. A requirement that admits 0.7.x (for example
+  `~> 0.7`) or is an exact pin fails it, and the wall reads the declaration from `mix.exs`
+  itself.
+- **Decision 3 unchanged.** Every adoption of a newer release, inside or beyond the range,
+  still carries its span evidence in the commit that moves the locks.
+- **Consequence for the currency gate.** [ADR-0020](0020-dependency-currency-gate.md)
+  listed the protocol's exact requirement as a deliberate pin that the gate never floats. It
+  is now an ordinary range: the gate reports drift when a release inside the range is
+  published and the lock is behind it, and the lock moves under Decision 3.
+- **Consequence for consumers.** An application can resolve BARA together with any protocol
+  release in the range, instead of only the one BARA was built against.
