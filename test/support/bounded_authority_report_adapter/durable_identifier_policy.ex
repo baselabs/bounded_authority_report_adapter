@@ -49,6 +49,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "test/bounded_authority_report_adapter/role_attestation_corpus_test.exs",
                        "test/bounded_authority_report_adapter/sign_grant_role_attestation_test.exs",
                        "test/bounded_authority_report_adapter/sign_report_test.exs",
+                       "test/bounded_authority_report_adapter/strict_ed25519_keys_test.exs",
                        "test/bounded_authority_report_adapter/standard_byte_identity_test.exs",
                        "test/bounded_authority_report_adapter/telemetry_test.exs",
                        "test/bounded_authority_report_adapter/v3_sign_test.exs",
@@ -58,6 +59,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "test/support/bounded_authority_report_adapter/conformance/vector_case.ex",
                        "test/support/bounded_authority_report_adapter/durable_identifier_policy.ex",
                        "test/support/bounded_authority_report_adapter/keys/raw_key.ex",
+                       "test/support/bounded_authority_report_adapter/strict_ed25519_handles.ex",
                        "test/support/bounded_authority_report_adapter/test_handles.ex",
                        "test/support/test_keys.ex"
                      ])

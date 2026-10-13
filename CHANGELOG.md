@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.10.0] — unreleased
+
+Strict Ed25519 key acceptance and signature self-check, over BAP 0.8.0.
+
+### Security
+
+- Every signing entry point now refuses an Ed25519 key handle whose public key BAP's strict
+  rule (`BoundedAuthorityProtocol.Ed25519.acceptable_public_key?/1`) rejects: a small-order
+  point, a non-canonical encoding, or a string that is not on the curve. The handle gets
+  `{:error, :invalid_key_handle}` before `sign/2` is called. This covers `sign_report/3`,
+  `sign_local_loopback_report/3`, `sign_anchor/3`, `sign_grant/3`, `sign_key_transition/3`
+  and `sign_content_assertion/3`. The ES256 (`V3`) entry points are unchanged.
+- The signing self-check (the wrong-key guard) is now
+  `BoundedAuthorityProtocol.Ed25519.verify_strict/3`, so a returned signature always
+  verifies under BAP's strict rule. A signature the strict rule refuses is
+  `{:error, :signing_failed}`.
+- `mix bounded_authority_report_adapter.doctor` reports a refused Ed25519 key as a fatal.
+
+### Changed
+
+- The exact protocol pin moves `== 0.7.0` → `== 0.8.0` (requirement, both wall attributes,
+  both locks). BAP 0.8.0 adds the public `BoundedAuthorityProtocol.Ed25519` module this
+  release calls. No new error atom: the existing `:invalid_key_handle` and
+  `:signing_failed` carry the new refusals.
+
 ## [0.9.1] — 2026-09-28
 
 Documentation-truth release: the 0.9.0 package shipped the pre-rewrite README.

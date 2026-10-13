@@ -230,6 +230,23 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     assert fatal =~ "32-byte"
   end
 
+  defmodule WeakKeyHandle do
+    def sign(_m, _r), do: {:ok, <<0::512>>}
+    def public_key(_ref), do: {:ok, <<1, 0::248>>}
+    def thumbprint(_r), do: {:ok, <<0::256>>}
+    def key_identity(_r), do: {:ok, {"k", <<1, 0::248>>}}
+    def signing_identity(_r), do: {:ok, {:issuer, "k", <<1, 0::248>>}}
+  end
+
+  test "RED: a small-order Ed25519 public key trips the acceptable-key fatal" do
+    assert %{fatals: [fatal]} = Doctor.check(WeakKeyHandle, :ref, false)
+    assert fatal =~ "acceptable 32-byte Ed25519"
+  end
+
+  test "an honest Ed25519 handle has no fatals (positive control for the acceptable-key gate)" do
+    assert %{fatals: []} = Doctor.check(MinimalHandle, :ref, false)
+  end
+
   test "minimal handle: no fatals, both advisories (which operation each blocks)" do
     assert %{fatals: [], advisories: advisories} = Doctor.check(MinimalHandle, :ref, false)
 

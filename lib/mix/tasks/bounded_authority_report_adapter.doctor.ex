@@ -18,7 +18,8 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
     * the module is not loaded / does not exist;
     * `sign/2`, `public_key/1`, or `thumbprint/1` is missing;
-    * `public_key/1` returns neither a 32-byte Ed25519 key nor a valid
+    * `public_key/1` returns neither an acceptable 32-byte Ed25519 key (canonical, on
+      the curve, not small-order: BAP's rule S1) nor a valid
       65-byte on-curve P-256 point for the supplied ref (with `--major`,
       a valid key of the WRONG type for that major is fatal too);
     * `thumbprint/1` disagrees with the RFC 7638 digest derived from
@@ -193,7 +194,8 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
       :invalid ->
         [
-          "public_key/1 must return a 32-byte Ed25519 public key or a valid " <>
+          "public_key/1 must return an acceptable 32-byte Ed25519 public key (canonical, " <>
+            "on the curve, not small-order) or a valid " <>
             "65-byte on-curve P-256 point (0x04 || x || y) for the supplied ref, " <>
             "got #{redact(key)}"
         ]
@@ -287,8 +289,15 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   # discrimination (diagnostics infer the suite from the key's wire shape;
   # defensible because a report is not wire bytes — ADR-0021's rejected-
   # alternative note). P-256 validation is BAP's certified arithmetic.
-  defp classify_public_key(key) when is_binary(key) and byte_size(key) == 32,
-    do: {:ed25519, key}
+  #
+  # A 32-byte key is an Ed25519 key only if BAP's key acceptance (rule S1) passes it:
+  # canonical, not small-order, on the curve. The adapter's resolvers refuse every other
+  # 32-byte string as `:invalid_key_handle`, so the doctor reports it as invalid here.
+  defp classify_public_key(key) when is_binary(key) and byte_size(key) == 32 do
+    if BoundedAuthorityProtocol.Ed25519.acceptable_public_key?(key),
+      do: {:ed25519, key},
+      else: :invalid
+  end
 
   defp classify_public_key(key) when is_binary(key) and byte_size(key) == 65 do
     case V3.EcJwk.encode_public(key, %{}) do

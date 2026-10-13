@@ -18,7 +18,7 @@ Verifiers depend only on the protocol package, never on this one.
 ```elixir
 def deps do
   [
-    {:bounded_authority_report_adapter, "~> 0.9.0"}
+    {:bounded_authority_report_adapter, "~> 0.10.0"}
   ]
 end
 ```

@@ -10,7 +10,7 @@ filesystem, not under `/mnt/c`), which is the Linux path. The package is publish
 [Hex](https://hex.pm/packages/bounded_authority_report_adapter).
 
 ```elixir
-{:bounded_authority_report_adapter, "~> 0.9.0"}
+{:bounded_authority_report_adapter, "~> 0.10.0"}
 ```
 
 Or scaffold the starter key-handle with [Igniter](https://hexdocs.pm/igniter)

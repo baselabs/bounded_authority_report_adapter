@@ -274,7 +274,8 @@ defmodule BoundedAuthorityReportAdapter do
 
     * `:invalid_report` — a required report field is missing.
     * `:invalid_key_handle` — the handle is malformed, or the handle's
-      `public_key/1` rejected / returned a non-32-byte key.
+      `public_key/1` rejected / returned a non-32-byte key or a key BAP's strict Ed25519
+      rule refuses (small-order, non-canonical, or not on the curve).
     * `:signing_failed` — the holder's `sign/2` callback rejected, returned a
       non-64-byte signature, violated the `{:ok, _} | {:error, _}` contract, or
       the signature did not verify against the resolved holder public key.
@@ -359,7 +360,8 @@ defmodule BoundedAuthorityReportAdapter do
     * `:invalid_report` — a required field is missing, or the `nonce` is
       absent, empty, or not a binary.
     * `:invalid_key_handle` — the handle is malformed, or the handle's
-      `public_key/1` rejected / returned a non-32-byte key.
+      `public_key/1` rejected / returned a non-32-byte key or a key BAP's strict Ed25519
+      rule refuses (small-order, non-canonical, or not on the curve).
     * `:signing_failed` — the holder's `sign/2` rejected, returned a
       non-64-byte signature, violated the `{:ok, _} | {:error, _}` contract, or
       the signature did not verify against the resolved holder public key.
@@ -444,7 +446,9 @@ defmodule BoundedAuthorityReportAdapter do
 
     * `:invalid_anchor` — a required content field is missing or malformed.
     * `:invalid_key_handle` — the handle is malformed, lacks `key_identity/1`, or its
-      `public_key/1` / `key_identity/1` rejected / returned an invalid value.
+      `public_key/1` / `key_identity/1` rejected / returned an invalid value (including a
+      key BAP's strict Ed25519 rule refuses: small-order, non-canonical, or not on the
+      curve).
     * `:signing_failed` — the `sign/2` callback rejected, returned a non-64-byte
       signature, violated the `{:ok, _} | {:error, _}` contract, or the signature
       did not verify against the resolved public key.
@@ -544,7 +548,9 @@ defmodule BoundedAuthorityReportAdapter do
 
     * `:invalid_grant` — a required grant field is missing or malformed.
     * `:invalid_key_handle` — the handle is malformed, lacks `signing_identity/1`, the
-      resolved role is not `:issuer`, or the snapshot returned an invalid value.
+      resolved role is not `:issuer`, or the snapshot returned an invalid value (including a
+      key BAP's strict Ed25519 rule refuses: small-order, non-canonical, or not on the
+      curve).
     * `:invalid_role_attestation` — the `:role_attestation` option is malformed, or BAP's
       `verify_attestation/2` rejected it (BA signature, subject binding, self-attestation,
       window containment, now-window) or the attested role is not `"issuer"`.
@@ -692,7 +698,8 @@ defmodule BoundedAuthorityReportAdapter do
     * `:invalid_transition` — a required content field is missing, or `next_public_key` is
       not a 32-byte Ed25519 key.
     * `:invalid_key_handle` — the handle is malformed, lacks `key_identity/1`, or its
-      `key_identity/1` rejected / returned an invalid value.
+      `key_identity/1` rejected / returned an invalid value (including a key BAP's strict
+      Ed25519 rule refuses: small-order, non-canonical, or not on the curve).
     * `:signing_failed` — `sign/2` rejected, returned a non-64-byte signature, violated the
       `{:ok, _} | {:error, _}` contract, or the signature did not verify against the
       snapshot's `public_key`.
@@ -746,7 +753,8 @@ defmodule BoundedAuthorityReportAdapter do
 
   Returns `{:ok, %{content_assertion: compact}}`. Closed errors are
   `:invalid_content_assertion` for malformed options or missing or incorrectly typed input fields,
-  `:invalid_key_handle` for key-identity failure, `:signing_failed` for signing or
+  `:invalid_key_handle` for key-identity failure (including a key BAP's strict Ed25519 rule
+  refuses), `:signing_failed` for signing or
   wrong-key failure, and `{:producer_error, :invalid}` for BAP rejection.
   """
   @spec sign_content_assertion(content_assertion_input(), key_handle(), content_assertion_opts()) ::
@@ -829,9 +837,14 @@ defmodule BoundedAuthorityReportAdapter do
   # {:ok, envelope}, deferring the failure to check_envelope downstream. Verify
   # the signature against the public key HERE so a wrong-key sign is :signing_failed,
   # not a silent false-success.
+  #
+  # The check is BAP's strict rule S1 (`BoundedAuthorityProtocol.Ed25519.verify_strict/3`),
+  # not the raw backend: a cofactorless backend accepts a signature whose `R` is a small-order
+  # point (the nonce `r = 0` signature `R = identity` under a genuine key), which no verifier
+  # under S1 accepts. A signature this library returns therefore verifies under S1.
   defp verify_signature(message, signature, holder_public_key)
        when is_binary(message) and is_binary(signature) and is_binary(holder_public_key) do
-    if :crypto.verify(:eddsa, :none, message, signature, [holder_public_key, :ed25519]),
+    if BoundedAuthorityProtocol.Ed25519.verify_strict(message, signature, holder_public_key),
       do: :ok,
       else: {:error, :signing_failed}
   end
@@ -925,7 +938,7 @@ defmodule BoundedAuthorityReportAdapter do
     # HERE as :invalid_key_handle, not downstream as a producer error.
     case safe_callback(module, :public_key, [handle]) do
       {:ok, public_key} when is_binary(public_key) and byte_size(public_key) == 32 ->
-        {:ok, public_key}
+        accept_key(public_key)
 
       _malformed_key_or_callback ->
         {:error, :invalid_key_handle}
@@ -950,7 +963,7 @@ defmodule BoundedAuthorityReportAdapter do
       {:ok, {key_id, public_key}}
       when is_binary(key_id) and byte_size(key_id) > 0 and is_binary(public_key) and
              byte_size(public_key) == 32 ->
-        {:ok, {key_id, public_key}}
+        with {:ok, public_key} <- accept_key(public_key), do: {:ok, {key_id, public_key}}
 
       _malformed_or_unimplemented ->
         {:error, :invalid_key_handle}
@@ -978,7 +991,7 @@ defmodule BoundedAuthorityReportAdapter do
       {:ok, {:issuer, key_id, public_key}}
       when is_binary(key_id) and byte_size(key_id) > 0 and is_binary(public_key) and
              byte_size(public_key) == 32 ->
-        {:ok, {key_id, public_key}}
+        with {:ok, public_key} <- accept_key(public_key), do: {:ok, {key_id, public_key}}
 
       _holder_role_or_malformed_or_unimplemented ->
         {:error, :invalid_key_handle}
@@ -986,6 +999,19 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   defp resolve_signing_identity(_handle), do: {:error, :invalid_key_handle}
+
+  # Every Ed25519 key a handle presents passes BAP's key acceptance (rule S1): canonical,
+  # not small-order, on the curve. A handle presenting the identity point, a point of order
+  # 2, 4 or 8, a `y >= p` alias or an off-curve string is refused as the same closed
+  # `:invalid_key_handle` a malformed key gets, BEFORE `sign/2` is reached. Without this gate
+  # `sign_grant/3` and `sign_content_assertion/3` (whose structs carry no key, so no BAP
+  # producer ever sees it) would sign under such a key. ES256 keys take the `V3` resolvers,
+  # where P-256 point validation already applies.
+  defp accept_key(public_key) do
+    if BoundedAuthorityProtocol.Ed25519.acceptable_public_key?(public_key),
+      do: {:ok, public_key},
+      else: {:error, :invalid_key_handle}
+  end
 
   defp safe_callback(module, function, args) do
     apply(module, function, args)
@@ -1331,6 +1357,12 @@ defmodule BoundedAuthorityReportAdapter do
   uncompressed-SEC1 P-256 point (`0x04 || x || y`) under the `.V3` entry
   points. The wire shape is the key-type discriminator (ADR-0021) — each
   major's resolvers accept exactly their shape and reject the other.
+
+  An Ed25519 key must also pass BAP's strict acceptance
+  (`BoundedAuthorityProtocol.Ed25519.acceptable_public_key?/1`): canonical, on the
+  curve, and not one of the eight small-order points. Any other 32-byte string is
+  refused as `:invalid_key_handle` before `sign/2` is called, by every entry point
+  that resolves a key (the same applies to `key_identity/1` and `signing_identity/1`).
   """
   @callback public_key(handle :: term()) :: {:ok, binary()} | {:error, term()}
 
