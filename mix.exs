@@ -117,11 +117,14 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # deps; the emitter is shape-validated and value-free
       # (lib/bounded_authority_report_adapter/telemetry.ex).
       {:telemetry, "~> 1.3"},
-      # DELIBERATE EXACT PIN, never floated: BAP's version IS the wire-contract
-      # identity this adapter compiles against (ADR-0023's bump policy +
-      # ADR-0017's exact-pin rationale). A bare `mix deps.update` on it reds
-      # the dependency wall by design; a bump is a reviewed, one-commit move.
-      {:bounded_authority_protocol, "== 0.8.0"},
+      # A RANGE with a security floor, not an exact pin (owner ruling, October 6, 2026;
+      # ADR-0023 amendment): a library declares the range it is compatible with and only an
+      # application locks an exact version. 0.8.0 is the floor: it carries the strict Ed25519
+      # verification rule this adapter's key refusal and self-check call
+      # (BoundedAuthorityProtocol.Ed25519), so 0.7.x must never resolve. The ceiling is the
+      # next protocol minor, a deliberate, reviewed move. The dependency wall pins the
+      # requirement shape and the locked version.
+      {:bounded_authority_protocol, "~> 0.8.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # The install task (lib/mix/tasks) uses Igniter when present; the file
       # compiles to a Mix.raise fallback without it.

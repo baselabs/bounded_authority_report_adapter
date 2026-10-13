@@ -53,22 +53,46 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # `bounded_authority_protocol` package at @protocol_requirement, and the resolved lock
   # carries the Hex tuple (not a git ref) — the wall asserts BOTH below.
   #
-  # A protocol version bump is a deliberate, reviewed change: raise @protocol_requirement
-  # here in the same commit that bumps the dep in mix.exs; when the pin moves is governed
-  # by docs/adr/0023-pin-follows-bap-releases.md (a wire/verification change is a protocol
-  # contract-major; an additive change is a minor).
+  # The requirement is a RANGE with a security floor (owner ruling, October 6, 2026; ADR-0023
+  # amendment): a library declares the range it is compatible with, and only an application
+  # locks an exact version. The floor is BAP 0.8.0, the release that carries the strict
+  # Ed25519 verification fix this adapter's key refusal and self-check call; the ceiling
+  # (exclusive) is the next protocol minor, which is a deliberate, reviewed move. Raising the
+  # floor or the ceiling moves @protocol_requirement, @protocol_floor / @protocol_ceiling and
+  # mix.exs in the same commit; when that happens is governed by
+  # docs/adr/0023-pin-follows-bap-releases.md.
   @protocol_app "bounded_authority_protocol"
-  @protocol_requirement "== 0.8.0"
+  @protocol_requirement "~> 0.8.0"
+  @protocol_floor "0.8.0"
+  @protocol_ceiling "0.9.0"
 
-  # The LOCKED version — the guard against silent lock drift. The exact requirement above
-  # selects the authority suite's recertified protocol identity. A version bump is a
-  # deliberate, reviewed change — the same commit raises the mix.exs requirement, BOTH wall
-  # attributes, and the lock; this attribute makes the lock half mechanically loud instead
-  # of trusted.
+  # The LOCKED version — the guard against silent lock drift. The requirement above is a
+  # range, so the lock is the exact version this repository compiles and tests against. A lock
+  # move (a bare `mix deps.update`, or a deliberate adoption of a newer release inside the
+  # range) is a reviewed change: the same commit raises this attribute and BOTH project locks.
   @protocol_locked_version "0.8.0"
 
-  defp requirement_tracks_locked_version?(requirement, locked_version) do
-    requirement == "== #{locked_version}"
+  # The requirement is acceptable only when it is a floored range: it admits the security
+  # floor, admits every later release below the ceiling (so it is not an exact pin), and
+  # admits nothing at or above the ceiling or below the floor (so it neither reopens 0.7.x,
+  # which lacks the strict Ed25519 rule, nor floats across a protocol minor).
+  defp requirement_is_floored_range?(requirement) do
+    case Version.parse_requirement(requirement) do
+      {:ok, parsed} ->
+        Version.match?(@protocol_floor, parsed) and
+          Version.match?("0.8.1", parsed) and
+          Version.match?("0.8.99", parsed) and
+          not Version.match?(@protocol_ceiling, parsed) and
+          not Version.match?("0.7.9", parsed) and
+          not Version.match?("0.7.0", parsed)
+
+      :error ->
+        false
+    end
+  end
+
+  defp requirement_admits_locked_version?(requirement, locked_version) do
+    Version.match?(locked_version, Version.parse_requirement!(requirement))
   end
 
   defp protocol_lock_line(version) do
@@ -209,20 +233,81 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
                "attributes + the lock in the SAME commit"
     end
 
-    test "@protocol_requirement names @protocol_locked_version exactly" do
-      assert requirement_tracks_locked_version?(
-               @protocol_requirement,
-               @protocol_locked_version
-             ),
-             "the requirement #{@protocol_requirement} does not name the locked version " <>
-               "#{@protocol_locked_version} exactly — SemVer compatibility is insufficient; " <>
-               "both wall attributes move together in the same deliberate-bump commit"
+    test "@protocol_requirement is a floored range that admits the locked version" do
+      assert requirement_is_floored_range?(@protocol_requirement),
+             "the requirement #{@protocol_requirement} must admit the security floor " <>
+               "#{@protocol_floor} and later releases below #{@protocol_ceiling}, and nothing " <>
+               "older or at the ceiling (a library declares a range; only an application " <>
+               "locks an exact version)"
+
+      assert requirement_admits_locked_version?(@protocol_requirement, @protocol_locked_version),
+             "the requirement #{@protocol_requirement} does not admit the locked version " <>
+               "#{@protocol_locked_version}"
+
+      assert Version.compare(@protocol_locked_version, @protocol_floor) != :lt,
+             "the locked version #{@protocol_locked_version} is below the security floor " <>
+               "#{@protocol_floor}"
+
+      assert Version.compare(@protocol_locked_version, @protocol_ceiling) == :lt,
+             "the locked version #{@protocol_locked_version} is at or above the ceiling " <>
+               "#{@protocol_ceiling}"
     end
 
-    test "a patch advance is not accepted as same-commit requirement identity" do
-      refute requirement_tracks_locked_version?(@protocol_requirement, "0.2.1"),
-             "SemVer compatibility must not let the locked-version attribute advance while " <>
-               "the requirement attribute and mix.exs stay unchanged"
+    test "the requirement declared in mix.exs is itself a floored range" do
+      # Reads the declaration, not the attribute: a mix.exs edited to `~> 0.7` or back to an
+      # exact pin reds on the predicate even if the attribute above were edited to match.
+      mix_exs = File.read!("mix.exs")
+
+      [_, declared] =
+        Regex.run(~r/\{:#{@protocol_app},\s*"([^"]+)"/, mix_exs) ||
+          flunk("mix.exs does not declare :#{@protocol_app} with a string requirement")
+
+      assert requirement_is_floored_range?(declared),
+             "mix.exs declares :#{@protocol_app} at #{inspect(declared)}, which is not a " <>
+               "floored range (>= #{@protocol_floor}, < #{@protocol_ceiling}, not an exact pin)"
+
+      assert requirement_admits_locked_version?(declared, @protocol_locked_version)
+    end
+
+    test "the floored-range predicate reds on a requirement that admits 0.7.x" do
+      # 0.7.x lacks the strict Ed25519 rule this adapter calls: `~> 0.7` and `>= 0.7.0` admit
+      # it (and `~> 0.7` also floats to 0.9.0 and beyond); `~> 0.7.0` is the 0.7 line itself.
+      for requirement <- ["~> 0.7", "~> 0.7.0", ">= 0.7.0", ">= 0.7.0 and < 0.9.0"] do
+        refute requirement_is_floored_range?(requirement),
+               "the requirement #{requirement} admits a protocol release below the " <>
+                 "#{@protocol_floor} security floor and the wall would stay green"
+      end
+    end
+
+    test "the floored-range predicate reds on an exact pin" do
+      # An exact pin is the retired policy: a library that pins one version blocks every
+      # consumer that holds the same package at a later compatible release.
+      for requirement <- ["== 0.8.0", "== 0.8.1", "0.8.0"] do
+        refute requirement_is_floored_range?(requirement),
+               "the exact requirement #{requirement} satisfies the wall; the ruling is a " <>
+                 "range, not an exact pin"
+      end
+    end
+
+    test "the floored-range predicate reds on a range that floats across the ceiling" do
+      for requirement <- ["~> 0.8", ">= 0.8.0", ">= 0.8.0 and < 1.0.0"] do
+        refute requirement_is_floored_range?(requirement),
+               "the requirement #{requirement} admits #{@protocol_ceiling} or later; crossing " <>
+                 "a protocol minor is a deliberate, reviewed move"
+      end
+    end
+
+    test "the floored-range predicate reds on a floor above 0.8.0 and on an unparsable string" do
+      for requirement <- ["~> 0.8.1", "~> 0.8.2", "not a requirement", ""] do
+        refute requirement_is_floored_range?(requirement),
+               "the requirement #{inspect(requirement)} must not satisfy the wall"
+      end
+    end
+
+    test "the lock-membership predicate reds when the lock leaves the range" do
+      refute requirement_admits_locked_version?(@protocol_requirement, "0.7.0")
+      refute requirement_admits_locked_version?(@protocol_requirement, "0.9.0")
+      assert requirement_admits_locked_version?(@protocol_requirement, "0.8.3")
     end
   end
 
@@ -431,7 +516,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
     test "the lock-version clause reds on a drifted lock (plain bump + prefix extension)" do
       # Two mutations, one per real hole. A plain drift (0.2.1 — a stale or manually
-      # altered lock; the exact requirement makes `mix deps.update` refuse it) exercises
+      # altered lock; a bare `mix deps.update` reconciles the lock inside the range, which this clause catches) exercises
       # the obvious red. The PREFIX EXTENSION (0.2.0-rc.1) exercises the one an
       # unterminated predicate would still match: mutating to 0.2.1
       # alone passes even while the prefix hole is open, so the proof would mask the very
