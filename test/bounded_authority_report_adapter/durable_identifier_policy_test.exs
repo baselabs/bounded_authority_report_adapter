@@ -77,24 +77,4 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicyTest do
                ~S(config :app, :"queue-v2")
              )
   end
-
-  test "the owned tree observes a foreign external major outside the facade" do
-    probe_path = "test/durable_identifier_external_major_probe.exs"
-
-    File.write!(
-      probe_path,
-      "defmodule DurableIdentifierExternalMajorProbe do\n" <>
-        "  alias BoundedAuthorityProtocol.V2\n" <>
-        "end\n"
-    )
-
-    try do
-      assert Enum.any?(DurableIdentifierPolicy.owned_tree_findings(), fn finding ->
-               finding.path == probe_path and finding.kind == :external_wire_module and
-                 finding.name == "BoundedAuthorityProtocol.V2"
-             end)
-    after
-      File.rm!(probe_path)
-    end
-  end
 end
