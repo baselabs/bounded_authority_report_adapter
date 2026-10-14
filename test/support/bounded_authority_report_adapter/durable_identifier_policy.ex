@@ -47,6 +47,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "test/bounded_authority_report_adapter/doctor_task_test.exs",
                        "test/bounded_authority_report_adapter/durable_identifier_policy_test.exs",
                        "test/bounded_authority_report_adapter/local_loopback_corpus_test.exs",
+                       "test/bounded_authority_report_adapter/optional_callback_users_test.exs",
                        "test/bounded_authority_report_adapter/sign_anchor_test.exs",
                        "test/bounded_authority_report_adapter/sign_content_assertion_test.exs",
                        "test/bounded_authority_report_adapter/sign_grant_test.exs",
@@ -75,6 +76,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
   @external_v3_paths MapSet.new([
                        "lib/bounded_authority_report_adapter/v3.ex",
                        "lib/mix/tasks/bounded_authority_report_adapter.doctor.ex",
+                       "test/bounded_authority_report_adapter/optional_callback_users_test.exs",
                        "test/bounded_authority_report_adapter/v3_sign_test.exs",
                        "test/support/test_keys.ex"
                      ])
