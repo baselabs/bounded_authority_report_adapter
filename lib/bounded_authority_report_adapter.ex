@@ -66,11 +66,20 @@ defmodule BoundedAuthorityReportAdapter do
 
   Every entry point takes its options as a map or as a keyword list, and the two are the
   same call: `sign_report(report, handle, issued_at: t)` is
-  `sign_report(report, handle, %{issued_at: t})`. A list that is not a keyword list with
-  unique atom keys, and any other value (`nil`, an atom, a number, a tuple, a binary), is
-  refused with the entry point's input error (`:invalid_report`, `:invalid_grant` and so on)
-  before any callback is called. Calling an entry point without the options argument means
-  `%{}`. `sign_content_assertion/3` also refuses a struct.
+  `sign_report(report, handle, %{issued_at: t})`. Each entry point accepts only the option
+  keys its documentation lists, and checks each value's kind. These are refused with the
+  entry point's input error (`:invalid_report`, `:invalid_grant` and so on) before any
+  callback is called:
+
+    * an unknown key, including a misspelling (`role_attestaton:`) and a string key
+      (`%{"issued_at" => t}`);
+    * a present value of the wrong kind (`proof_id: nil`, `issued_at: "now"`,
+      `bounds: :maximum`): a present option is never replaced by its default;
+    * a list that is not a keyword list with unique atom keys, a struct, and any other
+      value that is not a map (`nil`, an atom, a number, a tuple, a binary).
+
+  A malformed `:role_attestation` value on `sign_grant/3` is `:invalid_role_attestation`.
+  Calling an entry point without the options argument means `%{}`.
 
   ## Errors
 
@@ -269,8 +278,8 @@ defmodule BoundedAuthorityReportAdapter do
 
     * `:invalid_report` — `report` is not a map, a required field is missing or not a
       string, `cast_arguments` is `nil`, the nonce is neither `nil` nor a string,
-      `grant_compact` is not a contract-major-1 grant, or `opts` is neither a map nor a
-      keyword list with unique keys.
+      `grant_compact` is not a contract-major-1 grant, or `opts` is invalid (see "Options"
+      in the module documentation).
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, or `public_key/1`
       failed or returned something other than an acceptable 32-byte Ed25519 key.
     * `:signing_failed` — `sign/2` failed, returned something other than
@@ -306,7 +315,7 @@ defmodule BoundedAuthorityReportAdapter do
           {:ok, envelope()} | {:error, sign_error()}
   def sign_report(report, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:report, fn ->
-      with {:ok, opts} <- normalize_opts(opts, :invalid_report),
+      with {:ok, opts} <- normalize_opts(opts, :invalid_report, :report),
            do: do_sign_report(report, key_handle, opts)
     end)
   end
@@ -415,7 +424,7 @@ defmodule BoundedAuthorityReportAdapter do
           {:ok, envelope()} | {:error, sign_error()}
   def sign_local_loopback_report(report, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:local_loopback_report, fn ->
-      with {:ok, opts} <- normalize_opts(opts, :invalid_report),
+      with {:ok, opts} <- normalize_opts(opts, :invalid_report, :report),
            do: do_sign_local_loopback_report(report, key_handle, opts)
     end)
   end
@@ -472,7 +481,7 @@ defmodule BoundedAuthorityReportAdapter do
   ## Errors
 
     * `:invalid_anchor` — `anchor_input` is not a map, a field is missing or of the
-      wrong basic type, or `opts` is neither a map nor a keyword list.
+      wrong basic type, or `opts` is invalid (see "Options" above).
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
       `key_identity/1`, or returned an empty key id or a public key that is not an
       acceptable 32-byte Ed25519 key.
@@ -506,7 +515,7 @@ defmodule BoundedAuthorityReportAdapter do
           {:ok, anchor_compact()} | {:error, anchor_sign_error()}
   def sign_anchor(anchor_input, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:anchor, fn ->
-      with {:ok, opts} <- normalize_opts(opts, :invalid_anchor),
+      with {:ok, opts} <- normalize_opts(opts, :invalid_anchor, :anchor),
            do: do_sign_anchor(anchor_input, key_handle, opts)
     end)
   end
@@ -588,7 +597,7 @@ defmodule BoundedAuthorityReportAdapter do
 
     * `:invalid_grant` — `grant_input` is not a map, a field is missing or of the wrong
       basic type (including an empty or improper `:audiences` list or an empty
-      `:operations` list), or `opts` is neither a map nor a keyword list.
+      `:operations` list), or `opts` is invalid (see "Options" above).
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
       `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
       snapshot or a public key the strict Ed25519 rule refuses.
@@ -640,7 +649,7 @@ defmodule BoundedAuthorityReportAdapter do
           {:ok, grant_compact()} | {:error, grant_sign_error()}
   def sign_grant(grant_input, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:grant, fn ->
-      with {:ok, opts} <- normalize_opts(opts, :invalid_grant),
+      with {:ok, opts} <- normalize_opts(opts, :invalid_grant, :grant),
            do: do_sign_grant(grant_input, key_handle, opts)
     end)
   end
@@ -747,8 +756,8 @@ defmodule BoundedAuthorityReportAdapter do
   ## Errors
 
     * `:invalid_transition` — `transition_input` is not a map, a field is missing or of
-      the wrong basic type, `:next_public_key` is not 32 bytes, or `opts` is neither a map
-      nor a keyword list.
+      the wrong basic type, `:next_public_key` is not 32 bytes, or `opts` is invalid (see
+      "Options" in the module documentation).
     * `:invalid_key_handle` — as for `sign_anchor/3`.
     * `:signing_failed` — as for `sign_report/3`.
     * `{:producer_error, :invalid}` — the protocol package refused the transition, for
@@ -784,7 +793,7 @@ defmodule BoundedAuthorityReportAdapter do
           {:ok, transition_compact()} | {:error, transition_sign_error()}
   def sign_key_transition(transition_input, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:key_transition, fn ->
-      with {:ok, opts} <- normalize_opts(opts, :invalid_transition),
+      with {:ok, opts} <- normalize_opts(opts, :invalid_transition, :key_transition),
            do: do_sign_key_transition(transition_input, key_handle, opts)
     end)
   end
@@ -840,8 +849,8 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Errors
 
-    * `:invalid_content_assertion` — `opts` is neither a plain map nor a keyword list with
-      unique keys, or `assertion_input` is not a map or has a field that is missing or of
+    * `:invalid_content_assertion` — `opts` is invalid (see "Options" in the module
+      documentation), or `assertion_input` is not a map or has a field that is missing or of
       the wrong basic type.
     * `:invalid_key_handle` — as for `sign_anchor/3`.
     * `:signing_failed` — as for `sign_report/3`.
@@ -911,9 +920,8 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  # Content assertion also refuses a struct: its options must be a plain map or a keyword list.
-  defp content_assertion_opts(opts) when is_struct(opts), do: {:error, :invalid_content_assertion}
-  defp content_assertion_opts(opts), do: normalize_opts(opts, :invalid_content_assertion)
+  defp content_assertion_opts(opts),
+    do: normalize_opts(opts, :invalid_content_assertion, :content_assertion)
 
   @doc false
   # Which entry points call each optional callback, so require it. The doctor's advisories
@@ -1451,14 +1459,15 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  # Options at the boundary (BoundedAuthorityReportAdapter.Options): a map is used as given
-  # and a keyword list becomes the equivalent map. Anything else (a malformed list, nil, an
-  # atom, a number, a tuple, a binary) is the entry point's closed input error, before any
-  # callback runs; never a value-echoing BadMapError, never a silent fallback to defaults.
-  defp normalize_opts(opts, input_error) do
-    case Options.normalize(opts) do
+  # Options at the boundary (BoundedAuthorityReportAdapter.Options), before any callback: a
+  # plain map or a keyword list with only the keys this kind of entry point accepts, each
+  # with a value of the right kind. Anything else is the entry point's closed input error;
+  # a malformed :role_attestation value is :invalid_role_attestation.
+  defp normalize_opts(opts, input_error, object) do
+    case Options.normalize(opts, Options.schema(object)) do
       {:ok, opts} -> {:ok, opts}
-      :malformed -> {:error, input_error}
+      {:error, :role_attestation} -> {:error, :invalid_role_attestation}
+      {:error, _option} -> {:error, input_error}
     end
   end
 

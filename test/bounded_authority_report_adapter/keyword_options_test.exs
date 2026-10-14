@@ -187,10 +187,89 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
     for {name, _call, input_error} <- entry_points(context),
         _iteration <- 1..@iterations do
       opts = random_non_options()
-      call = probe_call(name, context, probe)
+      {^name, call, _input_error} = probe_call(name, context, probe)
 
       assert call.(opts) == {:error, input_error},
              "#{name} with #{inspect(opts)} did not return {:error, #{inspect(input_error)}}"
+
+      refute_received {:callback_called, _callback}
+    end
+  end
+
+  test "an unknown option key is the closed input error, before any callback", context do
+    probe = {BoundedAuthorityReportAdapter.RefusalProbeHandle, :ref}
+
+    cases = [
+      {"sign_grant", [role_attestaton: %{}]},
+      {"sign_grant", %{"role_attestation" => %{}}},
+      {"sign_report", [issue_at: @now]},
+      {"V3.sign_report", %{issue_at: @now}},
+      {"sign_anchor", [anchord_at: @now]},
+      {"sign_content_assertion", [bound: %{}]}
+    ]
+
+    for {name, opts} <- cases do
+      {^name, call, input_error} = probe_call(name, context, probe)
+      assert call.(opts) == {:error, input_error}, "#{name} accepted #{inspect(opts)}"
+      refute_received {:callback_called, _callback}
+    end
+
+    for {name, call, input_error} <- entry_points(Map.put(context, :probe, probe)),
+        opts <- [[{nil, 1}], %{nil => 1}, %{1 => :x}, %URI{}, V1.Bounds.maximum()] do
+      assert call.(opts) == {:error, input_error}, "#{name} accepted #{inspect(opts)}"
+      refute_received {:callback_called, _callback}
+    end
+  end
+
+  test "a misspelled role-attestation option does not sign with the gate off", context do
+    {"sign_grant", call, :invalid_grant} = probe_call("sign_grant", context, nil)
+    assert call.(role_attestaton: attestation(context.keys, "holder")) == {:error, :invalid_grant}
+  end
+
+  test "a present but invalid option value is the closed input error, not the default",
+       context do
+    probe = {BoundedAuthorityReportAdapter.RefusalProbeHandle, :ref}
+
+    cases =
+      for name <- ["sign_report", "sign_local_loopback_report", "V3.sign_report"],
+          opts <- [
+            [proof_id: nil],
+            [proof_id: false],
+            [proof_id: 7],
+            [issued_at: nil],
+            [issued_at: "now"],
+            [bounds: nil],
+            [bounds: :maximum]
+          ],
+          do: {name, opts}
+
+    cases =
+      cases ++
+        for name <- ["sign_anchor", "V3.sign_anchor"],
+            opts <- [[anchored_at: nil], [anchored_at: 1.5], [bounds: "max"]],
+            do: {name, opts}
+
+    for {name, opts} <- cases do
+      {^name, call, input_error} = probe_call(name, context, probe)
+      assert call.(opts) == {:error, input_error}, "#{name} accepted #{inspect(opts)}"
+      refute_received {:callback_called, _callback}
+    end
+  end
+
+  test "random unknown atom option keys are always refused before any callback (property)",
+       context do
+    probe = {BoundedAuthorityReportAdapter.RefusalProbeHandle, :ref}
+
+    for {name, call, input_error} <- entry_points(Map.put(context, :probe, probe)),
+        _iteration <- 1..@iterations do
+      key = String.to_atom("unknown_" <> Integer.to_string(:rand.uniform(1_000_000)))
+      known = known_options(name, context)
+      opts = Enum.shuffle([{key, Enum.random([nil, 1, "x", %{}, []])} | known])
+      form = Enum.random([:map, :keyword])
+      opts = if form == :map, do: Map.new(opts), else: opts
+
+      assert call.(opts) == {:error, input_error},
+             "#{name} accepted #{inspect(opts)} (run seed #{ExUnit.configuration()[:seed]})"
 
       refute_received {:callback_called, _callback}
     end
@@ -277,6 +356,11 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
     ]
   end
 
+  # Valid options for an entry point, a random subset (possibly empty).
+  defp known_options(name, context) do
+    name |> random_options(0, context) |> Enum.filter(fn _option -> :rand.uniform(2) == 1 end)
+  end
+
   # A random value that is neither a map nor a proper keyword list with unique atom keys.
   defp random_non_options do
     generators = [
@@ -300,10 +384,7 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
   # The same entry point called with a handle that records callbacks; the input is valid,
   # so only the options can make it refuse.
   defp probe_call(name, context, probe) do
-    {^name, call, _input_error} =
-      context |> Map.put(:probe, probe) |> entry_points() |> List.keyfind(name, 0)
-
-    call
+    context |> Map.put(:probe, probe) |> entry_points() |> List.keyfind(name, 0)
   end
 
   defp two_argument_calls(%{keys: keys, grant: grant, ec_grant: ec_grant}) do

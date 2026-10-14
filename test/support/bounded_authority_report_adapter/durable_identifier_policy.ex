@@ -37,6 +37,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "examples/edge_agent/test/edge_agent_test.exs",
                        "examples/edge_agent/test/local_loopback_test.exs",
                        "lib/bounded_authority_report_adapter.ex",
+                       "lib/bounded_authority_report_adapter/options.ex",
                        "lib/bounded_authority_report_adapter/v3.ex",
                        "lib/mix/tasks/bounded_authority_report_adapter.doctor.ex",
                        "scripts/check_package.exs",

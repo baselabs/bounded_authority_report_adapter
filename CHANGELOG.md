@@ -71,6 +71,16 @@
   non-keyword values to all ten and requires the input error with no callback called; and
   every entry point still signs when the options argument is omitted. The four tests that
   pinned the old fallback now assert the error.
+- Unknown option keys were silently ignored, which failed open: a misspelled
+  `role_attestaton:` signed a grant with the role-attestation gate off, and
+  `%{"role_attestation" => ...}`, `issue_at:` or `[{nil, 1}]` were dropped without an error.
+  A struct was accepted as options by nine of the ten entry points, and `proof_id: nil` or
+  `false` fell back to a fresh UUID. Each kind of entry point now declares the option keys
+  it accepts and the kind of each value, and refuses an unknown key, a non-atom key, a
+  struct and a present value of the wrong kind with its closed input error, before any
+  key-handle callback. Tests: each listed case on the entry points it applies to, through a
+  handle that records every callback; a generative test adding a random unknown atom key
+  (with or without valid options, as a map or a keyword list) to all ten entry points.
 
 ### Documentation
 

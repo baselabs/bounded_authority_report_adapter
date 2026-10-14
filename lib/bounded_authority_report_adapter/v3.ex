@@ -303,7 +303,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
           {:ok, envelope()} | {:error, sign_error()}
   def sign_report(report, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:report, fn ->
-      with {:ok, opts} <- normalize_opts(opts, :invalid_report),
+      with {:ok, opts} <- normalize_opts(opts, :invalid_report, :report),
            do: do_sign_report(report, key_handle, opts)
     end)
   end
@@ -349,7 +349,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   ## Errors
 
     * `:invalid_grant` — as for `BoundedAuthorityReportAdapter.sign_grant/3`, including
-      options that are neither a map nor a keyword list.
+      invalid options (see "Options" in `BoundedAuthorityReportAdapter`).
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
       `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
       snapshot or a key that is not a 65-byte P-256 point on the curve.
@@ -382,7 +382,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
           {:ok, grant_compact()} | {:error, grant_sign_error()}
   def sign_grant(grant_input, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:grant, fn ->
-      with {:ok, opts} <- normalize_opts(opts, :invalid_grant),
+      with {:ok, opts} <- normalize_opts(opts, :invalid_grant, :grant),
            do: do_sign_grant(grant_input, key_handle, opts)
     end)
   end
@@ -450,7 +450,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
           {:ok, anchor_compact()} | {:error, anchor_sign_error()}
   def sign_anchor(anchor_input, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:anchor, fn ->
-      with {:ok, opts} <- normalize_opts(opts, :invalid_anchor),
+      with {:ok, opts} <- normalize_opts(opts, :invalid_anchor, :anchor),
            do: do_sign_anchor(anchor_input, key_handle, opts)
     end)
   end
@@ -516,7 +516,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
           {:ok, transition_compact()} | {:error, transition_sign_error()}
   def sign_key_transition(transition_input, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:key_transition, fn ->
-      with {:ok, opts} <- normalize_opts(opts, :invalid_transition),
+      with {:ok, opts} <- normalize_opts(opts, :invalid_transition, :key_transition),
            do: do_sign_key_transition(transition_input, key_handle, opts)
     end)
   end
@@ -995,13 +995,13 @@ defmodule BoundedAuthorityReportAdapter.V3 do
     end
   end
 
-  # The same boundary normalization as the major-1 surface
-  # (BoundedAuthorityReportAdapter.Options): a keyword list is the equivalent map; anything
-  # else that is not a map is the entry point's closed input error, before any callback.
-  defp normalize_opts(opts, input_error) do
-    case Options.normalize(opts) do
+  # The same boundary check as the major-1 surface (BoundedAuthorityReportAdapter.Options):
+  # only the keys this kind of entry point accepts, each with a value of the right kind;
+  # anything else is the entry point's closed input error, before any callback.
+  defp normalize_opts(opts, input_error, object) do
+    case Options.normalize(opts, Options.schema(object)) do
       {:ok, opts} -> {:ok, opts}
-      :malformed -> {:error, input_error}
+      {:error, _option} -> {:error, input_error}
     end
   end
 

@@ -110,11 +110,13 @@ defmodule BoundedAuthorityReportAdapter.SignContentAssertionTest do
     input =
       Map.merge(c.input, %{attestor_key_id: "forged", kid: "forged", public_key: <<0::256>>, v: 9})
 
-    assert {:ok, %{content_assertion: compact}} =
-             Adapter.sign_content_assertion(input, c.handle, %{
-               attestor_key_id: "forged",
-               role_attestation: :irrelevant
-             })
+    assert {:ok, %{content_assertion: compact}} = Adapter.sign_content_assertion(input, c.handle)
+
+    # Identity or role keys smuggled into the options are unknown options, refused outright.
+    for opts <- [%{attestor_key_id: "forged"}, [role_attestation: :irrelevant]] do
+      assert {:error, :invalid_content_assertion} =
+               Adapter.sign_content_assertion(input, c.handle, opts)
+    end
 
     assert {:ok, decoded} = Content.decode_assertion(compact, %{})
     assert decoded.attestor_key_id == "assertion-attestor"
