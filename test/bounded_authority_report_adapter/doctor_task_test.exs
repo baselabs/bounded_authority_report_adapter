@@ -311,27 +311,45 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     assert Enum.any?(advisories, &(&1 =~ "signing_identity/1 absent" and &1 =~ "sign_grant/3"))
   end
 
-  test "each optional-callback advisory names every entry point that calls the callback" do
+  test "each optional-callback advisory lists exactly the entry points that call the callback" do
     assert %{advisories: advisories} = Doctor.check(MinimalHandle, :ref, false)
 
-    for {callback, entry_points} <- BoundedAuthorityReportAdapter.OptionalCallbacks.users() do
-      advisory = Enum.find(advisories, &String.starts_with?(&1, "#{callback}/1 absent"))
-      assert advisory, "no advisory for a missing #{callback}/1"
+    # Pinned literally, so dropping an entry point from the declaration or the doctor's
+    # rendering fails here, not only in the derivation test.
+    expected = %{
+      key_identity: [
+        "sign_anchor/3",
+        "sign_key_transition/3",
+        "sign_content_assertion/3",
+        "V3.sign_anchor/3",
+        "V3.sign_key_transition/3"
+      ],
+      signing_identity: ["sign_grant/3", "V3.sign_grant/3"]
+    }
 
-      for {module, function} <- entry_points do
-        name =
-          if module == BoundedAuthorityReportAdapter,
-            do: "#{function}/3",
-            else:
-              "#{inspect(module) |> String.replace_prefix("BoundedAuthorityReportAdapter.", "")}.#{function}/3"
+    for {callback, entry_points} <- expected do
+      prefix = "#{callback}/1 absent — blocks "
+      assert [advisory] = Enum.filter(advisories, &String.starts_with?(&1, prefix))
 
-        assert advisory =~ name, "the #{callback}/1 advisory does not name #{name}: #{advisory}"
-      end
+      listed =
+        advisory
+        |> String.replace_prefix(prefix, "")
+        |> String.split([", ", " and "])
+
+      assert listed == entry_points, "#{callback}/1 advisory lists #{inspect(listed)}"
     end
 
-    key_identity = Enum.find(advisories, &String.starts_with?(&1, "key_identity/1 absent"))
-    assert key_identity =~ "sign_content_assertion/3"
+    # The declaration the doctor reads names the same entry points.
+    declared =
+      Map.new(BoundedAuthorityReportAdapter.OptionalCallbacks.users(), fn {callback, users} ->
+        {callback, Enum.map(users, &entry_point_name/1)}
+      end)
+
+    assert declared == expected
   end
+
+  defp entry_point_name({BoundedAuthorityReportAdapter, function}), do: "#{function}/3"
+  defp entry_point_name({BoundedAuthorityReportAdapter.V3, function}), do: "V3.#{function}/3"
 
   test "--live: a wrong-key handle trips the wrong-key advisory" do
     assert %{fatals: [], advisories: advisories} = Doctor.check(WrongKeyHandle, :ref, true)
