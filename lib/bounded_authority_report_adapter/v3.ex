@@ -349,7 +349,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   ## Errors
 
     * `:invalid_grant` — as for `BoundedAuthorityReportAdapter.sign_grant/3`, including
-      a malformed options list.
+      options that are neither a map nor a keyword list.
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
       `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
       snapshot or a key that is not a 65-byte P-256 point on the curve.
@@ -996,13 +996,11 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   end
 
   # The same boundary normalization as the major-1 surface
-  # (BoundedAuthorityReportAdapter.Options): a keyword list is the equivalent map, a
-  # malformed list is the entry point's closed input error, any other value keeps the
-  # defaults.
+  # (BoundedAuthorityReportAdapter.Options): a keyword list is the equivalent map; anything
+  # else that is not a map is the entry point's closed input error, before any callback.
   defp normalize_opts(opts, input_error) do
     case Options.normalize(opts) do
       {:ok, opts} -> {:ok, opts}
-      :not_options -> {:ok, %{}}
       :malformed -> {:error, input_error}
     end
   end

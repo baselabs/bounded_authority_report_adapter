@@ -3,7 +3,7 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
-## Unreleased — protocol dependency is a range; keyword options apply
+## Unreleased — protocol dependency is a range; options are checked
 
 The protocol requirement moves from the exact `== 0.8.0` to `~> 0.8.0`: the floor is the
 release that carries the strict Ed25519 rule, and the ceiling is the next protocol minor.
@@ -18,6 +18,14 @@ equivalent map on every entry point, `sign_content_assertion/3` included (it use
 one). A list that is not a keyword list with unique keys is the entry point's input error
 (`:invalid_report` and so on). If you passed options as a keyword list, check that you
 meant them: they now take effect.
+
+Any other options value is now refused too. Before, `nil`, an atom, a number, a tuple or
+a binary in the options position was silently replaced by the defaults (only
+`sign_content_assertion/3` refused it). Now every entry point returns its input error
+(`:invalid_report`, `:invalid_anchor`, `:invalid_grant`, `:invalid_transition` or
+`:invalid_content_assertion`) before calling the key handle. **A caller passing `nil`
+explicitly, for example `sign_report(report, handle, nil)`, now gets an error**: pass
+`%{}` or drop the argument; calling an entry point with two arguments still means `%{}`.
 
 ## 0.10.0 — strict Ed25519 key acceptance and the BAP 0.8.0 pin
 

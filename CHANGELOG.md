@@ -62,6 +62,15 @@
   `keyword()`. Tests: a keyword `:issued_at` sets the proof's `iat`; malformed lists return
   the input error on all ten entry points; and a seeded generative test checks that map and
   keyword forms of random option sets give byte-identical results on all ten entry points.
+- Any other options value (`nil`, an atom, a number, a tuple, a binary) was silently
+  replaced by the defaults on every entry point except `sign_content_assertion/3`. It is now
+  the entry point's closed input error, returned before any key-handle callback runs, so a
+  caller passing `nil` explicitly gets an error. Calling an entry point with two arguments
+  still means `%{}`. Tests: `nil` and `:foo` are refused on all ten entry points (they
+  signed with the defaults before); a seeded generative test sends random non-map,
+  non-keyword values to all ten and requires the input error with no callback called; and
+  every entry point still signs when the options argument is omitted. The four tests that
+  pinned the old fallback now assert the error.
 
 ### Documentation
 

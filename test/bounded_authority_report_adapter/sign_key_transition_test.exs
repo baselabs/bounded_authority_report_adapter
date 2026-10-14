@@ -242,12 +242,12 @@ defmodule BoundedAuthorityReportAdapter.SignKeyTransitionTest do
     end
   end
 
-  describe "opts normalization (closed-atom: a non-map opts coerces, never crashes)" do
+  describe "opts normalization (closed-atom: a non-map, non-keyword opts is the input error)" do
     # The guard-family rule: every sign_*/3 entry point that calls normalize_opts/1 carries
     # this tripwire (sign_report/sign_anchor/sign_grant). sign_key_transition/3 is the fourth;
-    # removing its normalize_opts/1 call would go undetected without this test.
-    test "a non-map opts uses defaults instead of a value-echoing BadMapError" do
-      assert {:ok, _} =
+    # removing its options normalization would go undetected without this test.
+    test "a non-map, non-keyword opts is the closed input error, not the defaults or a crash" do
+      assert {:error, :invalid_transition} =
                BoundedAuthorityReportAdapter.sign_key_transition(
                  build_transition_input(),
                  current_handle(),

@@ -67,9 +67,10 @@ defmodule BoundedAuthorityReportAdapter do
   Every entry point takes its options as a map or as a keyword list, and the two are the
   same call: `sign_report(report, handle, issued_at: t)` is
   `sign_report(report, handle, %{issued_at: t})`. A list that is not a keyword list with
-  unique atom keys is refused with the entry point's input error (`:invalid_report`,
-  `:invalid_grant` and so on) before any callback is called. Any other value is treated as
-  `%{}`, except by `sign_content_assertion/3`, which refuses it.
+  unique atom keys, and any other value (`nil`, an atom, a number, a tuple, a binary), is
+  refused with the entry point's input error (`:invalid_report`, `:invalid_grant` and so on)
+  before any callback is called. Calling an entry point without the options argument means
+  `%{}`. `sign_content_assertion/3` also refuses a struct.
 
   ## Errors
 
@@ -268,7 +269,7 @@ defmodule BoundedAuthorityReportAdapter do
 
     * `:invalid_report` — `report` is not a map, a required field is missing or not a
       string, `cast_arguments` is `nil`, the nonce is neither `nil` nor a string,
-      `grant_compact` is not a contract-major-1 grant, or `opts` is a list that is not a
+      `grant_compact` is not a contract-major-1 grant, or `opts` is neither a map nor a
       keyword list with unique keys.
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, or `public_key/1`
       failed or returned something other than an acceptable 32-byte Ed25519 key.
@@ -471,7 +472,7 @@ defmodule BoundedAuthorityReportAdapter do
   ## Errors
 
     * `:invalid_anchor` — `anchor_input` is not a map, a field is missing or of the
-      wrong basic type, or `opts` is a malformed list.
+      wrong basic type, or `opts` is neither a map nor a keyword list.
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
       `key_identity/1`, or returned an empty key id or a public key that is not an
       acceptable 32-byte Ed25519 key.
@@ -587,7 +588,7 @@ defmodule BoundedAuthorityReportAdapter do
 
     * `:invalid_grant` — `grant_input` is not a map, a field is missing or of the wrong
       basic type (including an empty or improper `:audiences` list or an empty
-      `:operations` list), or `opts` is a malformed list.
+      `:operations` list), or `opts` is neither a map nor a keyword list.
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
       `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
       snapshot or a public key the strict Ed25519 rule refuses.
@@ -746,8 +747,8 @@ defmodule BoundedAuthorityReportAdapter do
   ## Errors
 
     * `:invalid_transition` — `transition_input` is not a map, a field is missing or of
-      the wrong basic type, `:next_public_key` is not 32 bytes, or `opts` is a malformed
-      list.
+      the wrong basic type, `:next_public_key` is not 32 bytes, or `opts` is neither a map
+      nor a keyword list.
     * `:invalid_key_handle` — as for `sign_anchor/3`.
     * `:signing_failed` — as for `sign_report/3`.
     * `{:producer_error, :invalid}` — the protocol package refused the transition, for
@@ -910,15 +911,9 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  # Content assertion accepts only a plain map or a keyword list; anything else is refused.
+  # Content assertion also refuses a struct: its options must be a plain map or a keyword list.
   defp content_assertion_opts(opts) when is_struct(opts), do: {:error, :invalid_content_assertion}
-
-  defp content_assertion_opts(opts) do
-    case Options.normalize(opts) do
-      {:ok, opts} -> {:ok, opts}
-      _malformed_or_not_options -> {:error, :invalid_content_assertion}
-    end
-  end
+  defp content_assertion_opts(opts), do: normalize_opts(opts, :invalid_content_assertion)
 
   @doc false
   # Which entry points call each optional callback, so require it. The doctor's advisories
@@ -1457,14 +1452,12 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   # Options at the boundary (BoundedAuthorityReportAdapter.Options): a map is used as given
-  # and a keyword list becomes the equivalent map. A malformed list (not a keyword list, or
-  # a repeated key) is the entry point's closed input error. Any other value is a type
-  # violation per every *_opts() @spec; it keeps the defaults rather than crash with a
-  # value-echoing BadMapError. Content assertion refuses it instead (content_assertion_opts/1).
+  # and a keyword list becomes the equivalent map. Anything else (a malformed list, nil, an
+  # atom, a number, a tuple, a binary) is the entry point's closed input error, before any
+  # callback runs; never a value-echoing BadMapError, never a silent fallback to defaults.
   defp normalize_opts(opts, input_error) do
     case Options.normalize(opts) do
       {:ok, opts} -> {:ok, opts}
-      :not_options -> {:ok, %{}}
       :malformed -> {:error, input_error}
     end
   end

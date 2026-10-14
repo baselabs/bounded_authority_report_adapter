@@ -502,11 +502,8 @@ defmodule BoundedAuthorityReportAdapter.SignLocalLoopbackReportTest do
       end
     end
 
-    test "a non-map opts is coerced to defaults rather than crashing" do
-      report = loopback_report()
-
-      assert {:ok, %{proof: proof}} = sign(report, handle(), :not_a_map)
-      assert {:ok, _} = Loopback.decode_proof(proof, %{})
+    test "a non-map, non-keyword opts is the closed input error, not the defaults" do
+      assert {:error, :invalid_report} = sign(loopback_report(), handle(), :not_a_map)
     end
   end
 

@@ -275,9 +275,9 @@ defmodule BoundedAuthorityReportAdapter.SignReportTest do
     end
   end
 
-  describe "opts normalization (closed-atom: a non-map opts coerces, never crashes)" do
-    test "a non-map opts uses defaults instead of a value-echoing BadMapError" do
-      assert {:ok, _} =
+  describe "opts normalization (closed-atom: a non-map, non-keyword opts is the input error)" do
+    test "a non-map, non-keyword opts is the closed input error, not the defaults or a crash" do
+      assert {:error, :invalid_report} =
                BoundedAuthorityReportAdapter.sign_report(
                  build_report(),
                  holder_handle(),

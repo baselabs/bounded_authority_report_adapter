@@ -55,6 +55,29 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsHandle do
     do: {:ok, {role, key_id, public}}
 end
 
+defmodule BoundedAuthorityReportAdapter.RefusalProbeHandle do
+  @moduledoc false
+  # Records any callback the adapter calls, by message to the calling process, and fails it.
+  # Used to show that malformed options are refused before any callback runs.
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  def sign(_message, _ref), do: called(:sign)
+  @impl true
+  def public_key(_ref), do: called(:public_key)
+  @impl true
+  def thumbprint(_ref), do: called(:thumbprint)
+  @impl true
+  def key_identity(_ref), do: called(:key_identity)
+  @impl true
+  def signing_identity(_ref), do: called(:signing_identity)
+
+  defp called(callback) do
+    send(self(), {:callback_called, callback})
+    {:error, :probe}
+  end
+end
+
 defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
   @moduledoc """
   Every `sign_*/3` takes its options as a map or as a keyword list, and the two forms are the
@@ -143,6 +166,36 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
     end
   end
 
+  test "nil and an atom as options are the closed input error, not the defaults", context do
+    for {name, call, input_error} <- entry_points(context), opts <- [nil, :foo] do
+      assert call.(opts) == {:error, input_error},
+             "#{name} with #{inspect(opts)} did not return {:error, #{inspect(input_error)}}"
+    end
+  end
+
+  test "omitting the options argument still means the defaults", context do
+    for {name, call2} <- two_argument_calls(context) do
+      assert {:ok, _signed} = call2.(), "#{name}/2 did not sign with the default options"
+    end
+  end
+
+  test "any options value that is neither a map nor a keyword list is refused before any callback (property)",
+       context do
+    :rand.seed(:exsss, {4, 5, 6})
+    probe = {BoundedAuthorityReportAdapter.RefusalProbeHandle, :ref}
+
+    for {name, _call, input_error} <- entry_points(context),
+        _iteration <- 1..@iterations do
+      opts = random_non_options()
+      call = probe_call(name, context, probe)
+
+      assert call.(opts) == {:error, input_error},
+             "#{name} with #{inspect(opts)} did not return {:error, #{inspect(input_error)}}"
+
+      refute_received {:callback_called, _callback}
+    end
+  end
+
   test "map and keyword options produce byte-identical results (property)", context do
     :rand.seed(:exsss, {1, 2, 3})
 
@@ -166,10 +219,21 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
 
   ## entry points and options
 
-  defp entry_points(%{keys: keys, grant: grant, ec_grant: ec_grant}) do
+  defp entry_points(%{keys: keys, grant: grant, ec_grant: ec_grant} = context) do
+    probe = Map.get(context, :probe)
+    assertion = assertion()
+    holder = probe || {Handle, keys.holder}
+    ec_holder = probe || {Handle, keys.ec_holder}
+    issuer = probe || {Handle, keys.issuer}
+    ec_issuer = probe || {Handle, keys.ec_issuer}
+
+    entry_point_calls(keys, grant, ec_grant, assertion, holder, ec_holder, issuer, ec_issuer)
+  end
+
+  defp assertion do
     {:ok, content_digest} = ContentAssertion.V1.content_digest("survey data", %{})
 
-    assertion = %{
+    %{
       jti: "urn:example:assertion:1",
       iss: "urn:example:issuer",
       aud: "urn:example:audience",
@@ -183,18 +247,16 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
       nbf: @now,
       exp: @now + 3600
     }
+  end
 
-    holder = {Handle, keys.holder}
-    ec_holder = {Handle, keys.ec_holder}
-
+  defp entry_point_calls(keys, grant, ec_grant, assertion, holder, ec_holder, issuer, ec_issuer) do
     [
       {"sign_report", &Adapter.sign_report(report(grant, "https://api.example/x"), holder, &1),
        :invalid_report},
       {"sign_local_loopback_report",
        &Adapter.sign_local_loopback_report(report(grant, "http://127.0.0.1:4000/x"), holder, &1),
        :invalid_report},
-      {"sign_grant",
-       &Adapter.sign_grant(grant_input(keys.holder, V1.Operation), {Handle, keys.issuer}, &1),
+      {"sign_grant", &Adapter.sign_grant(grant_input(keys.holder, V1.Operation), issuer, &1),
        :invalid_grant},
       {"sign_anchor", &Adapter.sign_anchor(anchor_input(), holder, &1), :invalid_anchor},
       {"sign_key_transition",
@@ -206,15 +268,75 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
        &V3.sign_report(report(ec_grant, "https://api.example/x"), ec_holder, &1),
        :invalid_report},
       {"V3.sign_grant",
-       &V3.sign_grant(
-         grant_input(keys.ec_holder, ProtocolV3.Operation),
-         {Handle, keys.ec_issuer},
-         &1
-       ), :invalid_grant},
+       &V3.sign_grant(grant_input(keys.ec_holder, ProtocolV3.Operation), ec_issuer, &1),
+       :invalid_grant},
       {"V3.sign_anchor", &V3.sign_anchor(anchor_input(), ec_holder, &1), :invalid_anchor},
       {"V3.sign_key_transition",
        &V3.sign_key_transition(transition_input(keys.ec_next), ec_holder, &1),
        :invalid_transition}
+    ]
+  end
+
+  # A random value that is neither a map nor a proper keyword list with unique atom keys.
+  defp random_non_options do
+    generators = [
+      fn -> nil end,
+      fn -> Enum.random([true, false, :foo, :defaults, :bounds]) end,
+      fn -> :rand.uniform(1_000_000) - 500_000 end,
+      fn -> :rand.uniform() * 1000 end,
+      fn -> {:bounds, %{}} end,
+      fn -> :crypto.strong_rand_bytes(:rand.uniform(16)) end,
+      fn -> ~c"bounds" end,
+      fn -> [{:bounds, %{}} | :tail] end,
+      fn -> [bounds: %{}, bounds: %{}] end,
+      fn -> [{"bounds", %{}}] end,
+      fn -> make_ref() end,
+      fn -> fn -> %{} end end
+    ]
+
+    Enum.random(generators).()
+  end
+
+  # The same entry point called with a handle that records callbacks; the input is valid,
+  # so only the options can make it refuse.
+  defp probe_call(name, context, probe) do
+    {^name, call, _input_error} =
+      context |> Map.put(:probe, probe) |> entry_points() |> List.keyfind(name, 0)
+
+    call
+  end
+
+  defp two_argument_calls(%{keys: keys, grant: grant, ec_grant: ec_grant}) do
+    holder = {Handle, keys.holder}
+    ec_holder = {Handle, keys.ec_holder}
+
+    [
+      {"sign_anchor", fn -> Adapter.sign_anchor(anchor_input(), holder) end},
+      {"sign_key_transition",
+       fn -> Adapter.sign_key_transition(transition_input(keys.next), holder) end},
+      {"sign_grant",
+       fn ->
+         Adapter.sign_grant(grant_input(keys.holder, V1.Operation), {Handle, keys.issuer})
+       end},
+      {"sign_report",
+       fn -> Adapter.sign_report(report(grant, "https://api.example/x"), holder) end},
+      {"sign_local_loopback_report",
+       fn ->
+         Adapter.sign_local_loopback_report(report(grant, "http://127.0.0.1:4000/x"), holder)
+       end},
+      {"V3.sign_report",
+       fn -> V3.sign_report(report(ec_grant, "https://api.example/x"), ec_holder) end},
+      {"V3.sign_grant",
+       fn ->
+         V3.sign_grant(
+           grant_input(keys.ec_holder, ProtocolV3.Operation),
+           {Handle, keys.ec_issuer}
+         )
+       end},
+      {"V3.sign_anchor", fn -> V3.sign_anchor(anchor_input(), ec_holder) end},
+      {"V3.sign_key_transition",
+       fn -> V3.sign_key_transition(transition_input(keys.ec_next), ec_holder) end},
+      {"sign_content_assertion", fn -> Adapter.sign_content_assertion(assertion(), holder) end}
     ]
   end
 

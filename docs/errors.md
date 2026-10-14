@@ -37,8 +37,10 @@ grammar, selectors) and reports them as `{:producer_error, :invalid}`. A field o
 right type but the wrong value is not one of these errors.
 
 Each input atom also covers malformed options: every entry point takes its options as a
-map or as a keyword list, and a list that is not a keyword list with unique atom keys (for
-example `[:bounds]`, or `:bounds` given twice) is the entry point's input atom.
+map or as a keyword list, and anything else is the entry point's input atom: a list that is
+not a keyword list with unique atom keys (for example `[:bounds]`, or `:bounds` given
+twice), or a value such as `nil`, an atom, a number, a tuple or a binary. Calling an entry
+point without the options argument means `%{}`.
 
 | Atom | Meaning | What to check | Fix |
 |---|---|---|---|
@@ -46,7 +48,7 @@ example `[:bounds]`, or `:bounds` given twice) is the entry point's input atom.
 | `:invalid_anchor` | The input is not a map; `anchor_id`, `chain_id` or `chain_hash` is missing or not a binary; or `sequence` is missing or not a non-negative integer. | The map against `anchor_input()`. | Fix the anchor fields. |
 | `:invalid_grant` | The input is not a map; `issuer`, `grant_id` or `holder_thumbprint` is missing or not a binary; `issued_at`, `not_before` or `expires_at` is missing or not an integer; `audiences` is missing, empty, improper or not all strings; or `operations` is missing, empty or not a list. | The map against `grant_input()`. | Fix the grant fields. |
 | `:invalid_role_attestation` | The `:role_attestation` option of `sign_grant/3` is malformed (including an explicit `nil`); the protocol package's `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` rejected it (attestor signature, subject, self-attestation, window containment, `now` outside `[nbf, exp)`); or the attested role is not `"issuer"`. On the `V3` surface, any `:role_attestation` option. | The compact is a `bap-role-attestation/1` attestation for the handle's own key; the attestor key and its validity window are the ones you trust; `now` is the time you mean. | Fix the attestation or the trusted attestor key. The subject always comes from the handle, never from the option. |
-| `:invalid_content_assertion` | The options are neither a plain map nor a keyword list with unique keys, or a `sign_content_assertion/3` input field (`jti`, `iss`, `aud`, `sub`, `profile`, `profile_digest`, `content_digest`, `prev` as binaries; `gen`, `iat`, `nbf`, `exp` as integers) is missing or of the wrong type. | The map against `content_assertion_input()`; the options' shape. | Fix the input or the options. |
+| `:invalid_content_assertion` | The options are neither a plain map nor a keyword list with unique keys (a struct is refused too), or a `sign_content_assertion/3` input field (`jti`, `iss`, `aud`, `sub`, `profile`, `profile_digest`, `content_digest`, `prev` as binaries; `gen`, `iat`, `nbf`, `exp` as integers) is missing or of the wrong type. | The map against `content_assertion_input()`; the options' shape. | Fix the input or the options. |
 | `:invalid_transition` | The input is not a map; `transition_id`, `chain_id` or `next_key_id` is missing or not a binary; `effective_at` is missing or not an integer; or `next_public_key` is not a 32-byte binary (major 1) or a 65-byte P-256 point on the curve (`V3`). | The map against `transition_input()`. | Fix the transition fields. |
 
 ## The V3 surface
