@@ -59,6 +59,12 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
     on_exit(fn -> File.rm_rf!(repo) end)
 
     git!(repo, ["init", "--initial-branch=master"])
+    # The throwaway repository never runs git's automatic maintenance. From git
+    # 2.54 the default maintenance strategy is "geometric", and a commit or merge
+    # starts `git maintenance run --auto --detach`: a repack that keeps writing
+    # into .git after the command returns and races the on_exit File.rm_rf!.
+    git!(repo, ["config", "maintenance.auto", "false"])
+    git!(repo, ["config", "gc.auto", "0"])
     git!(repo, ["config", "user.email", "privacy-gate@example.invalid"])
     git!(repo, ["config", "user.name", "Privacy Gate"])
 

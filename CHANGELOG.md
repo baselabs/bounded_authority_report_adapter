@@ -118,6 +118,12 @@ release.
   `signing_identity/1`. Tests: keyword and map nested values give identical results; seven
   malformed attestation values and three malformed bounds lists are refused with no
   callback; the map-versus-keyword generative test now converts nested maps too.
+- The public-surface privacy test's throwaway repository turns off git's automatic
+  maintenance (`maintenance.auto` false, `gc.auto` 0). From git 2.54, `git commit` and
+  `merge` start a detached repack that keeps writing into `.git` after the command returns;
+  on hosted CI (git 2.55) it can race the test's `File.rm_rf!` cleanup and fail with
+  `:eexist`. A new test requires every script or test that runs such a git command to set
+  both values. Test only; no API, wire, or signing change.
 
 ### Documentation
 
