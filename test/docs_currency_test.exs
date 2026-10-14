@@ -172,6 +172,22 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     end
   end
 
+  test "the docs describe how mix ci reports failure as it behaves" do
+    # `mix ci` runs its steps in order in one VM. Some failing steps end the run at once,
+    # but others (the test suite among them) record a non-zero exit status and let the
+    # later steps run, so the run does not stop at the first failure. Whatever failed,
+    # the run exits non-zero.
+    for path <- ["README.md", "CONTRIBUTING.md", "AGENTS.md"] do
+      doc = path |> File.read!() |> String.replace(~r/\s+/, " ")
+
+      refute doc =~ ~r/(aborts|stops) at the first (red|failing) step/i,
+             "#{path} claims mix ci stops at the first failing step; it does not"
+
+      assert doc =~ "exits non-zero if any step failed",
+             "#{path} must say that mix ci exits non-zero if any step failed"
+    end
+  end
+
   ## helpers
 
   # The atoms of one @type error set, from the lib source (the source of

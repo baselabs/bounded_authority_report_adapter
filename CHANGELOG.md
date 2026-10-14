@@ -45,6 +45,10 @@
   only the first two). The `signing_identity/1` advisory names `V3.sign_grant/3` too. Both
   are built from one list in the adapter, and a new test derives that list by calling every
   public `sign_*/3` with a handle that records its callbacks, so the list cannot drift.
+- The README, `CONTRIBUTING.md` and `AGENTS.md` described `mix ci` as stopping at the
+  first failing step. It runs its steps in order and exits non-zero if any step failed, but
+  a failing test suite (and a failing `mix hex.audit`) records the failure and lets later
+  steps run. The docs now say so, and a test keeps them from claiming otherwise.
 
 ### Documentation
 

@@ -137,8 +137,12 @@ alias step is an env guard (`scripts/ci_env_guard.exs`) that refuses any boot ot
 than `MIX_ENV=test` (a bare local `:dev` boot would skip `test/support` at compile —
 the RA7 trap) and prints the per-shell invocation; every later step is a bare task
 name — NO POSIX `env(1)` re-exec, so the alias is cross-platform
-(feedback_cross_platform_capability_is_required). It aborts at the first red step,
-like a failed CI job. It is the zero-spend stand-in while Actions can't run
+(feedback_cross_platform_capability_is_required). It exits non-zero if any step failed,
+but it does not stop at the first failure: some failing steps end the run at once
+(format, compile, Credo, Dialyzer, docs, the package scripts, the example runner),
+while others record a non-zero exit status and let the later steps run (`mix test` does
+this; so does `mix hex.audit`), so read the whole output. Making every step stop early would
+need per-step wrappers, not a flag. It is the zero-spend stand-in while Actions can't run
 (Actions live again as of 2026-08-26 — the full matrix + supply-chain runs green) and doubles as the one-command
 pre-push check; workflow steps NOT reproduced locally: checkout/setup-beam (asdf
 here).

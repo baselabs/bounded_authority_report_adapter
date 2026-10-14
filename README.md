@@ -300,7 +300,9 @@ MIX_ENV=test mix ci
 Credo, the test suite (including a conformance round-trip against the protocol's
 published vectors, the Livebook, and every runnable code sample in these docs), coverage,
 Dialyzer, documentation, advisory audits, and the package and reproducibility checks, for
-the library and the example app.
+the library and the example app. It runs the steps in order and exits non-zero if any step
+failed. Not every failing step ends the run: a failing test suite, for one, lets the later
+steps run, so read the whole output.
 
 ## Security
 

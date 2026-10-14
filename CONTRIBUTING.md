@@ -17,8 +17,10 @@ mix credo --strict
 mix test
 ```
 
-Then the one-command whole-repo check (both projects, every gate, aborts at the first red
-step — the local parity of CI):
+Then the one-command whole-repo check (both projects, every gate, the local parity of CI).
+It runs the steps in order and exits non-zero if any step failed. Some failing steps end the
+run at once; others, the test suite among them, record the failure and let the later steps
+run, so read the whole output:
 
 ```sh
 MIX_ENV=test mix ci
