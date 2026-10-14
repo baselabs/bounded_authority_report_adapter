@@ -39,17 +39,25 @@ defmodule BoundedAuthorityReportAdapter do
   `{:error, :signing_failed}` for `sign/2` and `{:error, :invalid_key_handle}` for the
   others.
 
-    * `sign/2` and `public_key/1` are required by every entry point.
-    * `thumbprint/1` is required by the behavior, but no entry point calls it. It
-      returns the RFC 7638 thumbprint the issuer puts in a grant's `cnf.jkt`, so callers
-      can check a handle against a grant.
-    * `key_identity/1` is optional. `sign_anchor/3`, `sign_key_transition/3` and
-      `sign_content_assertion/3` require it: they read the key id and the public key in
-      one call, so a handle over a rotating key store cannot return the id of one key
-      version and the public key of another.
-    * `signing_identity/1` is optional. `sign_grant/3` requires it: it reads the declared
-      role, the key id and the public key in one call, and signs only when the role is
-      `:issuer`.
+  The behavior requires `sign/2`, `public_key/1` and `thumbprint/1`, and makes
+  `key_identity/1` and `signing_identity/1` optional. Which callbacks each entry point
+  calls (the same on `BoundedAuthorityReportAdapter.V3`, for its four entry points):
+
+    * `sign/2` — every entry point: `sign_report/3`, `sign_local_loopback_report/3`,
+      `sign_grant/3`, `sign_anchor/3`, `sign_key_transition/3` and
+      `sign_content_assertion/3`.
+    * `public_key/1` — only `sign_report/3` and `sign_local_loopback_report/3`, for the
+      holder key. The other entry points read the public key from the identity callback
+      below.
+    * `key_identity/1` — `sign_anchor/3`, `sign_key_transition/3` and
+      `sign_content_assertion/3`. They read the key id and the public key in one call, so a
+      handle over a rotating key store cannot return the id of one key version and the
+      public key of another. A handle without it is refused by these three.
+    * `signing_identity/1` — `sign_grant/3`. It reads the declared role, the key id and the
+      public key in one call, and signs only when the role is `:issuer`. A handle without
+      it is refused.
+    * `thumbprint/1` — no entry point calls it. It returns the RFC 7638 thumbprint the
+      issuer puts in a grant's `cnf.jkt`, so callers can check a handle against a grant.
 
   Key and signature shapes depend on the surface. Under this module, public keys are raw
   32-byte Ed25519 keys that pass the protocol's strict acceptance rule

@@ -125,6 +125,83 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
     assert declared == derived
   end
 
+  test "the docs state exactly which callbacks each major-1 entry point calls" do
+    calls =
+      Map.new(probes(), fn {entry_point, probe} -> {entry_point, record(entry_point, probe)} end)
+
+    callbacks = [:sign, :public_key, :thumbprint, :key_identity, :signing_identity]
+
+    callers =
+      Map.new(callbacks, fn callback ->
+        names =
+          for {{Adapter, function}, called} <- calls, callback in called, do: "#{function}/3"
+
+        {callback, Enum.sort(names)}
+      end)
+
+    # The moduledoc's key-handle bullets: each names the major-1 entry points that call it.
+    {:docs_v1, _anno, :elixir, _format, %{"en" => moduledoc}, _meta, _docs} =
+      Code.fetch_docs(Adapter)
+
+    [_before, section] = String.split(moduledoc, "## The key-handle behavior", parts: 2)
+    [section, _after] = String.split(section, "\nKey and signature shapes", parts: 2)
+
+    bullets =
+      section
+      |> String.split(~r/\n\s*\* /)
+      |> Enum.drop(1)
+      |> Map.new(fn bullet ->
+        [_, callback] = Regex.run(~r/\A`(\w+)\/\d`/, bullet)
+        {String.to_existing_atom(callback), signer_names(bullet)}
+      end)
+
+    for callback <- callbacks do
+      assert Map.fetch!(bullets, callback) == callers[callback],
+             "the moduledoc bullet for #{callback} names #{inspect(bullets[callback])}, " <>
+               "but the entry points that call it are #{inspect(callers[callback])}"
+    end
+
+    # The entry-point tables in the moduledoc, the README and the getting-started guide.
+    tables = [
+      {"moduledoc", moduledoc},
+      {"README.md", File.read!("README.md")},
+      {"docs/getting-started.md", File.read!("docs/getting-started.md")}
+    ]
+
+    for {source, text} <- tables,
+        row <- String.split(text, "\n"),
+        String.starts_with?(row, "| `sign_"),
+        [first | rest] = row |> String.split("|", trim: true),
+        function <- signer_names(first) do
+      listed = rest |> Enum.join("|") |> callback_names()
+
+      actual =
+        for callback <- callbacks,
+            callback != :thumbprint,
+            "#{function}" in callers[callback],
+            do: callback
+
+      assert Enum.sort(listed) == Enum.sort(actual),
+             "#{source}: the row for #{function} lists #{inspect(listed)}, " <>
+               "but it calls #{inspect(actual)}"
+    end
+  end
+
+  defp signer_names(text) do
+    ~r/(?<![\w.])`(sign_\w+\/3)`/
+    |> Regex.scan(text)
+    |> Enum.map(fn [_, name] -> name end)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp callback_names(text) do
+    ~r/`(sign|public_key|thumbprint|key_identity|signing_identity)\/\d`/
+    |> Regex.scan(text)
+    |> Enum.map(fn [_, name] -> String.to_existing_atom(name) end)
+    |> Enum.uniq()
+  end
+
   # Every public sign_*/3 of the application's modules compiled from lib/ (under :test the
   # application also compiles test/support, which does not ship).
   defp shipped_signers do
@@ -265,6 +342,11 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
     {:ok, %{grant: ec_grant}} =
       V3.sign_grant(grant_input(ec_holder, ProtocolV3.Operation), handle(ec_issuer))
 
+    # Built outside the probes: grant_input/2 calls the handle's thumbprint/1 itself, which
+    # must not count as the entry point's call.
+    grant_in = grant_input(holder, V1.Operation)
+    ec_grant_in = grant_input(ec_holder, ProtocolV3.Operation)
+
     {:ok, content_digest} = ContentAssertion.V1.content_digest("probe", %{})
 
     assertion = %{
@@ -306,8 +388,7 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
            with_time.(&1)
          ), report_options},
       {Adapter, :sign_grant} =>
-        {&Adapter.sign_grant(grant_input(holder, V1.Operation), handle(issuer), &1),
-         grant_options},
+        {&Adapter.sign_grant(grant_in, handle(issuer), &1), grant_options},
       {Adapter, :sign_anchor} =>
         {&Adapter.sign_anchor(anchor_input(), handle(holder), &1), anchor_options},
       {Adapter, :sign_key_transition} =>
@@ -320,9 +401,7 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
            handle(ec_holder),
            with_time.(&1)
          ), report_options},
-      {V3, :sign_grant} =>
-        {&V3.sign_grant(grant_input(ec_holder, ProtocolV3.Operation), handle(ec_issuer), &1),
-         ec_grant_options},
+      {V3, :sign_grant} => {&V3.sign_grant(ec_grant_in, handle(ec_issuer), &1), ec_grant_options},
       {V3, :sign_anchor} =>
         {&V3.sign_anchor(anchor_input(), handle(ec_holder), &1), anchor_options},
       {V3, :sign_key_transition} =>
