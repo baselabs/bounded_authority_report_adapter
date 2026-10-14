@@ -1001,6 +1001,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   defp normalize_opts(opts, input_error, object) do
     case Options.normalize(opts, Options.schema(object)) do
       {:ok, opts} -> {:ok, opts}
+      {:error, :role_attestation} -> {:error, :invalid_role_attestation}
       {:error, _option} -> {:error, input_error}
     end
   end

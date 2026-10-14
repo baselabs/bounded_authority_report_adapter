@@ -43,7 +43,9 @@ unknown key (a misspelling such as `role_attestaton:`, or a string key), a prese
 the wrong kind (`proof_id: nil`, `issued_at: "now"`, `bounds: :maximum`), a list that is
 not a keyword list with unique atom keys (for example `[:bounds]`, or `:bounds` given
 twice), a struct, and any other value such as `nil`, an atom, a number, a tuple or a
-binary. Calling an entry point without the options argument means `%{}`.
+binary. The same holds for a nested `:bounds` value, which may itself be a map or a
+keyword list (a malformed `:role_attestation` value is `:invalid_role_attestation`, below).
+Calling an entry point without the options argument means `%{}`.
 
 | Atom | Meaning | What to check | Fix |
 |---|---|---|---|

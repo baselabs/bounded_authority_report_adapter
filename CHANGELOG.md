@@ -81,6 +81,15 @@
   key-handle callback. Tests: each listed case on the entry points it applies to, through a
   handle that records every callback; a generative test adding a random unknown atom key
   (with or without valid options, as a map or a keyword list) to all ten entry points.
+- Nested options follow the same rule: a `:bounds` or `:role_attestation` value given as a
+  keyword list is the equivalent map (it was refused, or reached the role-attestation gate
+  as a list), and a malformed one is refused before any key-handle callback. The
+  role-attestation shape check (a binary `:compact`, a `HistoricalPublicKey` `:attestor`, an
+  optional integer `:now`) now runs at the boundary as well as in the gate, so `nil` or a
+  missing attestor returns `:invalid_role_attestation` without calling
+  `signing_identity/1`. Tests: keyword and map nested values give identical results; seven
+  malformed attestation values and three malformed bounds lists are refused with no
+  callback; the map-versus-keyword generative test now converts nested maps too.
 
 ### Documentation
 

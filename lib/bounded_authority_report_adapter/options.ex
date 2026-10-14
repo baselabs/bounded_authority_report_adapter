@@ -11,12 +11,18 @@ defmodule BoundedAuthorityReportAdapter.Options do
   #     accept (a misspelled option must not silently fall back to its default);
   #   * a present value of the wrong kind (`proof_id: nil` is not "use the default").
   #
+  # Nested options follow the same rule all the way down: a :bounds or :role_attestation
+  # value given as a keyword list is the equivalent map, and a malformed one is refused here,
+  # before any callback (a role attestation's shape: a binary :compact, a
+  # BoundedAuthorityProtocol.V1.HistoricalPublicKey :attestor and an optional integer :now;
+  # other keys in it are ignored, because its subject always comes from the key handle).
+  #
   # The result is {:ok, map} or {:error, key}, where key names the offending option, or is
   # :options when the problem is not one option's value. The entry point maps that to its
   # closed error. Omitting the options argument is each sign_*/3's %{} default and never
   # reaches here.
 
-  @type kind :: :integer | :binary | :bounds | :any
+  @type kind :: :integer | :binary | :bounds | :role_attestation
   @type schema :: %{atom() => kind()}
 
   # The options each kind of entry point accepts, on both suite surfaces. V3.sign_grant/3
@@ -24,7 +30,7 @@ defmodule BoundedAuthorityReportAdapter.Options do
   @schemas %{
     report: %{bounds: :bounds, issued_at: :integer, proof_id: :binary},
     anchor: %{bounds: :bounds, anchored_at: :integer},
-    grant: %{bounds: :bounds, role_attestation: :any},
+    grant: %{bounds: :bounds, role_attestation: :role_attestation},
     key_transition: %{bounds: :bounds},
     content_assertion: %{bounds: :bounds}
   }
@@ -34,12 +40,11 @@ defmodule BoundedAuthorityReportAdapter.Options do
   def schema(object), do: Map.fetch!(@schemas, object)
 
   @spec normalize(term(), schema()) :: {:ok, map()} | {:error, atom()}
-  def normalize(opts, schema) when is_map(opts) and not is_struct(opts),
-    do: check(Map.to_list(opts), schema, %{})
+  def normalize(opts, schema) when is_map(opts) and not is_struct(opts), do: check(opts, schema)
 
   def normalize(opts, schema) when is_list(opts) do
     case keyword_to_map(opts) do
-      {:ok, map} -> check(Map.to_list(map), schema, %{})
+      {:ok, map} -> check(map, schema)
       :error -> {:error, :options}
     end
   end
@@ -59,21 +64,45 @@ defmodule BoundedAuthorityReportAdapter.Options do
 
   defp keyword_to_map(_malformed, _acc), do: :error
 
-  defp check([], _schema, acc), do: {:ok, acc}
+  # Keys first, so an unknown key is reported as such whatever the values are; then each
+  # value against its kind.
+  defp check(opts, schema) do
+    if Enum.all?(Map.keys(opts), &(is_atom(&1) and is_map_key(schema, &1))),
+      do: check_values(Map.to_list(opts), schema, %{}),
+      else: {:error, :options}
+  end
 
-  defp check([{key, value} | rest], schema, acc) when is_atom(key) and is_map_key(schema, key) do
+  defp check_values([], _schema, acc), do: {:ok, acc}
+
+  defp check_values([{key, value} | rest], schema, acc) do
     case value(Map.fetch!(schema, key), value) do
-      {:ok, value} -> check(rest, schema, Map.put(acc, key, value))
+      {:ok, value} -> check_values(rest, schema, Map.put(acc, key, value))
       :error -> {:error, key}
     end
   end
-
-  defp check(_unknown_or_non_atom_key, _schema, _acc), do: {:error, :options}
 
   defp value(:integer, value) when is_integer(value), do: {:ok, value}
   defp value(:binary, value) when is_binary(value), do: {:ok, value}
   defp value(:bounds, value) when is_map(value) and not is_struct(value), do: {:ok, value}
   defp value(:bounds, %BoundedAuthorityProtocol.V1.Bounds{} = value), do: {:ok, value}
-  defp value(:any, value), do: {:ok, value}
+  defp value(:bounds, value) when is_list(value), do: keyword_value(value)
+
+  defp value(:role_attestation, value) when is_list(value) do
+    with {:ok, map} <- keyword_to_map(value), do: value(:role_attestation, map)
+  end
+
+  defp value(:role_attestation, %{compact: compact, attestor: attestor} = value)
+       when is_binary(compact) and not is_struct(value) and
+              is_struct(attestor, BoundedAuthorityProtocol.V1.HistoricalPublicKey) do
+    if is_integer(Map.get(value, :now, 0)), do: {:ok, value}, else: :error
+  end
+
   defp value(_kind, _value), do: :error
+
+  defp keyword_value(list) do
+    case keyword_to_map(list) do
+      {:ok, map} -> {:ok, map}
+      :error -> :error
+    end
+  end
 end

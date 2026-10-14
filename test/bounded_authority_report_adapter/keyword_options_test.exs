@@ -275,6 +275,49 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
     end
   end
 
+  test "nested keyword values equal nested maps", %{keys: keys} = context do
+    {"sign_report", call, _error} = probe_call("sign_report", context, nil)
+    base = [issued_at: @now, proof_id: "urn:example:proof:nested"]
+
+    assert call.(base ++ [bounds: [compact_bytes: 64]]) ==
+             call.(base ++ [bounds: %{compact_bytes: 64}])
+
+    {"sign_grant", grant_call, _error} = probe_call("sign_grant", context, nil)
+    attestation = attestation(keys, "issuer")
+
+    assert {:ok, _signed} = signed = grant_call.(role_attestation: attestation)
+    assert grant_call.(role_attestation: Map.to_list(attestation)) == signed
+  end
+
+  test "a malformed nested option is refused before any callback", context do
+    probe = {BoundedAuthorityReportAdapter.RefusalProbeHandle, :ref}
+    {"sign_grant", grant_call, _error} = probe_call("sign_grant", context, probe)
+    attestation = attestation(context.keys, "issuer")
+
+    for value <- [
+          nil,
+          :attestation,
+          [compact: 1],
+          [compact: attestation.compact, compact: attestation.compact],
+          Map.delete(attestation, :attestor),
+          %{attestation | attestor: :not_a_key},
+          %{attestation | now: "now"}
+        ] do
+      assert grant_call.(role_attestation: value) == {:error, :invalid_role_attestation},
+             "sign_grant accepted role_attestation: #{inspect(value)}"
+
+      refute_received {:callback_called, _callback}
+    end
+
+    for {name, call, input_error} <- entry_points(Map.put(context, :probe, probe)),
+        bounds <- [[{:compact_bytes, 1} | :tail], [:compact_bytes], [{"compact_bytes", 1}]] do
+      assert call.(bounds: bounds) == {:error, input_error},
+             "#{name} accepted bounds: #{inspect(bounds)}"
+
+      refute_received {:callback_called, _callback}
+    end
+  end
+
   test "map and keyword options produce byte-identical results (property)", context do
     :rand.seed(:exsss, {1, 2, 3})
 
@@ -282,7 +325,8 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
       results =
         for iteration <- 1..@iterations do
           options = random_options(name, iteration, context)
-          keyword = Enum.shuffle(options)
+          # The keyword form is keyword all the way down: nested maps become keyword lists.
+          keyword = options |> Enum.shuffle() |> Enum.map(&keywordize_nested/1)
           result = call.(Map.new(options))
 
           assert result == call.(keyword),
@@ -355,6 +399,14 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
        :invalid_transition}
     ]
   end
+
+  defp keywordize_nested({:bounds, bounds}) when is_map(bounds) and not is_struct(bounds),
+    do: {:bounds, Map.to_list(bounds)}
+
+  defp keywordize_nested({:role_attestation, attestation}) when is_map(attestation),
+    do: {:role_attestation, Map.to_list(attestation)}
+
+  defp keywordize_nested(option), do: option
 
   # Valid options for an entry point, a random subset (possibly empty).
   defp known_options(name, context) do

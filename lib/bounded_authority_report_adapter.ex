@@ -78,8 +78,10 @@ defmodule BoundedAuthorityReportAdapter do
     * a list that is not a keyword list with unique atom keys, a struct, and any other
       value that is not a map (`nil`, an atom, a number, a tuple, a binary).
 
-  A malformed `:role_attestation` value on `sign_grant/3` is `:invalid_role_attestation`.
-  Calling an entry point without the options argument means `%{}`.
+  The rule holds all the way down: a `:bounds` or `:role_attestation` value may itself be a
+  map or a keyword list, and a malformed one is refused before any callback. A malformed
+  `:role_attestation` value on `sign_grant/3` is `:invalid_role_attestation`. Calling an
+  entry point without the options argument means `%{}`.
 
   ## Errors
 
@@ -591,7 +593,7 @@ defmodule BoundedAuthorityReportAdapter do
         evaluation time in Unix seconds (default `System.system_time(:second)`). `:now`
         is a trust input: it decides which instant the attestation must cover, so a
         caller that chooses a past `:now` accepts an attestation that has since expired.
-        Other keys are ignored.
+        Given as a map or a keyword list; other keys in it are ignored.
 
   ## Errors
 
@@ -602,7 +604,7 @@ defmodule BoundedAuthorityReportAdapter do
       `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
       snapshot or a public key the strict Ed25519 rule refuses.
     * `:invalid_role_attestation` — the option is malformed (including an explicit
-      `nil`), the protocol package rejected the attestation, or the attested role is not
+      `nil`; refused before any callback), the protocol package rejected the attestation, or the attested role is not
       `"issuer"`.
     * `:signing_failed` — `sign/2` failed, returned something other than a 64-byte
       signature, or returned a signature that does not verify against the snapshot's
