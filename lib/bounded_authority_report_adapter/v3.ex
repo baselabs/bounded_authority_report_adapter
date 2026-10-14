@@ -118,6 +118,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   alias BoundedAuthorityProtocol.V1
   alias BoundedAuthorityProtocol.V1.Json
   alias BoundedAuthorityProtocol.V3
+  alias BoundedAuthorityReportAdapter.Options
   alias BoundedAuthorityReportAdapter.Telemetry
 
   import Bitwise
@@ -237,7 +238,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   The same as `BoundedAuthorityReportAdapter.sign_report/3`, except that
   `:grant_compact` must be a contract-major-3 grant and `key_handle` must be a P-256
   handle (see the module documentation). Options: `:bounds`, `:issued_at` and
-  `:proof_id`, with the same defaults.
+  `:proof_id`, with the same defaults, as a map or a keyword list.
 
   ## Errors
 
@@ -298,14 +299,16 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   #=> {:error, :invalid_key_handle}
   ```
   """
-  @spec sign_report(report(), key_handle(), opts()) ::
+  @spec sign_report(report(), key_handle(), opts() | keyword()) ::
           {:ok, envelope()} | {:error, sign_error()}
   def sign_report(report, key_handle, opts \\ %{}) do
-    Telemetry.sign_span(:report, fn -> do_sign_report(report, key_handle, opts) end)
+    Telemetry.sign_span(:report, fn ->
+      with {:ok, opts} <- normalize_opts(opts, :invalid_report),
+           do: do_sign_report(report, key_handle, opts)
+    end)
   end
 
   defp do_sign_report(report, key_handle, opts) do
-    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
     issued_at = Map.get(opts, :issued_at, System.system_time(:second))
     proof_id = Map.get(opts, :proof_id) || generate_uuid()
@@ -339,12 +342,14 @@ defmodule BoundedAuthorityReportAdapter.V3 do
       `:holder_thumbprint` the holder's raw 32-byte RFC 7638 thumbprint (over the EC
       members for a P-256 holder key).
     * `key_handle` — the issuer's P-256 handle; calls `signing_identity/1` and `sign/2`.
-    * `opts` — a map (anything else is treated as `%{}`) with `:bounds`, passed unchanged
-      to the protocol package; default `%{}`.
+    * `opts` — a map or a keyword list with `:bounds`, passed unchanged to the protocol
+      package; default `%{}`. Options follow the rules in
+      `BoundedAuthorityReportAdapter`'s "Options" section.
 
   ## Errors
 
-    * `:invalid_grant` — as for `BoundedAuthorityReportAdapter.sign_grant/3`.
+    * `:invalid_grant` — as for `BoundedAuthorityReportAdapter.sign_grant/3`, including
+      a malformed options list.
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
       `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
       snapshot or a key that is not a 65-byte P-256 point on the curve.
@@ -373,23 +378,24 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   #=> {:error, :invalid_key_handle}
   ```
   """
-  @spec sign_grant(grant_input(), key_handle(), grant_opts()) ::
+  @spec sign_grant(grant_input(), key_handle(), grant_opts() | keyword()) ::
           {:ok, grant_compact()} | {:error, grant_sign_error()}
   def sign_grant(grant_input, key_handle, opts \\ %{}) do
-    Telemetry.sign_span(:grant, fn -> do_sign_grant(grant_input, key_handle, opts) end)
+    Telemetry.sign_span(:grant, fn ->
+      with {:ok, opts} <- normalize_opts(opts, :invalid_grant),
+           do: do_sign_grant(grant_input, key_handle, opts)
+    end)
   end
 
   defp do_sign_grant(grant_input, key_handle, opts) do
-    raw_opts = opts
-    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
 
     # The role-attestation gate option is the v1 surface's (RA11); the bap-role-attestation/1
     # profile is Ed25519-bound at schema 1, so no P-256 subject key can be attested under it.
     # A supplied option FAILS CLOSED rather than being silently ignored (cross-vendor review
     # M3 — silent-accept is the wrong failure mode for an unsupportable security option) —
-    # checked on the RAW opts so the keyword-list idiom cannot slip past the normalizer (B1).
-    if option_present?(raw_opts, :role_attestation) do
+    # checked on the normalized options, so a keyword list carries it exactly as a map does.
+    if Map.has_key?(opts, :role_attestation) do
       {:error, :invalid_role_attestation}
     else
       with {:ok, {key_id, public_key}} <- resolve_signing_identity(key_handle),
@@ -401,10 +407,6 @@ defmodule BoundedAuthorityReportAdapter.V3 do
       end
     end
   end
-
-  defp option_present?(opts, key) when is_map(opts), do: Map.has_key?(opts, key)
-  defp option_present?(opts, key) when is_list(opts), do: Keyword.has_key?(opts, key)
-  defp option_present?(_opts, _key), do: false
 
   @doc """
   Signs a contract-major-3 boundary anchor with a P-256 key.
@@ -444,14 +446,16 @@ defmodule BoundedAuthorityReportAdapter.V3 do
     )
   ```
   """
-  @spec sign_anchor(anchor_input(), key_handle(), anchor_opts()) ::
+  @spec sign_anchor(anchor_input(), key_handle(), anchor_opts() | keyword()) ::
           {:ok, anchor_compact()} | {:error, anchor_sign_error()}
   def sign_anchor(anchor_input, key_handle, opts \\ %{}) do
-    Telemetry.sign_span(:anchor, fn -> do_sign_anchor(anchor_input, key_handle, opts) end)
+    Telemetry.sign_span(:anchor, fn ->
+      with {:ok, opts} <- normalize_opts(opts, :invalid_anchor),
+           do: do_sign_anchor(anchor_input, key_handle, opts)
+    end)
   end
 
   defp do_sign_anchor(anchor_input, key_handle, opts) do
-    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
     anchored_at = Map.get(opts, :anchored_at, System.system_time(:second))
 
@@ -508,16 +512,16 @@ defmodule BoundedAuthorityReportAdapter.V3 do
     )
   ```
   """
-  @spec sign_key_transition(transition_input(), key_handle(), transition_opts()) ::
+  @spec sign_key_transition(transition_input(), key_handle(), transition_opts() | keyword()) ::
           {:ok, transition_compact()} | {:error, transition_sign_error()}
   def sign_key_transition(transition_input, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:key_transition, fn ->
-      do_sign_key_transition(transition_input, key_handle, opts)
+      with {:ok, opts} <- normalize_opts(opts, :invalid_transition),
+           do: do_sign_key_transition(transition_input, key_handle, opts)
     end)
   end
 
   defp do_sign_key_transition(transition_input, key_handle, opts) do
-    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
 
     with {:ok, {current_key_id, current_public_key}} <- resolve_key_identity(key_handle),
@@ -991,8 +995,17 @@ defmodule BoundedAuthorityReportAdapter.V3 do
     end
   end
 
-  defp normalize_opts(opts) when is_map(opts), do: opts
-  defp normalize_opts(_opts), do: %{}
+  # The same boundary normalization as the major-1 surface
+  # (BoundedAuthorityReportAdapter.Options): a keyword list is the equivalent map, a
+  # malformed list is the entry point's closed input error, any other value keeps the
+  # defaults.
+  defp normalize_opts(opts, input_error) do
+    case Options.normalize(opts) do
+      {:ok, opts} -> {:ok, opts}
+      :not_options -> {:ok, %{}}
+      :malformed -> {:error, input_error}
+    end
+  end
 
   defp generate_uuid do
     <<b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15>> =

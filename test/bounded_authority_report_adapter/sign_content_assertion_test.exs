@@ -179,12 +179,17 @@ defmodule BoundedAuthorityReportAdapter.SignContentAssertionTest do
   test "invalid handles and malformed options fail closed without signing", c do
     assert {:error, :invalid_key_handle} = Adapter.sign_content_assertion(c.input, :invalid, %{})
 
-    for opts <- [:defaults, nil, [bounds: %{compact_bytes: 1}], %URI{}] do
+    for opts <- [:defaults, nil, %URI{}, [:bounds], [bounds: %{}, bounds: %{}]] do
       assert {:error, :invalid_content_assertion} =
                Adapter.sign_content_assertion(c.input, c.handle, opts)
     end
 
     assert Agent.get(c.pid, & &1.signs) == 0
+
+    # A keyword list is the equivalent map, not malformed options: here its bounds apply
+    # and the protocol package refuses the compact.
+    assert {:error, {:producer_error, :invalid}} =
+             Adapter.sign_content_assertion(c.input, c.handle, bounds: %{compact_bytes: 1})
   end
 
   test "signature-byte tampering is rejected by the public verifier", c do

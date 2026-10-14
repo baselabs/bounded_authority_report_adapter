@@ -36,13 +36,17 @@ type. The protocol package checks values (digest sizes, time-window order, ident
 grammar, selectors) and reports them as `{:producer_error, :invalid}`. A field of the
 right type but the wrong value is not one of these errors.
 
+Each input atom also covers malformed options: every entry point takes its options as a
+map or as a keyword list, and a list that is not a keyword list with unique atom keys (for
+example `[:bounds]`, or `:bounds` given twice) is the entry point's input atom.
+
 | Atom | Meaning | What to check | Fix |
 |---|---|---|---|
 | `:invalid_report` | The report is not a map; `grant_compact`, `operation`, `method`, `target_uri` or `invocation_id` is missing or not a string; `cast_arguments` is missing or `nil`; `nonce` is neither `nil` nor a string; or `grant_compact` is not a grant of the entry point's contract-major (major 1 for `sign_report/3`, major 3 for `V3.sign_report/3`). For `sign_local_loopback_report/3`, also a missing, empty or non-string `nonce`. | The map against the `report()` (or `local_loopback_report()`) type; the grant's major. | Fix the report fields, or use the entry point that matches the grant. |
 | `:invalid_anchor` | The input is not a map; `anchor_id`, `chain_id` or `chain_hash` is missing or not a binary; or `sequence` is missing or not a non-negative integer. | The map against `anchor_input()`. | Fix the anchor fields. |
 | `:invalid_grant` | The input is not a map; `issuer`, `grant_id` or `holder_thumbprint` is missing or not a binary; `issued_at`, `not_before` or `expires_at` is missing or not an integer; `audiences` is missing, empty, improper or not all strings; or `operations` is missing, empty or not a list. | The map against `grant_input()`. | Fix the grant fields. |
 | `:invalid_role_attestation` | The `:role_attestation` option of `sign_grant/3` is malformed (including an explicit `nil`); the protocol package's `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` rejected it (attestor signature, subject, self-attestation, window containment, `now` outside `[nbf, exp)`); or the attested role is not `"issuer"`. On the `V3` surface, any `:role_attestation` option. | The compact is a `bap-role-attestation/1` attestation for the handle's own key; the attestor key and its validity window are the ones you trust; `now` is the time you mean. | Fix the attestation or the trusted attestor key. The subject always comes from the handle, never from the option. |
-| `:invalid_content_assertion` | The options are not a map, or a `sign_content_assertion/3` input field (`jti`, `iss`, `aud`, `sub`, `profile`, `profile_digest`, `content_digest`, `prev` as binaries; `gen`, `iat`, `nbf`, `exp` as integers) is missing or of the wrong type. | The map against `content_assertion_input()`; options as a map, not a keyword list. | Fix the input or pass the options as a map. |
+| `:invalid_content_assertion` | The options are neither a plain map nor a keyword list with unique keys, or a `sign_content_assertion/3` input field (`jti`, `iss`, `aud`, `sub`, `profile`, `profile_digest`, `content_digest`, `prev` as binaries; `gen`, `iat`, `nbf`, `exp` as integers) is missing or of the wrong type. | The map against `content_assertion_input()`; the options' shape. | Fix the input or the options. |
 | `:invalid_transition` | The input is not a map; `transition_id`, `chain_id` or `next_key_id` is missing or not a binary; `effective_at` is missing or not an integer; or `next_public_key` is not a 32-byte binary (major 1) or a 65-byte P-256 point on the curve (`V3`). | The map against `transition_input()`. | Fix the transition fields. |
 
 ## The V3 surface

@@ -49,6 +49,19 @@
   first failing step. It runs its steps in order and exits non-zero if any step failed, but
   a failing test suite (and a failing `mix hex.audit`) records the failure and lets later
   steps run. The docs now say so, and a test keeps them from claiming otherwise.
+- Options given as a keyword list were silently ignored by `sign_report/3`,
+  `sign_local_loopback_report/3`, `sign_anchor/3`, `sign_grant/3` (except
+  `:role_attestation`), `sign_key_transition/3` and the four `V3` entry points, so a caller
+  passing `issued_at: t` got a credential issued at the current time, with no error; and
+  `sign_content_assertion/3` refused them. Every entry point now normalizes its options at
+  the boundary through one helper: a keyword list is the equivalent map. A list that is not
+  a keyword list with unique atom keys returns the entry point's closed input error
+  (`:invalid_report`, `:invalid_anchor`, `:invalid_grant`, `:invalid_transition` or
+  `:invalid_content_assertion`) before any key is resolved; any other non-map value keeps
+  the defaults as before (`sign_content_assertion/3` still refuses it). The specs accept
+  `keyword()`. Tests: a keyword `:issued_at` sets the proof's `iat`; malformed lists return
+  the input error on all ten entry points; and a seeded generative test checks that map and
+  keyword forms of random option sets give byte-identical results on all ten entry points.
 
 ### Documentation
 

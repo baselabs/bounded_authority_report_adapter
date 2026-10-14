@@ -3,12 +3,21 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
-## Unreleased — protocol dependency is a range
+## Unreleased — protocol dependency is a range; keyword options apply
 
 The protocol requirement moves from the exact `== 0.8.0` to `~> 0.8.0`: the floor is the
 release that carries the strict Ed25519 rule, and the ceiling is the next protocol minor.
 No API, wire or error change. If your application locks `bounded_authority_protocol` at a
 0.8.x release, `mix deps.get` resolves it alongside this package without an override.
+
+Options given as a keyword list now apply. Before, every entry point except
+`sign_content_assertion/3` ignored a keyword list (only the `:role_attestation` option
+of the two `sign_grant/3` functions was read from one), so `sign_report(report, handle, issued_at: t)`
+signed with the current time instead of `t`. Now a keyword list is the same call as the
+equivalent map on every entry point, `sign_content_assertion/3` included (it used to refuse
+one). A list that is not a keyword list with unique keys is the entry point's input error
+(`:invalid_report` and so on). If you passed options as a keyword list, check that you
+meant them: they now take effect.
 
 ## 0.10.0 — strict Ed25519 key acceptance and the BAP 0.8.0 pin
 

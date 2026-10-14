@@ -62,6 +62,15 @@ defmodule BoundedAuthorityReportAdapter do
   The repository has test-only reference handles under `test/support/`; they are not
   shipped in the package. Production handles call your key custody.
 
+  ## Options
+
+  Every entry point takes its options as a map or as a keyword list, and the two are the
+  same call: `sign_report(report, handle, issued_at: t)` is
+  `sign_report(report, handle, %{issued_at: t})`. A list that is not a keyword list with
+  unique atom keys is refused with the entry point's input error (`:invalid_report`,
+  `:invalid_grant` and so on) before any callback is called. Any other value is treated as
+  `%{}`, except by `sign_content_assertion/3`, which refuses it.
+
   ## Errors
 
   Every entry point returns `{:ok, map}` or `{:error, reason}`, where `reason` is a closed
@@ -84,6 +93,7 @@ defmodule BoundedAuthorityReportAdapter do
   alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertionV1
   alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestationV1
   alias BoundedAuthorityProtocol.V1.Json
+  alias BoundedAuthorityReportAdapter.Options
   alias BoundedAuthorityReportAdapter.Telemetry
 
   @type key_handle :: {module(), term()}
@@ -246,7 +256,7 @@ defmodule BoundedAuthorityReportAdapter do
       * `:nonce` — the request nonce as a string, or `nil` when the verifier does not
         require one.
     * `key_handle` — the holder's `{module, term}` handle; calls `public_key/1` and `sign/2`.
-    * `opts` — a map (anything else is treated as `%{}`):
+    * `opts` — a map or a keyword list (see "Options" in the module documentation):
       * `:bounds` — resource limits passed unchanged to the protocol package's producer
         and assembler; default `%{}`, the protocol's maximums.
       * `:issued_at` — the proof's `iat` in Unix seconds; default
@@ -257,8 +267,9 @@ defmodule BoundedAuthorityReportAdapter do
   ## Errors
 
     * `:invalid_report` — `report` is not a map, a required field is missing or not a
-      string, `cast_arguments` is `nil`, the nonce is neither `nil` nor a string, or
-      `grant_compact` is not a contract-major-1 grant.
+      string, `cast_arguments` is `nil`, the nonce is neither `nil` nor a string,
+      `grant_compact` is not a contract-major-1 grant, or `opts` is a list that is not a
+      keyword list with unique keys.
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, or `public_key/1`
       failed or returned something other than an acceptable 32-byte Ed25519 key.
     * `:signing_failed` — `sign/2` failed, returned something other than
@@ -290,14 +301,16 @@ defmodule BoundedAuthorityReportAdapter do
   #=> {:error, :invalid_report}
   ```
   """
-  @spec sign_report(report(), key_handle(), opts()) ::
+  @spec sign_report(report(), key_handle(), opts() | keyword()) ::
           {:ok, envelope()} | {:error, sign_error()}
   def sign_report(report, key_handle, opts \\ %{}) do
-    Telemetry.sign_span(:report, fn -> do_sign_report(report, key_handle, opts) end)
+    Telemetry.sign_span(:report, fn ->
+      with {:ok, opts} <- normalize_opts(opts, :invalid_report),
+           do: do_sign_report(report, key_handle, opts)
+    end)
   end
 
   defp do_sign_report(report, key_handle, opts) do
-    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
     issued_at = Map.get(opts, :issued_at, System.system_time(:second))
     proof_id = Map.get(opts, :proof_id) || generate_uuid()
@@ -397,16 +410,16 @@ defmodule BoundedAuthorityReportAdapter do
   ```
   """
   @doc since: "0.5.0"
-  @spec sign_local_loopback_report(local_loopback_report(), key_handle(), opts()) ::
+  @spec sign_local_loopback_report(local_loopback_report(), key_handle(), opts() | keyword()) ::
           {:ok, envelope()} | {:error, sign_error()}
   def sign_local_loopback_report(report, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:local_loopback_report, fn ->
-      do_sign_local_loopback_report(report, key_handle, opts)
+      with {:ok, opts} <- normalize_opts(opts, :invalid_report),
+           do: do_sign_local_loopback_report(report, key_handle, opts)
     end)
   end
 
   defp do_sign_local_loopback_report(report, key_handle, opts) do
-    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
     issued_at = Map.get(opts, :issued_at, System.system_time(:second))
     proof_id = Map.get(opts, :proof_id) || generate_uuid()
@@ -448,7 +461,7 @@ defmodule BoundedAuthorityReportAdapter do
       `:sequence` (a non-negative integer) and `:chain_hash` (the raw 32-byte chain hash;
       all zeros only at sequence 0).
     * `key_handle` — the chain key's handle; calls `key_identity/1` and `sign/2`.
-    * `opts` — a map (anything else is treated as `%{}`):
+    * `opts` — a map or a keyword list (see "Options" in the module documentation):
       * `:anchored_at` — the anchor's timestamp in Unix seconds; default
         `System.system_time(:second)`. It must fall inside the key's validity window at
         verification.
@@ -457,8 +470,8 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Errors
 
-    * `:invalid_anchor` — `anchor_input` is not a map, or a field is missing or of the
-      wrong basic type.
+    * `:invalid_anchor` — `anchor_input` is not a map, a field is missing or of the
+      wrong basic type, or `opts` is a malformed list.
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
       `key_identity/1`, or returned an empty key id or a public key that is not an
       acceptable 32-byte Ed25519 key.
@@ -488,14 +501,16 @@ defmodule BoundedAuthorityReportAdapter do
   #=> {:error, :invalid_anchor}
   ```
   """
-  @spec sign_anchor(anchor_input(), key_handle(), anchor_opts()) ::
+  @spec sign_anchor(anchor_input(), key_handle(), anchor_opts() | keyword()) ::
           {:ok, anchor_compact()} | {:error, anchor_sign_error()}
   def sign_anchor(anchor_input, key_handle, opts \\ %{}) do
-    Telemetry.sign_span(:anchor, fn -> do_sign_anchor(anchor_input, key_handle, opts) end)
+    Telemetry.sign_span(:anchor, fn ->
+      with {:ok, opts} <- normalize_opts(opts, :invalid_anchor),
+           do: do_sign_anchor(anchor_input, key_handle, opts)
+    end)
   end
 
   defp do_sign_anchor(anchor_input, key_handle, opts) do
-    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
     anchored_at = Map.get(opts, :anchored_at, System.system_time(:second))
 
@@ -557,8 +572,7 @@ defmodule BoundedAuthorityReportAdapter do
       `BoundedAuthorityProtocol.V1.Operation` structs). The protocol package checks the
       values: identifier grammar, a coherent time window, unique operation names.
     * `key_handle` — the issuer's handle; calls `signing_identity/1` and `sign/2`.
-    * `opts` — a map (anything else is treated as `%{}`, except that a keyword list's
-      `:role_attestation` is still honored):
+    * `opts` — a map or a keyword list (see "Options" in the module documentation):
       * `:bounds` — resource limits passed unchanged to the protocol package; default
         `%{}`, the protocol's maximums.
       * `:role_attestation` — `%{compact: binary(), attestor:
@@ -571,9 +585,9 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Errors
 
-    * `:invalid_grant` — `grant_input` is not a map, or a field is missing or of the
-      wrong basic type (including an empty or improper `:audiences` list or an empty
-      `:operations` list).
+    * `:invalid_grant` — `grant_input` is not a map, a field is missing or of the wrong
+      basic type (including an empty or improper `:audiences` list or an empty
+      `:operations` list), or `opts` is a malformed list.
     * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
       `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
       snapshot or a public key the strict Ed25519 rule refuses.
@@ -621,10 +635,13 @@ defmodule BoundedAuthorityReportAdapter do
   #=> {:error, :invalid_key_handle}
   ```
   """
-  @spec sign_grant(grant_input(), key_handle(), grant_opts()) ::
+  @spec sign_grant(grant_input(), key_handle(), grant_opts() | keyword()) ::
           {:ok, grant_compact()} | {:error, grant_sign_error()}
   def sign_grant(grant_input, key_handle, opts \\ %{}) do
-    Telemetry.sign_span(:grant, fn -> do_sign_grant(grant_input, key_handle, opts) end)
+    Telemetry.sign_span(:grant, fn ->
+      with {:ok, opts} <- normalize_opts(opts, :invalid_grant),
+           do: do_sign_grant(grant_input, key_handle, opts)
+    end)
   end
 
   # RA11 (ADR-0008; BAP 0.6.0 `bap-role-attestation/1`): the BA-attested role gate. A
@@ -641,35 +658,17 @@ defmodule BoundedAuthorityReportAdapter do
   # malformed option shape, a verify failure, a non-issuer role — is the single closed
   # `{:error, :invalid_role_attestation}`, fired BEFORE `sign/2` (the counting-handle
   # tripwire) and before any BAP producer call.
-  # The gate reads the RAW opts, before normalize_opts/1 — the normalizer's benign
-  # default for a non-map opts (%{}) would silently drop an authorization gate riding in a
-  # keyword list (cross-vendor review B1: a holder-role attestation SIGNED through the
-  # keyword idiom). Resolution order: a map opts yields the value under the key (an
-  # explicit nil is malformed, not absent); a keyword list yields the keyword's value;
-  # anything else cannot carry the option, and the option absent means the gate is off
-  # (the declaration-only C1 gate stands).
-  defp role_attestation_gate(raw_opts, key_id, public_key, bounds)
-       when is_map(raw_opts) and not is_struct(raw_opts) do
-    case Map.fetch(raw_opts, :role_attestation) do
-      {:ok, attestation} ->
-        run_role_attestation_gate(attestation, key_id, public_key, bounds)
-
-      :error ->
-        :ok
+  # The gate reads the normalized options map, so a keyword list carries the option exactly
+  # as a map does (a keyword list was once dropped by a normalizer default, which let a
+  # holder-role attestation through: cross-vendor review B1). A map value of nil is
+  # malformed, not absent; the option absent means the gate is off (the declaration-only
+  # C1 gate stands).
+  defp role_attestation_gate(opts, key_id, public_key, bounds) do
+    case Map.fetch(opts, :role_attestation) do
+      {:ok, attestation} -> run_role_attestation_gate(attestation, key_id, public_key, bounds)
+      :error -> :ok
     end
   end
-
-  defp role_attestation_gate(raw_opts, key_id, public_key, bounds) when is_list(raw_opts) do
-    case Keyword.fetch(raw_opts, :role_attestation) do
-      {:ok, attestation} ->
-        run_role_attestation_gate(attestation, key_id, public_key, bounds)
-
-      :error ->
-        :ok
-    end
-  end
-
-  defp role_attestation_gate(_raw_opts, _key_id, _public_key, _bounds), do: :ok
 
   defp run_role_attestation_gate(attestation, key_id, public_key, bounds) do
     with {:ok, {compact, expected}} <-
@@ -705,12 +704,10 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   defp do_sign_grant(grant_input, key_handle, opts) do
-    raw_opts = opts
-    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
 
     with {:ok, {key_id, public_key}} <- resolve_signing_identity(key_handle),
-         :ok <- role_attestation_gate(raw_opts, key_id, public_key, bounds),
+         :ok <- role_attestation_gate(opts, key_id, public_key, bounds),
          {:ok, grant} <- build_grant(grant_input, key_id),
          {:ok, signing_input} <- produce_grant_signing_input(grant, bounds),
          {:ok, grant_compact} <-
@@ -743,13 +740,14 @@ defmodule BoundedAuthorityReportAdapter do
       `:effective_at` (integer, Unix seconds), `:next_key_id` (string) and
       `:next_public_key` (the successor's raw 32-byte Ed25519 public key).
     * `key_handle` — the current key's handle; calls `key_identity/1` and `sign/2`.
-    * `opts` — a map (anything else is treated as `%{}`) with `:bounds`, passed unchanged
-      to the protocol package; default `%{}`.
+    * `opts` — a map or a keyword list (see "Options" in the module documentation) with
+      `:bounds`, passed unchanged to the protocol package; default `%{}`.
 
   ## Errors
 
     * `:invalid_transition` — `transition_input` is not a map, a field is missing or of
-      the wrong basic type, or `:next_public_key` is not 32 bytes.
+      the wrong basic type, `:next_public_key` is not 32 bytes, or `opts` is a malformed
+      list.
     * `:invalid_key_handle` — as for `sign_anchor/3`.
     * `:signing_failed` — as for `sign_report/3`.
     * `{:producer_error, :invalid}` — the protocol package refused the transition, for
@@ -781,16 +779,16 @@ defmodule BoundedAuthorityReportAdapter do
   #=> {:error, {:producer_error, :invalid}}
   ```
   """
-  @spec sign_key_transition(transition_input(), key_handle(), transition_opts()) ::
+  @spec sign_key_transition(transition_input(), key_handle(), transition_opts() | keyword()) ::
           {:ok, transition_compact()} | {:error, transition_sign_error()}
   def sign_key_transition(transition_input, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:key_transition, fn ->
-      do_sign_key_transition(transition_input, key_handle, opts)
+      with {:ok, opts} <- normalize_opts(opts, :invalid_transition),
+           do: do_sign_key_transition(transition_input, key_handle, opts)
     end)
   end
 
   defp do_sign_key_transition(transition_input, key_handle, opts) do
-    opts = normalize_opts(opts)
     bounds = Map.get(opts, :bounds, %{})
 
     with {:ok, {current_key_id, current_public_key}} <- resolve_key_identity(key_handle),
@@ -835,13 +833,15 @@ defmodule BoundedAuthorityReportAdapter do
       digest, or 32 zero bytes when `gen` is 1), and `:iat`, `:nbf` and `:exp`
       (integers, Unix seconds).
     * `key_handle` — the signer's handle; calls `key_identity/1` and `sign/2`.
-    * `opts` — a map with `:bounds`, passed unchanged to the protocol package; default
-      `%{}`. Unlike the other entry points, any other `opts` value is an error.
+    * `opts` — a map or a keyword list with `:bounds`, passed unchanged to the protocol
+      package; default `%{}`. Unlike the other entry points, any other `opts` value
+      (including a struct) is an error.
 
   ## Errors
 
-    * `:invalid_content_assertion` — `opts` is not a map, or `assertion_input` is not a
-      map or has a field that is missing or of the wrong basic type.
+    * `:invalid_content_assertion` — `opts` is neither a plain map nor a keyword list with
+      unique keys, or `assertion_input` is not a map or has a field that is missing or of
+      the wrong basic type.
     * `:invalid_key_handle` — as for `sign_anchor/3`.
     * `:signing_failed` — as for `sign_report/3`.
     * `{:producer_error, :invalid}` — the protocol package refused the assertion, for
@@ -875,20 +875,24 @@ defmodule BoundedAuthorityReportAdapter do
   {:ok, %{content_assertion: _compact}} =
     BoundedAuthorityReportAdapter.sign_content_assertion(input, signer)
 
-  BoundedAuthorityReportAdapter.sign_content_assertion(input, signer, bounds: %{})
+  BoundedAuthorityReportAdapter.sign_content_assertion(input, signer, [:bounds])
   #=> {:error, :invalid_content_assertion}
   ```
   """
-  @spec sign_content_assertion(content_assertion_input(), key_handle(), content_assertion_opts()) ::
+  @spec sign_content_assertion(
+          content_assertion_input(),
+          key_handle(),
+          content_assertion_opts() | keyword()
+        ) ::
           {:ok, content_assertion_compact()} | {:error, content_assertion_sign_error()}
   def sign_content_assertion(assertion_input, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:content_assertion, fn ->
-      do_sign_content_assertion(assertion_input, key_handle, opts)
+      with {:ok, opts} <- content_assertion_opts(opts),
+           do: do_sign_content_assertion(assertion_input, key_handle, opts)
     end)
   end
 
-  defp do_sign_content_assertion(assertion_input, key_handle, opts)
-       when is_map(opts) and not is_struct(opts) do
+  defp do_sign_content_assertion(assertion_input, key_handle, opts) do
     bounds = Map.get(opts, :bounds, %{})
 
     with {:ok, {key_id, public_key}} <- resolve_key_identity(key_handle),
@@ -906,8 +910,15 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  defp do_sign_content_assertion(_assertion_input, _key_handle, _opts),
-    do: {:error, :invalid_content_assertion}
+  # Content assertion accepts only a plain map or a keyword list; anything else is refused.
+  defp content_assertion_opts(opts) when is_struct(opts), do: {:error, :invalid_content_assertion}
+
+  defp content_assertion_opts(opts) do
+    case Options.normalize(opts) do
+      {:ok, opts} -> {:ok, opts}
+      _malformed_or_not_options -> {:error, :invalid_content_assertion}
+    end
+  end
 
   @doc false
   # Which entry points call each optional callback, so require it. The doctor's advisories
@@ -1445,13 +1456,18 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  # Coerce a non-map opts (a caller bug) to the empty map rather than crashing with a
-  # value-echoing BadMapError inside Map.get/3 — the closed-atom error discipline. opts is
-  # caller-supplied config (bounds windows, timestamps); a non-map is a type violation per
-  # every *_opts() @spec, and the defaults are a safe fallback. Applied to every sign_*
-  # entry point that uses this legacy normalizer. Content assertion rejects malformed opts.
-  defp normalize_opts(opts) when is_map(opts), do: opts
-  defp normalize_opts(_opts), do: %{}
+  # Options at the boundary (BoundedAuthorityReportAdapter.Options): a map is used as given
+  # and a keyword list becomes the equivalent map. A malformed list (not a keyword list, or
+  # a repeated key) is the entry point's closed input error. Any other value is a type
+  # violation per every *_opts() @spec; it keeps the defaults rather than crash with a
+  # value-echoing BadMapError. Content assertion refuses it instead (content_assertion_opts/1).
+  defp normalize_opts(opts, input_error) do
+    case Options.normalize(opts) do
+      {:ok, opts} -> {:ok, opts}
+      :not_options -> {:ok, %{}}
+      :malformed -> {:error, input_error}
+    end
+  end
 
   defp generate_uuid do
     # UUID v4 per RFC 4122: 16 random bytes, then overwrite byte 6's high nibble
