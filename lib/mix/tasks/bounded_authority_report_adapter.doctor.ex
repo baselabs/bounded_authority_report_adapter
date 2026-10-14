@@ -223,7 +223,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   # thumbprint callback is fatal (swallowing it made the check vacuously
   # clean); a mismatch is fatal only for a STABLE key — a stateful handle
   # that rotated between the two calls reports an inconclusive rotation
-  # advisory instead (cross-vendor code review, B2).
+  # advisory instead (a review finding).
   defp thumbprint_findings(module, ref) do
     if Code.ensure_loaded?(module) and function_exported?(module, :public_key, 1) and
          function_exported?(module, :thumbprint, 1) do
@@ -521,7 +521,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   # Malformed flags (e.g. --major bogus, --major 3.0, a bare --major) must
   # be fatal usage errors, not silently dropped to the permissive default
-  # (cross-vendor code review, B2).
+  # (a review finding).
   defp reject_invalid_options([]), do: :ok
 
   defp reject_invalid_options(invalid) do

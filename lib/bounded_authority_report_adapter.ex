@@ -664,25 +664,19 @@ defmodule BoundedAuthorityReportAdapter do
     end)
   end
 
-  # RA11 (ADR-0008; BAP 0.6.0 `bap-role-attestation/1`): the BA-attested role gate. A
-  # SECOND sign-time gating verify — charter §3 as sharpened by ADR-0008 ("BARA does
-  # sign-time gating verifies (wrong-key, role-attestation); it does not do content
-  # verification"). The caller supplies the BA-signed attestation compact and the trusted
-  # attestor context (the BA trust-root, `HistoricalPublicKey`); the EXPECTED subject
-  # binding is the handle's atomic `signing_identity/1` snapshot — never caller input — so
-  # a handle cannot present another key's attestation (the lying-handle defeat). BAP's
-  # `verify_attestation/2` proves the BA signature, the subject binding, structural
-  # self-attestation rejection, window containment, and the half-open now-window under the
-  # caller's bounds; this gate adds the role check (the attested role must be "issuer").
-  # Absent option: the declaration-only C1 gate stands unchanged. Any failure here — a
-  # malformed option shape, a verify failure, a non-issuer role — is the single closed
-  # `{:error, :invalid_role_attestation}`, fired BEFORE `sign/2` (the counting-handle
-  # tripwire) and before any BAP producer call.
-  # The gate reads the normalized options map, so a keyword list carries the option exactly
-  # as a map does (a keyword list was once dropped by a normalizer default, which let a
-  # holder-role attestation through: cross-vendor review B1). A map value of nil is
-  # malformed, not absent; the option absent means the gate is off (the declaration-only
-  # C1 gate stands).
+  # The role-attestation gate (ADR-0008; the protocol's `bap-role-attestation/1` profile):
+  # a second sign-time check, alongside the wrong-key guard. Neither verifies the content of
+  # what is signed. The caller supplies the attestation compact, signed by the authority, and
+  # the trusted attestor key (`HistoricalPublicKey`); the EXPECTED subject is the handle's
+  # atomic `signing_identity/1` snapshot, never caller input, so a handle cannot present
+  # another key's attestation. The protocol's `verify_attestation/2` checks the attestor's
+  # signature, the subject, self-attestation, window containment and the half-open
+  # now-window under the caller's bounds; this gate adds the role check (the attested role
+  # must be "issuer"). Without the option, only the declared-role gate applies. Any failure
+  # here (a malformed option, a failed verification, a non-issuer role) is the single
+  # closed `{:error, :invalid_role_attestation}`, before `sign/2` and before any producer
+  # call. The options were normalized at the boundary, so a keyword list carries the option
+  # exactly as a map does, and a malformed value never reaches here.
   defp role_attestation_gate(opts, key_id, public_key, bounds) do
     case Map.fetch(opts, :role_attestation) do
       {:ok, attestation} -> run_role_attestation_gate(attestation, key_id, public_key, bounds)
@@ -938,7 +932,7 @@ defmodule BoundedAuthorityReportAdapter do
   #
   # sign_via_handle → verify_signature → assemble_compact. Every object this
   # library signs flows through here. verify_signature is the wrong-key guard
-  # (the RA1 cross-vendor CV-finding): a signature that does not verify against
+  # (found in review of the first signer): a signature that does not verify against
   # the resolved public key is :signing_failed, never a silent false-success.
   #
   # The assembler parameter selects BAP's compact assembler for the signing
@@ -975,7 +969,7 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  # Cross-vendor closeout finding (CV round 2): the adapter validated only the
+  # A review finding from the first release: the adapter validated only the
   # signature's 64-byte length, never that it verifies against the resolved
   # holder public key. A callback signing with the wrong key (a rotation/
   # misconfiguration race — the handle's public_key/1 returns key A, but sign/2
@@ -1029,8 +1023,8 @@ defmodule BoundedAuthorityReportAdapter do
   # into an envelope no verifier accepts. The gate is the major's own
   # bounded DECODER, not the header walk: v1 and v2 grants share the EdDSA
   # header, so the major is only distinguishable in the payload's `v` claim,
-  # which the closed v1 decode rejects on mismatch (cross-vendor code
-  # review, B2). Anything but a v1 grant fails HERE as :invalid_report, per
+  # which the closed v1 decode rejects on mismatch. Anything but a v1 grant
+  # fails HERE as :invalid_report, per
   # this repo's fail-fast principle. This is the ONE deliberate behavior
   # change on the major-1 surface (previously such an envelope failed
   # downstream at check_envelope/2).
@@ -1096,8 +1090,8 @@ defmodule BoundedAuthorityReportAdapter do
   # The anchor's key identity — the signed-header `kid` AND the 32-byte public
   # key — resolved as ONE atomic snapshot. This is defense-in-depth at sign time:
   # a single key_identity/1 call cannot split key_id from public_key across a
-  # rotation race (the separate-callback design Codex's cross-vendor probe
-  # exploited). The remaining surface — sign/2 signing with a key different from
+  # rotation race (a separate-callback design was shown to allow exactly that).
+  # The remaining surface — sign/2 signing with a key different from
   # the snapshot's public_key — is caught by verify_signature in the shared tail.
   # key_identity/1 is an OPTIONAL callback (@optional_callbacks); a proof-only
   # handle does not implement it, so sign_anchor on such a handle fails HERE as
@@ -1120,7 +1114,7 @@ defmodule BoundedAuthorityReportAdapter do
 
   # The grant's atomic signing identity — the role (:issuer | :holder) AND the key's
   # registry id AND its 32-byte public key — resolved as ONE snapshot, with the role
-  # gate folded into the match. This is the C1 enforcement (ADR-0006's grant-signing
+  # gate folded into the match. This is the issuer-role gate (ADR-0006's grant-signing
   # pre-commitment): ONLY a snapshot whose role is :issuer passes; a :holder snapshot,
   # a malformed snapshot, a callback failure, or a missing signing_identity/1 (the
   # UndefinedFunctionError from apply/3 caught by safe_callback) all collapse to
@@ -1130,8 +1124,7 @@ defmodule BoundedAuthorityReportAdapter do
   # callbacks) is load-bearing: a stateful handle cannot return :issuer then rotate to a
   # holder key between role resolution and signing — the snapshot is one observation, and
   # the verify_signature guard in the shared tail catches any sign/2-vs-snapshot drift.
-  # (design-adversarial Challenge 1 — the separate-callback design was rejected for the
-  # TOCTOU it opened.)
+  # (A separate-callback design was rejected in design review for the race it opened.)
   defp resolve_signing_identity({module, handle}) when is_atom(module) do
     case safe_callback(module, :signing_identity, [handle]) do
       {:ok, {:issuer, key_id, public_key}}
@@ -1297,7 +1290,7 @@ defmodule BoundedAuthorityReportAdapter do
   defp required_grant_audiences(grant_input) do
     # An IMPROPER list (["a" | :tail]) passes is_list/1 but raises inside
     # Enum.all?/2 — the closed-error contract requires rejecting it as data
-    # (cross-vendor code review, B2; the same defect existed on the v1 path).
+    # (a review finding; the same defect existed on the v1 path).
     case Map.fetch(grant_input, :audiences) do
       {:ok, audiences} when is_list(audiences) and audiences != [] ->
         if proper_list?(audiences) and Enum.all?(audiences, &is_binary/1),
@@ -1332,7 +1325,7 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   # The transition's content is validated for presence + shape HERE (clean :invalid_transition
-  # on a missing/malformed field; next_public_key is pre-checked for 32 bytes — design Q7: the
+  # on a missing/malformed field; next_public_key is pre-checked for 32 bytes — the
   # adapter pre-checks PUBLIC KEYS for 32 bytes, the way resolve_public_key/1 +
   # resolve_key_identity/1 do; digests like grant's holder_thumbprint defer to BAP). BAP's
   # producer validates SEMANTICS — identifier grammar, time bounds, and distinct_fingerprints
@@ -1379,7 +1372,7 @@ defmodule BoundedAuthorityReportAdapter do
 
   # next_public_key is a raw 32-byte Ed25519 public key (the successor). Pre-checked HERE
   # (fail-fast :invalid_transition) rather than deferred to BAP's producer — public keys get
-  # the adapter's 32-byte guard (design Q7 principle).
+  # the adapter's 32-byte guard (the same rule as the key resolvers).
   defp required_transition_public_key(transition_input) do
     case Map.fetch(transition_input, :next_public_key) do
       {:ok, value} when is_binary(value) and byte_size(value) == 32 -> {:ok, value}

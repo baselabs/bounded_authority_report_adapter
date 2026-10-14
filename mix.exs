@@ -18,7 +18,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      # The coverage floor is the MEASURED total, re-pinned at every slice
+      # The coverage floor is the MEASURED total, re-pinned at every change
       # that moves it (never aspirational; pinned just under the measured
       # number — Mix compares the RAW ratio, whose hidden decimals round up
       # for display, so an exact display-value pin can flake).
@@ -58,7 +58,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   # step on the pinned dev lane (every library-job step + the example job's
   # steps) with zero GitHub Actions spend.
   # NO env(1) re-exec — the FIRST step is an env guard that refuses any boot
-  # other than MIX_ENV=test (a :dev compile skips test/support, the RA7 trap)
+  # other than MIX_ENV=test (a :dev compile skips test/support and its warnings)
   # with the invocation in its message; every later step is a plain task
   # name. The example job runs through scripts/ci_example.exs, preserving the
   # step-for-step order and abort-on-first-red semantics. Not reproduced
@@ -78,7 +78,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "credo --strict",
         # The gate battery (parity with the sibling-standard batteries): coverage
         # floor, dialyzer (PLT + analysis under :test so test/support/ is in the
-        # paths — the RA7 lesson), doc warnings, and the LIBRARY's own advisory
+        # paths, so their warnings are seen), doc warnings, and the LIBRARY's own advisory
         # audits (the example job has always audited its own lock; the library's
         # lock is now audited too). `test --cover` is the only test step: Mix runs a task once per
         # invocation, so a plain "test" before it made this step a silent no-op locally.
@@ -102,7 +102,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
 
   # test/support/ holds the reference key-handle impl (Keys.RawKey) + test-only
   # keypair fixtures — compiled ONLY in :test so the {pub, priv} reference impl
-  # does not ship in the artifact (design C5, ADR-0014: a key-in-process-memory
+  # does not ship in the artifact (ADR-0014: a key-in-process-memory
   # impl in lib/ would pave a road to the failure strategy §4 says the separate
   # repo exists to prevent).
   defp elixirc_paths(:test), do: ["lib/", "test/support/"]
@@ -117,7 +117,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # deps; the emitter is shape-validated and value-free
       # (lib/bounded_authority_report_adapter/telemetry.ex).
       {:telemetry, "~> 1.3"},
-      # A RANGE with a security floor, not an exact pin (owner ruling, October 6, 2026;
+      # A RANGE with a security floor, not an exact pin (October 6, 2026;
       # ADR-0023 amendment): a library declares the range it is compatible with and only an
       # application locks an exact version. 0.8.0 is the floor: it carries the strict Ed25519
       # verification rule this adapter's key refusal and self-check call

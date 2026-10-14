@@ -5,7 +5,7 @@
 ### Changed
 
 - The protocol dependency is now a range with a security floor, `~> 0.8.0`, replacing the
-  exact `== 0.8.0` (amendment to ADR-0023, October 6, 2026). Libraries declare
+  exact `== 0.8.0` (amendment to [ADR-0023](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0023-pin-follows-bap-releases.md), October 6, 2026). Libraries declare
   ranges and only applications lock exact versions. The floor is BAP 0.8.0, which carries the
   strict Ed25519 rule this library calls, so BAP 0.7.x never resolves; the ceiling is the next
   protocol minor (exclusive). Both project locks stay at BAP 0.8.0 and no wire byte, API or
@@ -30,7 +30,7 @@
   (byte-equal to the previous derivation on 200 random keys per suite; no verdict changes). The
   test tree reaches a thumbprint only through `TestKeys.holder_thumbprint_raw/1` and
   `TestKeys.ec_thumbprint_raw/1`, which use the same functions; the ES256 differential test runs
-  through BAP's documented `V3.check_envelope/2` (ADR-0021 amendment), and the request-digest tag
+  through BAP's documented `V3.check_envelope/2` ([ADR-0021](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0021-es256-key-type-discrimination.md) amendment), and the request-digest tag
   test calls `V1.request_digest/3`.
 
 ### Fixed
@@ -129,7 +129,7 @@
   `sign_*/3` exported by a `lib/` module is never called in the notebook's code, when a cell is
   not formatted, and when the notebook's statement of the source version, protocol requirement
   and release state disagrees with `mix.exs` and the CHANGELOG. It runs in `mix test`, so in
-  `mix ci` and CI (ADR-0011 amendment).
+  `mix ci` and CI ([ADR-0011](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0011-two-project-structure.md) amendment).
 - `test/bounded_authority_report_adapter/protocol_private_api_test.exs` fails when any file under
   `lib/`, `scripts/`, `examples/` or `test/` calls a `bounded_authority_protocol` function the
   dependency does not document. The private set comes from the dependency's compiled docs chunks
@@ -164,7 +164,7 @@ Strict Ed25519 key acceptance and signature self-check, over BAP 0.8.0. Security
   `b5598cc5ba25f6ff4a2b55dab619bc2419b1d90cce9be3b1d4330d55a6da0bdb`). BAP 0.8.0 adds the
   public `BoundedAuthorityProtocol.Ed25519` module this release calls. No new error atom: the
   existing `:invalid_key_handle` and `:signing_failed` carry the new refusals. Span evidence
-  per ADR-0023 Decision 3, from the protocol repository over `v0.7.0..v0.8.0`:
+  per [ADR-0023](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0023-pin-follows-bap-releases.md) Decision 3, from the protocol repository over `v0.7.0..v0.8.0`:
   - full span: 288 files changed, 12,713 insertions, 1,125 deletions (docs, ADRs, CI,
     the strict-Ed25519 corpus, scripts, the cross-language SDKs, tests);
   - `lib/`: 15 files, 668 insertions, 46 deletions — the new public
@@ -208,22 +208,22 @@ The content-assertion release: `sign_content_assertion/3` over BAP 0.7.0.
 
 ### Added
 
-- `sign_content_assertion/3` (ADR-0022): signs BAP's standalone `bap-content-assertion/1`
+- `sign_content_assertion/3` ([ADR-0022](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0022-content-assertion-signing.md)): signs BAP's standalone `bap-content-assertion/1`
   profile from the caller's twelve payload members through BAP's typed producer and
   profile assembler, with the protected key identifier taken from the handle's atomic
   `key_identity/1` and the shared wrong-key guard. Options must be a plain map.
 - The closed `:invalid_content_assertion` error and the value-free `:content_assertion`
   telemetry object (its input error maps to `:invalid_input`).
-- ADR-0023: the protocol pin follows published BAP releases directly. It supersedes
-  ADR-0010's alignment with the authority runtime's pin; no consumer's pin gates a BARA
-  release. `scripts/check-bap-drift.sh` no longer reads any consumer repository.
+- [ADR-0023](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0023-pin-follows-bap-releases.md): the protocol pin follows published BAP releases directly. It supersedes
+  [ADR-0010](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0010-pin-bump-policy.md)'s alignment with the authority runtime's pin; no consumer's pin gates an
+  adapter release. `scripts/check-bap-drift.sh` no longer reads any consumer repository.
 
 ### Changed
 
 - The exact protocol pin moves `== 0.6.0` → `== 0.7.0` (requirement, both wall
   attributes, both locks; locked checksum
   `777c606660727781ba03b742e7a7785f2655814048fe365f415b3a0c7253e0a8`). Span evidence per
-  ADR-0023 Decision 3, from the protocol repository over `v0.6.0..v0.7.0`:
+  [ADR-0023](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0023-pin-follows-bap-releases.md) Decision 3, from the protocol repository over `v0.6.0..v0.7.0`:
   - full span: 101 files changed, 9,287 insertions, 238 deletions (docs, ADRs, CI,
     the content-assertion corpus, scripts, the cross-language SDKs, tests);
   - `lib/`: 10 files, 627 insertions, 13 deletions — the new
@@ -234,7 +234,7 @@ The content-assertion release: `sign_content_assertion/3` over BAP 0.7.0.
     (compiled-purity repair, no verdict change); `mix.exs` changes no dependency;
   - corpus sweep: the nine new `attestation-profiles/content-assertion/v1` files and
     BAP's corpus test; the consumed vector `v1/vectors/grant-holder-proof.json` is
-    unchanged, and RA2's round-trip is green at the new pin.
+    unchanged, and the conformance round-trip is green at the new pin.
 - CI runs on Linux only; macOS and Windows jobs are removed. Developer portability is
   unchanged. The CI-parity test pins the Linux lanes and rejects macOS and Windows
   runners.
@@ -272,47 +272,46 @@ tree, and this patch re-runs the release-package evidence lane on a fresh tag.
 
 ## [0.8.0] — 2026-09-23
 
-The role-attestation release (RA11, ADR-0008 accepted): the first BARA release whose
-`sign_grant/3` can gate on a BA-asserted, cryptographically-signed role binding, over
-BAP 0.6.0. The gate is optional and additive — absent `:role_attestation` the
-declaration-only C1 gate and every existing verdict are unchanged. V3's
+The role-attestation release ([ADR-0008](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0008-role-attestation-direction.md)): the first adapter release whose
+`sign_grant/3` can gate on a role binding signed by the authority, over BAP 0.6.0. The
+gate is optional and additive — absent `:role_attestation` the declared-role gate and
+every existing verdict are unchanged. V3's
 `sign_grant/3` fails closed on the option (the profile is Ed25519-bound at schema 1).
 
-### Added — RA11: the BA-attested role gate on `sign_grant/3` (ADR-0008, accepted; BAP 0.6.0)
+### Added — the role-attestation gate on `sign_grant/3` ([ADR-0008](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0008-role-attestation-direction.md); BAP 0.6.0)
 
 - `sign_grant/3` gains the optional `:role_attestation` option: when supplied with a
-  BA-signed `bap-role-attestation/1` compact and the caller-trusted attestor context (a
+  `bap-role-attestation/1` compact signed by the authority and the caller-trusted attestor
+  context (a
   `BoundedAuthorityProtocol.V1.HistoricalPublicKey` trust-root), the gate calls
   `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` with the expected
   subject binding taken from the handle's atomic `signing_identity/1` snapshot — never
-  caller input — and requires the BA-attested role to be `"issuer"`. The gate fires before
-  `sign/2` and before any producer call; any failure (malformed option, BA signature,
+  caller input — and requires the attested role to be `"issuer"`. The gate fires before
+  `sign/2` and before any producer call; any failure (malformed option, attestor signature,
   subject binding, self-attestation, window containment, now-window, non-issuer role) is the
   single closed `{:error, :invalid_role_attestation}`. Absent the option, the
-  declaration-only C1 gate is unchanged. Charter §3's sign-time-gating-verify nuance is
-  landed (ADR-0008's sharpening).
+  declared-role gate is unchanged. The adapter now runs two sign-time checks (the
+  wrong-key guard and this gate); neither verifies the content it signs ([ADR-0008](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0008-role-attestation-direction.md)).
 - The BAP pin moves `== 0.5.1` -> `== 0.6.0` (the role-attestation release) in the one-commit
   discipline: the mix.exs requirement, both wall attributes, and both locks. The full
   0.5.1..0.6.0 span, enumerated and classified (reviewer-verified against the two Hex
-  packages): `lib/` — the new `role_attestation/` tree (the feature this slice consumes),
+  packages): `lib/` — the new `role_attestation/` tree (the feature this release consumes),
   the labeled `compact_jws`/`signing_input` kind touches, and the v1/v2
   wrong-width-signature closed-error-shape fix (error shape only, verdicts unchanged);
   `priv/conformance/attestation-profiles/role-attestation/v1/` — the certified 40-case
-  profile corpus (executed through the dependency by `RoleAttestationCorpusTest`, the
-  RA12 discipline); `spec/` + `docs/` — the profile spec, BAP ADR 0036, and the REQ-RA1
-  requirement map. This is BARA ahead of BA over a `lib/`-touching span by the owner's
-  explicit 2026-09-23 sequencing order (BARA first, BA by handoff) — the user-supersedes
-  route ADR-0010 names, recorded as a dated SUPERSESSION note in that ADR; BA's pin move
-  and issuance leg are owned in that repo.
+  profile corpus (executed through the dependency by `RoleAttestationCorpusTest`);
+  `spec/` + `docs/` — the profile spec, BAP [ADR 0036](https://github.com/baselabs/bounded_authority_protocol/blob/main/docs/adr/0036-role-attestation-profile.md), and the REQ-RA1 requirement map.
+  The adapter adopts this release ahead of the authority runtime, recorded as a dated
+  supersession note in [ADR-0010](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0010-pin-bump-policy.md).
 
 ## [0.7.0] — 2026-09-22
 
-### Added — the ES256 signing surface (B2, ADR-0021)
+### Added — the ES256 signing surface ([ADR-0021](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0021-es256-key-type-discrimination.md))
 
 - `BoundedAuthorityReportAdapter.V3`: the contract-major-3 sibling of the
   major-1 surface — `sign_report/3`, `sign_grant/3`, `sign_anchor/3`, and
   `sign_key_transition/3` over BAP's `BAP3-ES256-SHA256` suite (BAP 0.5.1,
-  BAP ADR 0035: EC P-256 keys, RFC 7518 §3.4 raw `r || s` signatures,
+  BAP [ADR 0035](https://github.com/baselabs/bounded_authority_protocol/blob/main/docs/adr/0035-es256-contract-major-activation.md): EC P-256 keys, RFC 7518 §3.4 raw `r || s` signatures,
   `ES256` headers, `BAP3-*` separators). Major selection is the module name.
 - The key-type discriminator: each major's resolvers accept exactly their
   suite's key shape — 32-byte Ed25519 on the major-1 entry points, the
@@ -335,14 +334,13 @@ declaration-only C1 gate and every existing verdict are unchanged. V3's
 - The conformance harness executes all three certified corpora (v1 283 /
   v2 268 / v3 292 = 843 cases) through the pinned package's certified
   loader and runner, with each corpus's index SHA-256 pinned independently
-  (ADR-0013's one-vector scope superseded by explicit owner direction, as a
-  dated amendment on that ADR).
+  ([ADR-0013](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0013-corpus-as-acceptance-oracle.md)'s one-vector scope superseded, as a dated amendment on that ADR).
 
 ### Changed — dependencies and one deliberate major-1 tightening
 
-- The protocol pin moves `== 0.4.1` → `== 0.5.1` (ADR-0010's bump
+- The protocol pin moves `== 0.4.1` → `== 0.5.1` ([ADR-0010](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0010-pin-bump-policy.md)'s bump
   evidence in the bump commit; the ES256 activation is deliberate
-  contract-surface adoption under the owner-directed B2 program). mint
+  contract-surface adoption). mint
   1.10.0 → 1.10.1 in both locks (EEF-CVE-2026-82672, MEDIUM).
 - `sign_report/3` and `sign_local_loopback_report/3` now reject a
   `grant_compact` that is not a v1 grant (a v2, v3, or malformed compact)
@@ -357,7 +355,7 @@ declaration-only C1 gate and every existing verdict are unchanged. V3's
 ### Dependencies
 
 - The protocol pin moves to `== 0.4.1` (the 2026-09-17 protocol release — a
-  wire-identical tooling/docs patch; ADR-0010's bump policy). Root and edge-agent
+  wire-identical tooling/docs patch; [ADR-0010](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0010-pin-bump-policy.md)'s bump policy). Root and edge-agent
   locks follow; the dependency-direction wall and upgrading guide carry the new
   version. Lock moved to the resolvable latest: spitfire 0.4.2 (a transitive of sourceror; 0.4.2
   reached the registry after 0.6.2 and the latest-first gate flagged it on the next run).
@@ -375,7 +373,7 @@ declaration-only C1 gate and every existing verdict are unchanged. V3's
 ### Added — Windows CI lane + cross-platform developer surface (owner standard, 2026-09-16)
 
 - The CI matrix gains a `windows-latest` lane on the pinned versions (Elixir 1.20.2 /
-  OTP 29.0.3) in both jobs, proving clone → build → test holds on Windows (ADR-0019's
+  OTP 29.0.3) in both jobs, proving clone → build → test holds on Windows ([ADR-0019](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0019-supported-otp-set-and-self-enforcing-toolchain.md)'s
   lane list amended accordingly; the parity test pins the OS dimension with its
   existing mutation proofs). The library itself gains no platform-specific code —
   nothing about the shipped package changes.
@@ -385,7 +383,7 @@ declaration-only C1 gate and every existing verdict are unchanged. V3's
   currency gate moves from a bash script to `scripts/check_deps_currency.exs` (same
   caller-cwd contract and rendered-table classification); the `mix ci` alias drops
   its POSIX `env(1)` re-execs for an env-guard first step (`scripts/ci_env_guard.exs`,
-  preserving the RA7 :dev-boot refusal) with the example job running through
+  preserving the refusal of a :dev boot) with the example job running through
   `scripts/ci_example.exs` (same steps, same order, abort-on-first-red); release-gate
   `mix` spawns route through a `cmd /c` shim on Windows; `mktemp` is replaced by
   `System.tmp_dir!/0`. Porting surfaced three Windows-only defects now fixed in the
@@ -412,7 +410,7 @@ declaration-only C1 gate and every existing verdict are unchanged. V3's
 
 ### Changed — repository toolchain hygiene (no library-code or runtime-dep change)
 
-- The repository now enforces its own toolchain (ADR-0019): `config/config.exs` in both
+- The repository now enforces its own toolchain ([ADR-0019](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0019-supported-otp-set-and-self-enforcing-toolchain.md)): `config/config.exs` in both
   mix projects refuses to build on an Erlang/OTP major outside the supported set {27–29}
   at config load — before compilation and before dependency resolution. The set is
   probe-discovered, not hand-picked: OTP 25/26 have official images but are excluded
@@ -423,7 +421,7 @@ declaration-only C1 gate and every existing verdict are unchanged. V3's
   proves it) — consumers are unaffected. The CI matrix's three lanes (1.18/27, 1.19/28,
   1.20/29) are now lockstep-bound to the enforced set: mix range, config set,
   `.tool-versions`, and lanes move in ONE commit.
-- Dependency-currency gate (ADR-0020): `scripts/check-deps-currency.sh` — caller-cwd,
+- Dependency-currency gate ([ADR-0020](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0020-dependency-currency-gate.md)): `scripts/check-deps-currency.sh` — caller-cwd,
   classifies the RENDERED `mix hex.outdated` tables (direct + `--all`; whitespace-anchored
   status matches), fails on resolvable drift and on an unrendered (unverified) state,
   reports resolver-rejected pins with their requirement chains. Runs in both CI jobs
@@ -469,7 +467,7 @@ breaking changes (SemVer §4).
 
 - Add `sign_local_loopback_report/3` — the holder-side signer for BAP's
   byte-distinct `bap-application-proof/local-loopback-http/1` profile
-  (`typ: "ba+loopback-proof"`, BAP 0.3.0 / BAP ADR-0027). Same report shape,
+  (`typ: "ba+loopback-proof"`, BAP 0.3.0 / BAP [ADR-0027](https://github.com/baselabs/bounded_authority_protocol/blob/main/docs/adr/0027-byte-distinct-application-proof-profiles.md)). Same report shape,
   key-handle callbacks, `%{grant, proof}` envelope, and closed error set as
   `sign_report/3`; two profile divergences: the nonce is required (non-empty
   binary), and only canonical literal-loopback HTTP targets
@@ -493,8 +491,8 @@ breaking changes (SemVer §4).
 - Select `bounded_authority_protocol == 0.3.0` exactly (from `== 0.2.0`).
   Root/example locks and the dependency wall move together in one commit. The
   span is `lib/`-non-empty (the profile surface), so the bump rides an
-  explicit owner-authorized supersession of ADR-0010's alignment default —
-  recorded in ADR-0018, with
+  explicit supersession of [ADR-0010](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0010-pin-bump-policy.md)'s alignment default —
+  recorded in [ADR-0018](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0018-local-loopback-profile-pin.md), with
   BA re-alignment expected at the authority runtime's next dependency pass.
 - `sign_report/3` and all standard `dpop+jwt` behavior are unchanged; the
   shared signing tail is parameterized by the BAP assembler (standard vs
@@ -553,8 +551,8 @@ breaking changes (SemVer §4).
 
 ## [0.3.0] — 2026-08-26
 
-Pre-1.0 feature release. The 1.0 cut is DELIBERATELY DEFERRED (owner direction,
-2026-08-26) until the release sees real consumer use and the surface settles;
+Pre-1.0 feature release. The 1.0 cut is deliberately deferred until the release sees
+real consumer use and the surface settles;
 the stability contract in [upgrading.md](docs/upgrading.md) stands as the
 PROPOSED freeze that 1.0 will publish, not an operative one. Everything the
 contract enumerates is in this release and pinned by the doc-currency tripwire:
@@ -566,10 +564,8 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
 ### Documentation
 
 - Reconcile the governing charter, strategy, contributor guide, and examples to the live release
-  state: 0.2.1 and its source are public, it consumes BAP from Hex, and the separate BA runtime
-  remains a private commercial application that is never public-Hex-published and is not privately
-  Hex-distributed because no paid private-package subscription exists. A future private BA release
-  requires an active subscription and fresh approval for that exact release and destination.
+  state: 0.2.1 and its source are public, it consumes BAP from Hex, and the separate authority
+  runtime is not a dependency.
 - Remove private-consumer identifiers and deployment-specific topology from the tracked public
   surface and rewritten repository history; harden the hash-based gate over tracked files, commit
   messages, historical paths, every reachable commit snapshot, merge content, and annotated-tag
@@ -631,7 +627,7 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   sections by durable identity, the conformance corpus as the oracle — closes the
   "signing beyond Elixir" residual as documentation, not a second-language SDK). The
   security doc's named misuses each state the consequence: caller-supplied key ids,
-  skipped identity binding, no nonce ledger, trusting the C1 declaration as role
+  skipped identity binding, no nonce ledger, trusting the declared issuer role as role
   separation, value-carrying telemetry, and shipping the test-support handle.
 - Doc-currency tripwires (`test/docs_currency_test.exs`) + the regression-pinned
   Livebook: the round-trip notebook now commits its expected cell outputs
@@ -648,7 +644,8 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   `V1.Json.decode/1`; the shipped call shape is /2) — fixed in both guides.
 - Core DX guides, shipped in the package and indexed from the README:
   [usage-rules.md](usage-rules.md) (12 flat rules, exact identifiers, reasons folded
-  in — the C1-gate-is-declaration-rejection rule leads), [docs/errors.md](docs/errors.md)
+  in — the rule that the issuer-role gate only rejects declarations leads),
+  [docs/errors.md](docs/errors.md)
   (all four closed-atom error sets as atom → meaning → what to check → recovery, authored
   to be mechanically checkable against the `@type`s), and
   [docs/getting-started.md](docs/getting-started.md) (first sign in minutes with a
@@ -718,17 +715,18 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   workflow jobs: the protocol package has been consumed from public Hex since 0.2.0 and
   neither project lock carries a git dependency.
 - Re-align the protocol dependency to `bounded_authority_protocol` 0.1.2 (`~> 0.1.2`),
-  the authority runtime's pin (ADR-0010 Decision 3 re-alignment, not a BARA-ahead bump).
+  the authority runtime's pin ([ADR-0010](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0010-pin-bump-policy.md) Decision 3 re-alignment, not an ahead-of-runtime bump).
   The release span's `lib/` delta is conformance tooling only
   (`conformance/{cli,report}.ex` — zero `V1.*` change to the consumed surface),
   `priv/conformance` is unchanged, and the protocol package's own `mix.exs` carries a
   version-line-only change. The wall's requirement + locked-version attributes, both
   project locks, and the drift-guard mutation fixtures (plain drift `0.1.3`, prefix
   extension `0.1.20`) moved in the same commit.
-- ADR-0010 amended with a Hex-era mapping (Decision 6): the substrate moved to Hex
-  consumption on 2026-08-20; the decision records how each policy term (BA's pin, the
-  `lib/`-empty gate, the same-commit bump discipline, RA2-at-version) maps onto release
-  tags and the now-mechanical wall clauses. ADR-0013's one-vector scope reaffirmed.
+- [ADR-0010](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0010-pin-bump-policy.md) amended with a Hex-era mapping (Decision 6): the substrate moved to Hex
+  consumption on 2026-08-20; the decision records how each policy term (the runtime's pin,
+  the `lib/`-empty gate, the same-commit bump discipline, the conformance round-trip at the
+  new version) maps onto release
+  tags and the now-mechanical wall clauses. [ADR-0013](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0013-corpus-as-acceptance-oracle.md)'s one-vector scope reaffirmed.
 - Independent full-range review hardened the drift probe to withhold release verdicts on a
   malformed Hex response and to select only BA's `:bounded_authority_protocol` ref; both paths
   now have executable regressions. The review also replaced the compatible-version and

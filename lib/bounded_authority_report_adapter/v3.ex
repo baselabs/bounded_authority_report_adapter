@@ -390,10 +390,10 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   defp do_sign_grant(grant_input, key_handle, opts) do
     bounds = Map.get(opts, :bounds, %{})
 
-    # The role-attestation gate option is the v1 surface's (RA11); the bap-role-attestation/1
+    # The role-attestation gate option is the v1 surface's; the bap-role-attestation/1
     # profile is Ed25519-bound at schema 1, so no P-256 subject key can be attested under it.
-    # A supplied option FAILS CLOSED rather than being silently ignored (cross-vendor review
-    # M3 — silent-accept is the wrong failure mode for an unsupportable security option) —
+    # A supplied option FAILS CLOSED rather than being silently ignored (a review finding:
+    # silent acceptance is the wrong failure mode for an unsupportable security option) —
     # checked on the normalized options, so a keyword list carries it exactly as a map does.
     if Map.has_key?(opts, :role_attestation) do
       {:error, :invalid_role_attestation}
@@ -690,7 +690,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   defp resolve_key_identity(_handle), do: {:error, :invalid_key_handle}
 
-  # The grant's atomic signing identity — the C1 role gate (the :issuer
+  # The grant's atomic signing identity — the issuer-role gate (the :issuer
   # match) and the P-256 key validation applied to the SAME atomic snapshot.
   # The role and width literals share this clause head: a wrong-width
   # :issuer snapshot is rejected exactly like a :holder one, before sign/2.
@@ -774,7 +774,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   # verifier accepts. The gate is the major's own bounded DECODER, not the
   # header walk: v1 and v2 grants share the EdDSA header, so the major is
   # only distinguishable in the payload's `v` claim, which each major's
-  # closed decode rejects on mismatch (cross-vendor code review, B2).
+  # closed decode rejects on mismatch.
   defp matching_grant_major(grant_compact) do
     case V3.decode_grant(grant_compact, %{}) do
       {:ok, _decoded_grant} -> :ok
@@ -861,7 +861,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   defp required_grant_audiences(grant_input) do
     # An IMPROPER list (["a" | :tail]) passes is_list/1 but raises inside
     # Enum.all?/2 — the closed-error contract requires rejecting it as data
-    # (cross-vendor code review, B2; the same defect existed on the v1 path).
+    # (a review finding; the same defect existed on the v1 path).
     case Map.fetch(grant_input, :audiences) do
       {:ok, audiences} when is_list(audiences) and audiences != [] ->
         if proper_list?(audiences) and Enum.all?(audiences, &is_binary/1),
@@ -936,7 +936,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   end
 
   # next_public_key gets the same point validation as the resolved keys
-  # (design Q7's fail-fast principle, v3-shaped): the successor of a v3 chain
+  # (the resolvers' fail-fast rule, v3-shaped): the successor of a v3 chain
   # key is itself a v3 chain key.
   defp build_key_transition(transition_input, current_key_id, current_public_key)
        when is_map(transition_input) do

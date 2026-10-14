@@ -46,7 +46,7 @@ Migration notes:
 
 ## 0.9.0 — content assertions and the BAP 0.7.0 pin
 
-0.9.0 adds `sign_content_assertion/3` (ADR-0022) for BAP's standalone
+0.9.0 adds `sign_content_assertion/3` ([ADR-0022](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0022-content-assertion-signing.md)) for BAP's standalone
 `bap-content-assertion/1` profile, and the exact protocol pin moves to `0.7.0`, the release
 that carries that profile.
 
@@ -62,7 +62,7 @@ Migration notes:
 - **Code that builds `%BoundedAuthorityProtocol.V1.Bounds{}` literally** must add the new
   `content_bytes` key (a BAP 0.7.0 change); override maps are unaffected.
 - **Pin policy:** this package now follows published protocol releases directly
-  (ADR-0023); consumers adopt protocol and adapter releases on their own schedules.
+  ([ADR-0023](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0023-pin-follows-bap-releases.md)); consumers adopt protocol and adapter releases on their own schedules.
 
 ## 0.8.1 — the documentation-truth patch
 
@@ -73,7 +73,7 @@ code, API, or dependency change — nothing for a consumer to do beyond preferri
 
 ## 0.8.0 — the role-attestation gate and the BAP 0.6.0 pin
 
-0.8.0 adds the optional `:role_attestation` input to `sign_grant/3` (ADR-0008): an
+0.8.0 adds the optional `:role_attestation` input to `sign_grant/3` ([ADR-0008](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0008-role-attestation-direction.md)): an
 authority-signed `bap-role-attestation/1` compact plus the caller-trusted attestor key
 gate grant signing on the attested role being `"issuer"` and the attested subject
 matching the handle's atomic signing identity, before `sign/2` is ever called.
@@ -95,7 +95,7 @@ Migration notes:
 
 ## 0.7.0 — the ES256 surface (`BoundedAuthorityReportAdapter.V3`) and one v1 tightening
 
-0.7.0 adds the contract-major-3 signing surface (ADR-0021): the same four
+0.7.0 adds the contract-major-3 signing surface ([ADR-0021](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0021-es256-key-type-discrimination.md)): the same four
 standard instantiations over the `BAP3-ES256-SHA256` suite (EC P-256 keys,
 raw `r || s` signatures with adapter-owned low-S normalization), selected by
 module name. The exact protocol pin moves to `0.5.1`.
@@ -133,7 +133,7 @@ adding a CI leg for it: the dependency-currency gate is an `.exs` (same behavior
 `mix` through a Windows shim and avoid `mktemp`/`Path.wildcard`/cwd-directed tar
 extraction (each a real Windows defect found while porting), and `.gitattributes` keeps
 every checkout byte-identical. Developer portability across macOS, Linux, and Windows is
-a property of the developer setup, proven on a developer machine, not a CI leg (ADR-0019).
+a property of the developer setup, proven on a developer machine, not a CI leg ([ADR-0019](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0019-supported-otp-set-and-self-enforcing-toolchain.md)).
 One named test exclusion: `DriftProbeTest` skips on Windows — its stub harness intercepts
 git/curl via POSIX shebang exec, which Git Bash bypasses (the drift probe itself runs
 there); the exclusion is declared in the workflow's gate-job comment.
@@ -142,14 +142,14 @@ there); the exclusion is declared in the workflow's gate-job comment.
 
 Repository tooling/hygiene release — no library code, API, or runtime-dependency change.
 The repository now enforces its own toolchain: builds refuse Erlang/OTP majors outside the
-supported set {27–29} at config load, before compilation (ADR-0019). OTP 25 and 26 are
+supported set {27–29} at config load, before compilation ([ADR-0019](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0019-supported-otp-set-and-self-enforcing-toolchain.md)). OTP 25 and 26 are
 explicitly outside the set — `bounded_authority_protocol` 0.4.0's codecs decode through
 OTP 27's `:json` module, so the stack cannot compile its test battery there (probe-proven
 on the official `elixir:1.18.4-otp-25` and `elixir:1.19.6-otp-26` images). The assert
 lives in the repository's `config/config.exs`, which is NOT part of the published
 package — consumers are unaffected. The CI matrix keeps its three lanes (1.18/27,
 1.19/28, 1.20/29 — one per supported major), now locked to the enforced set. A
-dependency-currency gate (latest-first policy, ADR-0020) runs in CI and `mix ci` for
+dependency-currency gate (latest-first policy, [ADR-0020](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0020-dependency-currency-gate.md)) runs in CI and `mix ci` for
 both mix projects; dev-only dependency bumps: `dialyxir` 1.4.8, `ex_doc` 0.40.4
 (example app: `req` 0.7.4). Nothing for a consumer to do.
 
@@ -174,7 +174,7 @@ signing APIs, return shapes, key-handle contract, telemetry, and produced V1
 wire forms are unchanged, and the standard conformance oracle re-ran green at
 the new pin. The version moves to a pre-1.0 minor because the exact pin is a
 package-resolution break for consumers retaining BAP 0.2.x (see
-ADR-0018 for the pin-policy record).
+[ADR-0018](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0018-local-loopback-profile-pin.md) for the pin-policy record).
 
 New capability: `sign_local_loopback_report/3` signs the byte-distinct
 `ba+loopback-proof` profile for canonical `http://127.0.0.1` / `http://[::1]`
