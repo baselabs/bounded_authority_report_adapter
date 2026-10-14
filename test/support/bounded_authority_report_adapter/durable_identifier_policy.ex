@@ -26,7 +26,9 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                          {"test/bounded_authority_report_adapter/protocol_private_api_test.exs",
                           :atom, "docs_v1"},
                          # The same EEP 48 tag: the doc-sample test reads the API docs' examples.
-                         {"test/doc_samples_test.exs", :atom, "docs_v1"}
+                         {"test/doc_samples_test.exs", :atom, "docs_v1"},
+                         {"test/bounded_authority_report_adapter/optional_callback_users_test.exs",
+                          :atom, "docs_v1"}
                        ])
   @external_v1_paths MapSet.new([
                        "examples/edge_agent/lib/edge_agent.ex",
