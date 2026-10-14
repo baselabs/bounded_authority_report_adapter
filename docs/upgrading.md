@@ -3,29 +3,39 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
-## Unreleased — protocol dependency is a range; options are checked
+## Unreleased (0.11.0) — options are checked; the protocol dependency is a range
+
+### Breaking changes
+
+- **Keyword-list options now apply.** Before, every entry point except
+  `sign_content_assertion/3` ignored a keyword list (only the `:role_attestation` option
+  of the two `sign_grant/3` functions was read from one), so
+  `sign_report(report, handle, issued_at: t)` signed with the current time instead of `t`.
+  Now a keyword list is the same call as the equivalent map on every entry point, nested
+  `:bounds` and `:role_attestation` values included, and `sign_content_assertion/3`
+  accepts one (it used to refuse it). If you pass options as a keyword list, check that
+  you meant them: they now take effect.
+- **Unknown option keys and invalid option values are refused.** Each entry point accepts
+  only the option keys its documentation lists. An unknown key (a misspelling such as
+  `role_attestaton:`, or a string key like `%{"issued_at" => t}`), a struct, or a present
+  value of the wrong kind (`proof_id: nil`, `issued_at: "now"`, `bounds: :maximum`) now
+  returns the entry point's input error (`:invalid_report`, `:invalid_anchor`,
+  `:invalid_grant`, `:invalid_transition` or `:invalid_content_assertion`) before calling
+  the key handle. Before, it was ignored. Fix the key or the value.
+- **`nil` and other non-map options are refused.** Before, `nil`, an atom, a number, a
+  tuple or a binary in the options position was silently replaced by the defaults (only
+  `sign_content_assertion/3` refused it). Now every entry point returns its input error.
+  **A caller passing `nil` explicitly, for example `sign_report(report, handle, nil)`, now
+  gets an error**: pass `%{}` or drop the argument; calling an entry point with two
+  arguments still means `%{}`.
+
+### The protocol dependency is a range
 
 The protocol requirement moves from the exact `== 0.8.0` to `~> 0.8.0`: the floor is the
 release that carries the strict Ed25519 rule, and the ceiling is the next protocol minor.
-No API, wire or error change. If your application locks `bounded_authority_protocol` at a
-0.8.x release, `mix deps.get` resolves it alongside this package without an override.
-
-Options given as a keyword list now apply. Before, every entry point except
-`sign_content_assertion/3` ignored a keyword list (only the `:role_attestation` option
-of the two `sign_grant/3` functions was read from one), so `sign_report(report, handle, issued_at: t)`
-signed with the current time instead of `t`. Now a keyword list is the same call as the
-equivalent map on every entry point, `sign_content_assertion/3` included (it used to refuse
-one). A list that is not a keyword list with unique keys is the entry point's input error
-(`:invalid_report` and so on). If you passed options as a keyword list, check that you
-meant them: they now take effect.
-
-Any other options value is now refused too. Before, `nil`, an atom, a number, a tuple or
-a binary in the options position was silently replaced by the defaults (only
-`sign_content_assertion/3` refused it). Now every entry point returns its input error
-(`:invalid_report`, `:invalid_anchor`, `:invalid_grant`, `:invalid_transition` or
-`:invalid_content_assertion`) before calling the key handle. **A caller passing `nil`
-explicitly, for example `sign_report(report, handle, nil)`, now gets an error**: pass
-`%{}` or drop the argument; calling an entry point with two arguments still means `%{}`.
+The range itself changes no wire bytes, signing behavior or error atoms. If your
+application locks `bounded_authority_protocol` at a 0.8.x release, `mix deps.get`
+resolves it alongside this package without an override.
 
 ## 0.10.0 — strict Ed25519 key acceptance and the BAP 0.8.0 pin
 

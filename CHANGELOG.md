@@ -1,6 +1,28 @@
 # Changelog
 
-## [Unreleased]
+## [Unreleased] — 0.11.0
+
+To be released as 0.11.0, a minor release because it narrows behavior: options that were
+silently ignored now apply or are refused. The version in `mix.exs` stays 0.10.0 until the
+release.
+
+### Breaking changes
+
+- **Keyword-list options now apply.** Before, nine of the ten entry points ignored options
+  given as a keyword list, so `sign_report(report, handle, issued_at: t)` signed at the
+  current time. A keyword list is now the same call as the equivalent map, including nested
+  `:bounds` and `:role_attestation` values, and `sign_content_assertion/3` accepts one (it
+  refused it). If you pass keyword options, check that you meant them: they now take effect.
+- **An unknown option key is refused.** Each entry point accepts only its documented option
+  keys. An unknown key (a misspelling such as `role_attestaton:`, or a string key), a struct,
+  or a present value of the wrong kind (`proof_id: nil`, `issued_at: "now"`) returns the
+  entry point's closed input error (`:invalid_report`, `:invalid_anchor`, `:invalid_grant`,
+  `:invalid_transition` or `:invalid_content_assertion`) before any key-handle callback.
+  Before, it was ignored, so a misspelled `:role_attestation` signed with the gate off.
+- **`nil` and other non-map options are refused.** `nil`, an atom, a number, a tuple or a
+  binary in the options position returns the input error instead of the defaults, so
+  `sign_report(report, handle, nil)` now fails. Pass `%{}` or omit the argument (calling
+  with two arguments still means `%{}`).
 
 ### Changed
 
@@ -57,9 +79,8 @@
   the boundary through one helper: a keyword list is the equivalent map. A list that is not
   a keyword list with unique atom keys returns the entry point's closed input error
   (`:invalid_report`, `:invalid_anchor`, `:invalid_grant`, `:invalid_transition` or
-  `:invalid_content_assertion`) before any key is resolved; any other non-map value keeps
-  the defaults as before (`sign_content_assertion/3` still refuses it). The specs accept
-  `keyword()`. Tests: a keyword `:issued_at` sets the proof's `iat`; malformed lists return
+  `:invalid_content_assertion`) before any key is resolved; other non-map values are
+  covered by the next entry. The specs accept `keyword()`. Tests: a keyword `:issued_at` sets the proof's `iat`; malformed lists return
   the input error on all ten entry points; and a seeded generative test checks that map and
   keyword forms of random option sets give byte-identical results on all ten entry points.
 - Any other options value (`nil`, an atom, a number, a tuple, a binary) was silently
