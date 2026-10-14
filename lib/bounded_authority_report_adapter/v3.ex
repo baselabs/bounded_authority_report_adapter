@@ -185,9 +185,15 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   @type grant_compact :: %{grant: binary()}
 
+  @typedoc """
+  The errors of `sign_grant/3`. `:invalid_role_attestation` is returned whenever the
+  options carry `:role_attestation`: this surface has no role-attestation gate and refuses
+  the option rather than ignore it.
+  """
   @type grant_sign_error ::
           :invalid_grant
           | :invalid_key_handle
+          | :invalid_role_attestation
           | :signing_failed
           | {:producer_error, :invalid}
 

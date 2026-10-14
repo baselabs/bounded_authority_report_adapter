@@ -56,7 +56,7 @@ right type but the wrong value is not one of these errors.
 - `:invalid_report` when `grant_compact` is not a contract-major-3 grant.
 - `:invalid_role_attestation` from `V3.sign_grant/3` whenever `:role_attestation` is
   present in the options: that surface has no role-attestation gate and refuses the option
-  rather than ignore it. (`V3`'s `grant_sign_error/0` type does not list this atom.)
+  rather than ignore it. `V3`'s `grant_sign_error/0` type lists it.
 
 ## Where the error types live
 

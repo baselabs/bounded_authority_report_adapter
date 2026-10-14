@@ -33,6 +33,13 @@
   through BAP's documented `V3.check_envelope/2` (ADR-0021 amendment), and the request-digest tag
   test calls `V1.request_digest/3`.
 
+### Fixed
+
+- `BoundedAuthorityReportAdapter.V3.grant_sign_error/0` now lists `:invalid_role_attestation`,
+  which `V3.sign_grant/3` has always returned when the options carry `:role_attestation`.
+  A new test requires each V3 error type to equal its major-1 namesake and calls
+  `V3.sign_grant/3` to pin the atom against the declared type.
+
 ### Documentation
 
 - The README quick start now runs as written: a development key handle, an issuer signing
