@@ -39,6 +39,12 @@
   which `V3.sign_grant/3` has always returned when the options carry `:role_attestation`.
   A new test requires each V3 error type to equal its major-1 namesake and calls
   `V3.sign_grant/3` to pin the atom against the declared type.
+- `mix bounded_authority_report_adapter.doctor`'s advisory for a missing `key_identity/1`
+  now names every entry point that needs it: `sign_anchor/3`, `sign_key_transition/3`,
+  `sign_content_assertion/3`, `V3.sign_anchor/3` and `V3.sign_key_transition/3` (it named
+  only the first two). The `signing_identity/1` advisory names `V3.sign_grant/3` too. Both
+  are built from one list in the adapter, and a new test derives that list by calling every
+  public `sign_*/3` with a handle that records its callbacks, so the list cannot drift.
 
 ### Documentation
 

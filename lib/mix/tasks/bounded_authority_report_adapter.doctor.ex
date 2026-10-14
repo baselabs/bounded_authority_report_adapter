@@ -29,10 +29,11 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   ADVISORY (reported, exit stays zero if nothing fatal):
 
-    * `key_identity/1` absent: `sign_anchor/3`, `sign_key_transition/3` and
-      `sign_content_assertion/3` will refuse the handle (the advisory line names the
-      first two);
-    * `signing_identity/1` absent: `sign_grant/3` will refuse the handle;
+    * `key_identity/1` absent: `sign_anchor/3`, `sign_key_transition/3`,
+      `sign_content_assertion/3`, `V3.sign_anchor/3` and `V3.sign_key_transition/3`
+      will refuse the handle;
+    * `signing_identity/1` absent: `sign_grant/3` and `V3.sign_grant/3` will refuse
+      the handle;
     * with `--ref` + `--live`: a synthetic-message `sign/2` probe whose
       signature does not verify against `public_key/1`'s key (the same
       wrong-key guard the adapter enforces on every real sign; the probe
@@ -315,17 +316,25 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   defp advisories(module) do
     if Code.ensure_loaded?(module) do
-      blocked = [
-        {{:key_identity, 1}, "blocks sign_anchor/3 and sign_key_transition/3"},
-        {{:signing_identity, 1}, "blocks sign_grant/3"}
-      ]
-
-      for {{name, arity}, consequence} <- blocked,
-          not function_exported?(module, name, arity),
-          do: "#{name}/#{arity} absent — #{consequence}"
+      # The entry points that call each optional callback come from the adapter itself
+      # (a test derives that list from the entry points' behavior).
+      for {callback, entry_points} <- BoundedAuthorityReportAdapter.__optional_callback_users__(),
+          not function_exported?(module, callback, 1),
+          do: "#{callback}/1 absent — blocks #{entry_point_list(entry_points)}"
     else
       []
     end
+  end
+
+  defp entry_point_list(entry_points) do
+    names =
+      Enum.map(entry_points, fn
+        {BoundedAuthorityReportAdapter, function} -> "#{function}/3"
+        {BoundedAuthorityReportAdapter.V3, function} -> "V3.#{function}/3"
+      end)
+
+    {init, [last]} = Enum.split(names, -1)
+    if init == [], do: last, else: Enum.join(init, ", ") <> " and " <> last
   end
 
   # Which surface the found key unlocks — reported under --major (the caller

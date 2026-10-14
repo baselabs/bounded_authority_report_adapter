@@ -311,6 +311,28 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     assert Enum.any?(advisories, &(&1 =~ "signing_identity/1 absent" and &1 =~ "sign_grant/3"))
   end
 
+  test "each optional-callback advisory names every entry point that calls the callback" do
+    assert %{advisories: advisories} = Doctor.check(MinimalHandle, :ref, false)
+
+    for {callback, entry_points} <- BoundedAuthorityReportAdapter.__optional_callback_users__() do
+      advisory = Enum.find(advisories, &String.starts_with?(&1, "#{callback}/1 absent"))
+      assert advisory, "no advisory for a missing #{callback}/1"
+
+      for {module, function} <- entry_points do
+        name =
+          if module == BoundedAuthorityReportAdapter,
+            do: "#{function}/3",
+            else:
+              "#{inspect(module) |> String.replace_prefix("BoundedAuthorityReportAdapter.", "")}.#{function}/3"
+
+        assert advisory =~ name, "the #{callback}/1 advisory does not name #{name}: #{advisory}"
+      end
+    end
+
+    key_identity = Enum.find(advisories, &String.starts_with?(&1, "key_identity/1 absent"))
+    assert key_identity =~ "sign_content_assertion/3"
+  end
+
   test "--live: a wrong-key handle trips the wrong-key advisory" do
     assert %{fatals: [], advisories: advisories} = Doctor.check(WrongKeyHandle, :ref, true)
     assert Enum.any?(advisories, &(&1 =~ "--live probe" and &1 =~ "wrong-key"))
