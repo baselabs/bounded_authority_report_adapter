@@ -52,8 +52,6 @@ defmodule BoundedAuthorityReportAdapter.StrictEd25519Handles do
     @moduledoc false
     @behaviour BoundedAuthorityReportAdapter
 
-    alias BoundedAuthorityProtocol.V1.Jwk
-
     @kid "honest-key-001"
 
     @impl true
@@ -70,7 +68,7 @@ defmodule BoundedAuthorityReportAdapter.StrictEd25519Handles do
     @impl true
     def thumbprint(seed) do
       {:ok, public_key} = public_key(seed)
-      Jwk.public_key_thumbprint_raw(public_key, %{})
+      {:ok, BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)}
     end
 
     @impl true
@@ -119,8 +117,6 @@ defmodule BoundedAuthorityReportAdapter.StrictEd25519Handles do
     @moduledoc false
     @behaviour BoundedAuthorityReportAdapter
 
-    alias BoundedAuthorityProtocol.V1.Jwk
-
     @l 0x1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED
     @kid "nonce-zero-key-001"
     @counter {__MODULE__, :sign_calls}
@@ -144,7 +140,7 @@ defmodule BoundedAuthorityReportAdapter.StrictEd25519Handles do
     @impl true
     def thumbprint(seed) do
       {:ok, public_key} = public_key(seed)
-      Jwk.public_key_thumbprint_raw(public_key, %{})
+      {:ok, BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)}
     end
 
     @impl true

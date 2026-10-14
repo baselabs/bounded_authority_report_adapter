@@ -11,7 +11,7 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
     * high-S normalization + low-S pass-through (D4);
     * DER rejection (D3);
     * wrong-key rotation race + right-width wrong-suite (D5);
-    * differential agreement with BAP's `V3.Es256.verify/3` (D5);
+    * differential agreement with BAP's documented `V3.check_envelope/2` (D5);
     * cross-major byte-distinctness and mixed-major fail-fast (D8);
     * the C1 role gate under the v3 surface (D1).
   """
@@ -730,12 +730,16 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
 
   # ------------------------------------------------- differential agreement
 
-  describe "differential agreement with BAP's V3.Es256.verify/3 (D5)" do
+  # BAP's ES256 verifier module is @moduledoc false, so the differential goes through the
+  # documented V3.check_envelope/2: the proof compact is the JWS signing input (the captured
+  # message) plus the base64url signature, and every other envelope input is held fixed, so
+  # the verdict turns on the signature alone (ADR-0021 amendment, October 14, 2026).
+  describe "differential agreement with BAP's V3.check_envelope/2 (D5)" do
     test "valid low-S signatures and single-bit mutations agree on every sample" do
       for seed <- 1..25 do
         {pub, priv} = TestKeys.ec_keypair(<<seed::256>>)
 
-        {grant_compact, _} =
+        {grant_compact, issuer_pub} =
           TestKeys.ec_issuer_signed_grant_compact(ec_thumb(pub),
             issued_at: 1_000,
             not_before: 1_000,
@@ -761,23 +765,26 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
 
         # The adapter's verdict: a handle returning exactly `low_s` (same
         # report + opts → same signing input) signs green.
-        assert {:ok, _} =
+        assert {:ok, %{proof: proof}} =
                  BoundedAuthorityReportAdapter.V3.sign_report(
                    report,
                    {CraftedSignatureHandle, {pub, low_s}},
                    opts
                  ),
-               "seed #{seed}: a signature BAP's Es256 accepts was rejected"
+               "seed #{seed}: a signature BAP accepts was rejected"
 
-        assert V3.Es256.verify(message, low_s, pub),
-               "seed #{seed}: fixture is not actually Es256-valid"
+        # The reconstruction below is exactly the compact the adapter assembled.
+        assert proof == proof_compact(message, low_s)
+
+        assert {:ok, _} = bap_check(grant_compact, issuer_pub, message, low_s),
+               "seed #{seed}: fixture is not accepted by BAP"
 
         # Single-bit mutations of the last byte: both verifiers must reject.
         <<pre::binary-size(63), last>> = low_s
         mutated = <<pre::binary, Bitwise.bxor(last, 0x01)>>
 
-        assert not V3.Es256.verify(message, mutated, pub),
-               "seed #{seed}: Es256 accepted a mutated signature"
+        assert {:error, :invalid} = bap_check(grant_compact, issuer_pub, message, mutated),
+               "seed #{seed}: BAP accepted a mutated signature"
 
         assert {:error, :signing_failed} =
                  BoundedAuthorityReportAdapter.V3.sign_report(
@@ -788,6 +795,30 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
                "seed #{seed}: the adapter accepted a mutated signature"
       end
     end
+  end
+
+  defp proof_compact(message, signature),
+    do: message <> "." <> Base.url_encode64(signature, padding: false)
+
+  defp bap_check(grant_compact, issuer_pub, message, signature) do
+    V3.check_envelope(
+      %Credentials{grant: grant_compact, proof: proof_compact(message, signature)},
+      %ExpectedRequest{
+        trusted_issuer: %TrustedIssuer{key_id: "issuer-2026-09", public_key: issuer_pub},
+        issuer: "https://issuer.example.test",
+        audience: "https://verifier.example.test",
+        method: "POST",
+        target_uri: "https://api.example.test/invoke",
+        invocation_id: "123e4567-e89b-42d3-a456-426614174000",
+        operation: "report_external_materialization",
+        cast_arguments: @cast_arguments,
+        evaluation_time: @now,
+        clock_skew: 60,
+        proof_max_age: 300,
+        nonce: :not_required,
+        bounds: V1.Bounds.maximum()
+      }
+    )
   end
 
   # --------------------------------------------- cross-major + mixed-major

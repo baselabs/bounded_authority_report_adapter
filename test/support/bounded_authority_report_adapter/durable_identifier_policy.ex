@@ -20,7 +20,11 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                          {"test/support/bounded_authority_report_adapter/v3_test_handles.ex",
                           :path, "v3_test_handles"},
                          {"test/support/bounded_authority_report_adapter/v3_test_handles.ex",
-                          :module, "BoundedAuthorityReportAdapter.V3TestHandles"}
+                          :module, "BoundedAuthorityReportAdapter.V3TestHandles"},
+                         # The EEP 48 docs-chunk format tag returned by Code.fetch_docs/1, owned
+                         # by Erlang/OTP: the private-API guard matches on it.
+                         {"test/bounded_authority_report_adapter/protocol_private_api_test.exs",
+                          :atom, "docs_v1"}
                        ])
   @external_v1_paths MapSet.new([
                        "examples/edge_agent/lib/edge_agent.ex",

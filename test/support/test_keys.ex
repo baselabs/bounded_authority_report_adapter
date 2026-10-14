@@ -63,14 +63,14 @@ defmodule BoundedAuthorityReportAdapter.TestKeys do
   end
 
   @doc """
-  The raw RFC 7638 holder thumbprint for a public key (32 bytes), via BAP's JWK
-  thumbprint derivation.
+  The raw RFC 7638 thumbprint (32 bytes) of any raw 32-byte Ed25519 public key: the
+  test tree's one route to an Ed25519 thumbprint. It uses only BAP's documented JWK
+  functions (`encode_public/2`, then `thumbprint/2`, base64url-decoded).
   """
   def holder_thumbprint_raw(holder_public_key) do
-    {:ok, thumbprint} =
-      Jwk.public_key_thumbprint_raw(holder_public_key, %{})
-
-    thumbprint
+    {:ok, jwk} = Jwk.encode_public(holder_public_key, %{})
+    {:ok, thumbprint} = Jwk.thumbprint(jwk, %{})
+    Base.url_decode64!(thumbprint, padding: false)
   end
 
   defp ed25519_keypair(seed) do
@@ -105,15 +105,15 @@ defmodule BoundedAuthorityReportAdapter.TestKeys do
 
   @doc """
   The raw RFC 7638 EC thumbprint (32 bytes) for a 65-byte uncompressed-SEC1
-  P-256 public key — the v3 `cnf.jkt` preimage
-  `{"crv":"P-256","kty":"EC","x":X,"y":Y}` hashed with SHA-256
-  (spec/bap-v3.md §3.1).
+  P-256 public key — the v3 `cnf.jkt` digest over
+  `{"crv":"P-256","kty":"EC","x":X,"y":Y}` (spec/bap-v3.md §3.1): the test tree's
+  one route to a P-256 thumbprint, through BAP's documented `V3.EcJwk.encode_public/2`
+  and `V3.EcJwk.thumbprint/2` (base64url-decoded).
   """
   def ec_thumbprint_raw(public_key) when byte_size(public_key) == 65 do
-    {:ok, jwk_preimage} =
-      V3.EcJwk.encode_public(public_key, %{})
-
-    :crypto.hash(:sha256, jwk_preimage)
+    {:ok, jwk} = V3.EcJwk.encode_public(public_key, %{})
+    {:ok, thumbprint} = V3.EcJwk.thumbprint(jwk, %{})
+    Base.url_decode64!(thumbprint, padding: false)
   end
 
   @doc """

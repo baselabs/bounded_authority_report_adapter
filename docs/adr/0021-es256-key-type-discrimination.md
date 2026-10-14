@@ -175,7 +175,14 @@ point is a defect, not a diagnostics problem).
    a decorrelation property, and equivalence is proven by a
    differential-agreement test over randomized signatures — valid pairs and
    single-bit mutations — where this guard's verdict must match
-   `V3.Es256.verify/3`'s on every sample. The v1 guard (`:eddsa`, `:none`) is
+   `V3.Es256.verify/3`'s on every sample. *(Amended 2026-10-14: `V3.Es256` is
+   `@moduledoc false`, and the repository now fails any call to an
+   undocumented protocol function. The differential runs through BAP's
+   documented `V3.check_envelope/2` instead: each sample's proof compact is
+   the captured JWS signing input plus the base64url signature, asserted
+   equal to the compact the adapter assembled, with every other envelope
+   input held fixed, so the verdict turns on the signature. The samples, the
+   mutations and the decorrelation property are unchanged.)* The v1 guard (`:eddsa`, `:none`) is
    unchanged. The rotation-race defense carries over unchanged: the
    signature must verify against the key resolved in the same operation's
    snapshot, else `:signing_failed`.
@@ -299,7 +306,8 @@ dependency (BAP 0.5.1):
   suites; only the verify can).
 - **Differential agreement.** Over randomized valid and single-bit-mutated
   signatures, this library's v3 verify guard and BAP's
-  `V3.Es256.verify/3` agree on every sample.
+  `V3.Es256.verify/3` agree on every sample. *(Amended 2026-10-14: measured
+  through BAP's documented `V3.check_envelope/2`; see Decision 5.)*
 - **Round-trips.** All four v3 objects sign through this library and verify
   green through BAP's v3 façade (`check_envelope/2`, `verify_grant/3`,
   `verify_historical_anchor/3`, `verify_key_transition/4`) with 65-byte

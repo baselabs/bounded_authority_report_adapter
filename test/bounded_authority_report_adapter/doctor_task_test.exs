@@ -8,10 +8,9 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
 
   use ExUnit.Case, async: false
 
-  alias BoundedAuthorityProtocol.V1
   alias Mix.Tasks.BoundedAuthorityReportAdapter.Doctor
 
-  def ed_thumb_ref(pub), do: elem(V1.Jwk.public_key_thumbprint_raw(pub, %{}), 1)
+  def ed_thumb_ref(pub), do: BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(pub)
 
   def ed_thumb_pub7, do: ed_thumb_ref(pub7())
 
@@ -184,6 +183,64 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
       Process.put({__MODULE__, :calls}, count + 1)
       if count == 0, do: 0, else: 1
     end
+  end
+
+  # Thumbprint oracles independent of the protocol package: the RFC 7638 digest built by hand
+  # from its definition (SHA-256 over the lexicographically ordered required members), for
+  # each suite. The doctor's expected value must agree with them.
+  def rfc7638_ed25519(pub) do
+    x = Base.url_encode64(pub, padding: false)
+    :crypto.hash(:sha256, ~s({"crv":"Ed25519","kty":"OKP","x":"#{x}"}))
+  end
+
+  def rfc7638_p256(<<4, x::binary-size(32), y::binary-size(32)>>) do
+    x = Base.url_encode64(x, padding: false)
+    y = Base.url_encode64(y, padding: false)
+    :crypto.hash(:sha256, ~s({"crv":"P-256","kty":"EC","x":"#{x}","y":"#{y}"}))
+  end
+
+  defmodule HandBuiltEdThumbprintHandle do
+    def sign(message, _ref),
+      do: {:ok, :crypto.sign(:eddsa, :none, message, [elem(keypair(), 1), :ed25519])}
+
+    def public_key(_ref), do: {:ok, elem(keypair(), 0)}
+
+    def thumbprint(_ref),
+      do: {:ok, BoundedAuthorityReportAdapter.DoctorTaskTest.rfc7638_ed25519(elem(keypair(), 0))}
+
+    defp keypair, do: :crypto.generate_key(:eddsa, :ed25519, <<21::256>>)
+  end
+
+  defmodule HandBuiltECThumbprintHandle do
+    def sign(_message, _ref), do: {:error, :not_called_without_live}
+    def public_key(_ref), do: {:ok, elem(keypair(), 0)}
+
+    def thumbprint(_ref),
+      do: {:ok, BoundedAuthorityReportAdapter.DoctorTaskTest.rfc7638_p256(elem(keypair(), 0))}
+
+    defp keypair, do: :crypto.generate_key(:ecdh, :prime256v1, <<22::256>>)
+  end
+
+  defmodule ThumbprintMismatchEdHandle do
+    def sign(message, _ref),
+      do: {:ok, :crypto.sign(:eddsa, :none, message, [elem(keypair(), 1), :ed25519])}
+
+    def public_key(_ref), do: {:ok, elem(keypair(), 0)}
+
+    # The WRONG preimage: a hash of the raw key bytes, not the RFC 7638 OKP member set.
+    def thumbprint(_ref), do: {:ok, :crypto.hash(:sha256, elem(keypair(), 0))}
+
+    defp keypair, do: :crypto.generate_key(:eddsa, :ed25519, <<23::256>>)
+  end
+
+  test "the doctor's expected thumbprint equals the hand-built RFC 7638 digest (both suites)" do
+    assert %{fatals: []} = Doctor.check(HandBuiltEdThumbprintHandle, :ref, false)
+    assert %{fatals: []} = Doctor.check(HandBuiltECThumbprintHandle, :ref, false)
+  end
+
+  test "RED: an Ed25519 thumbprint over the wrong preimage trips the match fatal" do
+    assert %{fatals: fatals} = Doctor.check(ThumbprintMismatchEdHandle, :ref, false)
+    assert Enum.any?(fatals, &(&1 =~ "RFC 7638 digest derived from public_key/1"))
   end
 
   test "RED: a thumbprint that raises trips the thumbprint-callback fatal" do

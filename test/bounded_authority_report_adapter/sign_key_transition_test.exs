@@ -33,7 +33,7 @@ defmodule BoundedAuthorityReportAdapter.SignKeyTransitionTest do
   defp current_keypair, do: ed25519(<<2::256>>)
   defp next_keypair, do: ed25519(<<3::256>>)
   defp ed25519(seed), do: :crypto.generate_key(:eddsa, :ed25519, seed)
-  defp thumb(pub), do: elem(V1.Jwk.public_key_thumbprint_raw(pub, %{}), 1)
+  defp thumb(pub), do: BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(pub)
 
   # --- fixtures ---------------------------------------------------------------
 

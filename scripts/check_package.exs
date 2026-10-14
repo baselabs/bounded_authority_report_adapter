@@ -128,8 +128,9 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
 
   defp holder_thumbprint do
     {holder_pub, _} = keypair(@holder_seed)
-    {:ok, raw} = V1.Jwk.public_key_thumbprint_raw(holder_pub, %{})
-    raw
+    {:ok, jwk} = V1.Jwk.encode_public(holder_pub, %{})
+    {:ok, thumbprint} = V1.Jwk.thumbprint(jwk, %{})
+    Base.url_decode64!(thumbprint, padding: false)
   end
 
   defp issuer_signed_grant_compact do

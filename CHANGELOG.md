@@ -25,6 +25,13 @@
   generated comment, the package smoke check and the `edge_agent` example compute the raw holder
   thumbprint with the protocol package's documented `V1.Jwk.encode_public/2` and
   `V1.Jwk.thumbprint/2` instead of the undocumented `V1.Jwk.public_key_thumbprint_raw/2`.
+- `mix bounded_authority_report_adapter.doctor` derives the expected thumbprint for both suites
+  through the documented `V1.Jwk` and `V3.EcJwk` `encode_public/2` + `thumbprint/2` functions
+  (byte-equal to the previous derivation on 200 random keys per suite; no verdict changes). The
+  test tree reaches a thumbprint only through `TestKeys.holder_thumbprint_raw/1` and
+  `TestKeys.ec_thumbprint_raw/1`, which use the same functions; the ES256 differential test runs
+  through BAP's documented `V3.check_envelope/2` (ADR-0021 amendment), and the request-digest tag
+  test calls `V1.request_digest/3`.
 
 ### Added
 
@@ -35,6 +42,13 @@
   not formatted, and when the notebook's statement of the source version, protocol requirement
   and release state disagrees with `mix.exs` and the CHANGELOG. It runs in `mix test`, so in
   `mix ci` and CI (ADR-0011 amendment).
+- `test/bounded_authority_report_adapter/protocol_private_api_test.exs` fails when any file under
+  `lib/`, `scripts/`, `examples/` or `test/` calls a `bounded_authority_protocol` function the
+  dependency does not document. The private set comes from the dependency's compiled docs chunks
+  (`@doc false` functions and every function of a `@moduledoc false` module); calls are read from
+  parsed code, including pipes and captures, with aliases resolved.
+- The doctor tests pin its expected thumbprint to a hand-built RFC 7638 digest for both suites,
+  and an Ed25519 handle with a wrong-preimage thumbprint must trip the match fatal.
 
 ## [0.10.0] — 2026-10-13
 

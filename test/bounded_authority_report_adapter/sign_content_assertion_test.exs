@@ -9,8 +9,6 @@ defmodule BoundedAuthorityReportAdapter.SignContentAssertionTest do
     @moduledoc false
     @behaviour BoundedAuthorityReportAdapter
 
-    alias BoundedAuthorityProtocol.V1.Jwk
-
     @impl true
     def key_identity(pid) do
       Agent.get_and_update(pid, fn s ->
@@ -33,7 +31,7 @@ defmodule BoundedAuthorityReportAdapter.SignContentAssertionTest do
     @impl true
     def thumbprint(pid) do
       {:ok, public} = public_key(pid)
-      Jwk.public_key_thumbprint_raw(public, %{})
+      {:ok, BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public)}
     end
   end
 

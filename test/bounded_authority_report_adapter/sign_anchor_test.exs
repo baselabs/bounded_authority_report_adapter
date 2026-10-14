@@ -52,7 +52,7 @@ defmodule BoundedAuthorityReportAdapter.SignAnchorTest do
   end
 
   defp expected_anchor(anchor_input, public_key, opts \\ []) do
-    {:ok, fingerprint} = V1.Jwk.public_key_thumbprint_raw(public_key, %{})
+    fingerprint = TestKeys.holder_thumbprint_raw(public_key)
 
     %V1.ExpectedAnchor{
       anchor_id: anchor_input.anchor_id,

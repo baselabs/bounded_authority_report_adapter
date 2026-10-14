@@ -233,7 +233,7 @@ defmodule EdgeAgent.LocalLoopbackTest do
   # `nonce` overrides the reservation (used where no loopback listener exists).
   defp loopback_signed_envelope(target, nonce \\ nil) do
     {pub, priv} = ed25519(@holder_seed)
-    {:ok, thumb} = V1.Jwk.public_key_thumbprint_raw(pub, %{})
+    {:ok, thumb} = EdgeAgent.Handle.thumbprint({pub, priv})
     {grant_compact, _issuer_pub} = EdgeAgent.DemoIssuer.signed_grant(thumb)
     {:ok, cast_arguments} = V1.Json.decode(@body)
 
@@ -263,7 +263,7 @@ defmodule EdgeAgent.LocalLoopbackTest do
   # A STANDARD envelope (valid dpop+jwt bytes over the configured https target).
   defp standard_signed_envelope do
     {pub, priv} = ed25519(@holder_seed)
-    {:ok, thumb} = V1.Jwk.public_key_thumbprint_raw(pub, %{})
+    {:ok, thumb} = EdgeAgent.Handle.thumbprint({pub, priv})
     {grant_compact, _issuer_pub} = EdgeAgent.DemoIssuer.signed_grant(thumb)
     {:ok, cast_arguments} = V1.Json.decode(@body)
 

@@ -16,7 +16,6 @@ defmodule BoundedAuthorityReportAdapter.TestHandles do
 end
 
 defmodule CountingKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
   @moduledoc "Counts sign/2 calls — the C1 tripwire (asserts exactly one signing call)."
   @behaviour BoundedAuthorityReportAdapter
 
@@ -33,7 +32,7 @@ defmodule CountingKeyHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -41,7 +40,6 @@ defmodule CountingKeyHandle do
 end
 
 defmodule CapturingKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
   @moduledoc "Captures the message handed to sign/2 — the no-canonical-bytes-fork tripwire."
   @behaviour BoundedAuthorityReportAdapter
 
@@ -58,7 +56,7 @@ defmodule CapturingKeyHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -66,7 +64,6 @@ defmodule CapturingKeyHandle do
 end
 
 defmodule FailingKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
   @moduledoc "A key-handle whose sign/2 always fails — exercises the :signing_failed path."
   @behaviour BoundedAuthorityReportAdapter
 
@@ -78,14 +75,12 @@ defmodule FailingKeyHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 end
 
 defmodule BadContractHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   A key-handle whose sign/2 violates the {:ok,_}|{:error,_} contract (returns :ok).
   Cross-vendor closeout finding: sign_via_handle/2 was non-total; a non-tuple
@@ -106,7 +101,7 @@ defmodule BadContractHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 end
@@ -150,8 +145,6 @@ defmodule ExitingKeyHandle do
 end
 
 defmodule WrongKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   A key-handle whose public_key/1 returns key A but whose sign/2 signs with a
   DIFFERENT key B (a rotation/misconfiguration race). Cross-vendor round 2
@@ -172,7 +165,7 @@ defmodule WrongKeyHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 end
@@ -184,8 +177,6 @@ end
 # ---------------------------------------------------------------------------
 
 defmodule AnchorCapturingKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   Captures the message handed to sign/2 — the no-canonical-bytes-fork tripwire
   for sign_anchor/3. Implements key_identity/1 so sign_anchor reaches sign/2.
@@ -200,7 +191,7 @@ defmodule AnchorCapturingKeyHandle do
   def public_key({public_key, _private_key}), do: {:ok, public_key}
 
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -210,8 +201,6 @@ defmodule AnchorCapturingKeyHandle do
 end
 
 defmodule AnchorWrongKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   key_identity/1 + public_key/1 return key A's material, but sign/2 signs with a
   DIFFERENT key B (a rotation/misconfiguration race). The verify_signature
@@ -225,7 +214,7 @@ defmodule AnchorWrongKeyHandle do
   end
 
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -244,8 +233,6 @@ defmodule AnchorExitingKeyHandle do
 end
 
 defmodule AnchorFailingKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   key_identity/1 + public_key/1 succeed; sign/2 returns {:error, _} -> :signing_failed.
   """
@@ -254,7 +241,7 @@ defmodule AnchorFailingKeyHandle do
   def sign(_message, _handle), do: {:error, :always_fails}
 
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -298,8 +285,6 @@ end
 # ---------------------------------------------------------------------------
 
 defmodule TransitionCapturingKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   Captures the message handed to sign/2 — the no-canonical-bytes-fork tripwire for
   sign_key_transition/3. Implements key_identity/1 so sign_key_transition reaches sign/2.
@@ -314,7 +299,7 @@ defmodule TransitionCapturingKeyHandle do
   def public_key({public_key, _private_key}), do: {:ok, public_key}
 
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -386,8 +371,6 @@ end
 # ---------------------------------------------------------------------------
 
 defmodule GrantIssuerHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc "The issuer-role handle for sign_grant tests: signing_identity/1 -> {:issuer, 'issuer-2026-07', pub}."
   @behaviour BoundedAuthorityReportAdapter
 
@@ -406,7 +389,7 @@ defmodule GrantIssuerHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -414,8 +397,6 @@ defmodule GrantIssuerHandle do
 end
 
 defmodule GrantHolderCountingHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   The C1 tripwire for sign_grant: signing_identity/1 -> {:holder, ...}, and sign/2
   counts calls. sign_grant MUST reject a :holder handle BEFORE sign/2, so
@@ -440,7 +421,7 @@ defmodule GrantHolderCountingHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -448,8 +429,6 @@ defmodule GrantHolderCountingHandle do
 end
 
 defmodule GrantIssuerCountingHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   The RA11 tripwire for the role-attestation gate: an ISSUER-role handle whose sign/2 counts
   calls. When the BA-attestation gate rejects (holder-role attestation, foreign subject
@@ -475,7 +454,7 @@ defmodule GrantIssuerCountingHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -483,8 +462,6 @@ defmodule GrantIssuerCountingHandle do
 end
 
 defmodule GrantRolelessHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   The roleless tripwire: implements sign/2 + public_key/1 + thumbprint/1 +
   key_identity/1 but OMITS signing_identity/1. sign_grant must reject it as
@@ -504,7 +481,7 @@ defmodule GrantRolelessHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -515,7 +492,6 @@ defmodule GrantRolelessHandle do
 end
 
 defmodule GrantCapturingKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
   @moduledoc "Captures the sign/2 message — the no-canonical-bytes-fork tripwire for sign_grant."
   @behaviour BoundedAuthorityReportAdapter
   @key {__MODULE__, :message}
@@ -535,7 +511,7 @@ defmodule GrantCapturingKeyHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 
@@ -543,8 +519,6 @@ defmodule GrantCapturingKeyHandle do
 end
 
 defmodule GrantWrongKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   signing_identity/1 returns the handle's pub A; sign/2 signs with a DIFFERENT key B.
   The verify_signature guard in the shared tail catches the sign/2-vs-snapshot mismatch
@@ -567,7 +541,7 @@ defmodule GrantWrongKeyHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 end
@@ -615,8 +589,6 @@ defmodule GrantExitingHandle do
 end
 
 defmodule GrantFailingKeyHandle do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc "signing_identity/1 + public_key/1 succeed; sign/2 -> {:error, _} -> :signing_failed."
   @behaviour BoundedAuthorityReportAdapter
 
@@ -632,7 +604,7 @@ defmodule GrantFailingKeyHandle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw} = Jwk.public_key_thumbprint_raw(public_key, %{})
+    raw = BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
     {:ok, raw}
   end
 end

@@ -130,7 +130,7 @@ defmodule EdgeAgentTest do
   # Grant + proof both match the demo issuer key the default receiver trusts.
   defp signed_envelope(opts \\ []) do
     {pub, priv} = ed25519(@holder_seed)
-    {:ok, thumb} = V1.Jwk.public_key_thumbprint_raw(pub, %{})
+    {:ok, thumb} = EdgeAgent.Handle.thumbprint({pub, priv})
     {grant_compact, _issuer_pub} = EdgeAgent.DemoIssuer.signed_grant(thumb)
 
     invocation_id = "00000000-0000-4000-8000-000000000001"
@@ -151,7 +151,7 @@ defmodule EdgeAgentTest do
   defp stranger_signed_envelope do
     {holder_pub, _holder_priv} = ed25519(@holder_seed)
     {stranger_pub, stranger_priv} = ed25519(@stranger_seed)
-    {:ok, holder_thumb} = V1.Jwk.public_key_thumbprint_raw(holder_pub, %{})
+    {:ok, holder_thumb} = EdgeAgent.Handle.thumbprint({holder_pub, nil})
     {grant_compact, _issuer_pub} = EdgeAgent.DemoIssuer.signed_grant(holder_thumb)
 
     invocation_id = "00000000-0000-4000-8000-000000000002"

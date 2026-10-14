@@ -273,17 +273,21 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   defp expected_thumbprint(key) do
     case classify_public_key(key) do
-      {:ed25519, pub} -> V1.Jwk.public_key_thumbprint_raw(pub, %{})
-      {:p256, pub} -> ec_thumbprint_raw(pub)
+      {:ed25519, pub} -> raw_thumbprint(V1.Jwk.encode_public(pub, %{}), &V1.Jwk.thumbprint/2)
+      {:p256, pub} -> raw_thumbprint(V3.EcJwk.encode_public(pub, %{}), &V3.EcJwk.thumbprint/2)
       :invalid -> :error
     end
   end
 
-  defp ec_thumbprint_raw(pub) do
-    with {:ok, preimage} <- V3.EcJwk.encode_public(pub, %{}) do
-      {:ok, :crypto.hash(:sha256, preimage)}
+  # The raw RFC 7638 digest, through the protocol package's documented JWK functions only:
+  # encode the public JWK, take its canonical base64url thumbprint, decode it.
+  defp raw_thumbprint({:ok, jwk}, thumbprint) do
+    with {:ok, encoded} <- thumbprint.(jwk, %{}) do
+      Base.url_decode64(encoded, padding: false)
     end
   end
+
+  defp raw_thumbprint(_encode_error, _thumbprint), do: :error
 
   # Shape classification — the doctor's mirror of the adapter's resolver
   # discrimination (diagnostics infer the suite from the key's wire shape;

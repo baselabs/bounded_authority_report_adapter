@@ -57,8 +57,7 @@ defmodule BoundedAuthorityReportAdapter.StandardByteIdentityTest do
   end
 
   defp thumb(public_key) do
-    {:ok, digest} = V1.Jwk.public_key_thumbprint_raw(public_key, %{})
-    digest
+    BoundedAuthorityReportAdapter.TestKeys.holder_thumbprint_raw(public_key)
   end
 
   defp report do

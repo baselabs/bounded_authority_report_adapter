@@ -1,6 +1,4 @@
 defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @moduledoc """
   TEST-ONLY reference implementation of the `BoundedAuthorityReportAdapter`
   key-handle behaviour.
@@ -59,8 +57,7 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
   end
 
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw_thumbprint} = Jwk.public_key_thumbprint_raw(public_key, %{})
-    {:ok, raw_thumbprint}
+    {:ok, TestKeys.holder_thumbprint_raw(public_key)}
   end
 
   def thumbprint(_handle), do: {:error, :invalid_handle}

@@ -29,8 +29,12 @@ that pointed at this work named the exact files:
 `deps/bounded_authority_protocol/lib/bounded_authority_protocol/v1/runtime.ex`
 (`check_envelope/2`, `verify_grant/3`), the struct files (`expected_request.ex`,
 `trusted_issuer.ex`, `envelope_facts.ex`, `credentials.ex`), `jwk.ex`
-(`public_key_thumbprint_raw/2`). Build verifier/consumer calls from the struct
-defs + the function `@spec`s, not from prose.
+(`encode_public/2` + `thumbprint/2`; its `public_key_thumbprint_raw/2` is `@doc false`).
+Build verifier/consumer calls from the struct defs + the function `@spec`s, not from
+prose, and call only documented protocol functions:
+`test/bounded_authority_report_adapter/protocol_private_api_test.exs` fails on any call
+to a `@doc false` function or `@moduledoc false` module of the protocol package, read
+from its compiled docs chunks.
 
 **Verify before you cite — and check BAP/BA MAIN, not just BARA's locked
 release.** ADR numbers, ROADMAP rows, and "the standard says X" claims are all

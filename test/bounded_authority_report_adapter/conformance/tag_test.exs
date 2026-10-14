@@ -61,10 +61,12 @@ defmodule BoundedAuthorityReportAdapter.Conformance.TagTest do
     # the coercion, a ["float", 1] tag (JCS-encoded integer) would produce
     # {:float, 1} (an integer), which RequestDigest rejects.
     test "the translated float satisfies RequestDigest.typed" do
-      alias BoundedAuthorityProtocol.V1.{Bounds, RequestDigest}
+      alias BoundedAuthorityProtocol.V1
+      alias BoundedAuthorityProtocol.V1.Bounds
 
+      # V1.request_digest/3 is the documented entry point to RequestDigest.digest/3.
       tagged = Tag.from_json(["float", 1])
-      assert {:ok, _} = RequestDigest.digest("op", tagged, Bounds.maximum())
+      assert {:ok, _} = V1.request_digest("op", tagged, Bounds.maximum())
     end
   end
 end
