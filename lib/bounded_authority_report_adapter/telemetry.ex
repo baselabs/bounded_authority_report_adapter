@@ -37,7 +37,14 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   # The single source of truth for both axes. docs/telemetry.md's tables are
   # diffed against these by telemetry_test.exs — a drift reds the suite.
   @objects [:report, :anchor, :grant, :key_transition, :local_loopback_report, :content_assertion]
-  @classes [:ok, :invalid_input, :invalid_key_handle, :signing_failed, :producer_error]
+  @classes [
+    :ok,
+    :invalid_input,
+    :invalid_key_handle,
+    :invalid_role_attestation,
+    :signing_failed,
+    :producer_error
+  ]
 
   @doc """
   The closed object axis: one atom per signing object kind.
@@ -52,7 +59,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   The closed result-class axis: the classified outcome of a signing call.
 
       iex> BoundedAuthorityReportAdapter.Telemetry.classes()
-      [:ok, :invalid_input, :invalid_key_handle, :signing_failed, :producer_error]
+      [:ok, :invalid_input, :invalid_key_handle, :invalid_role_attestation, :signing_failed, :producer_error]
   """
   @spec classes() :: [atom()]
   def classes, do: @classes
@@ -150,6 +157,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   defp classify({:error, :invalid_transition}), do: :invalid_input
   defp classify({:error, :invalid_content_assertion}), do: :invalid_input
   defp classify({:error, :invalid_key_handle}), do: :invalid_key_handle
+  defp classify({:error, :invalid_role_attestation}), do: :invalid_role_attestation
   defp classify({:error, :signing_failed}), do: :signing_failed
   defp classify({:error, {:producer_error, :invalid}}), do: :producer_error
   defp classify(_off_spec), do: :signing_failed

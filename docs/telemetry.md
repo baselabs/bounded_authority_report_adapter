@@ -41,6 +41,7 @@ Result classes (the classified outcome of a span):
 | `:ok` | The signing round-trip returned `{:ok, _}`. | Baseline; alert on rate DROPS. |
 | `:invalid_input` | The caller-supplied object failed validation (`:invalid_report`, `:invalid_anchor`, `:invalid_grant`, `:invalid_transition`, or `:invalid_content_assertion`). | Rate = caller input quality. Not a custody problem. |
 | `:invalid_key_handle` | The key handle is malformed, or a handle callback (`public_key/1`, `key_identity/1`, `signing_identity/1`) rejected / returned an invalid value (including an Ed25519 key BAP's strict rule refuses) / exited. | Rate = handle wiring or custody-endpoint health. |
+| `:invalid_role_attestation` | `sign_grant/3` refused its `:role_attestation` option: malformed, rejected by the protocol's verification, or not attesting the issuer role (and, on `V3.sign_grant/3`, any such option). | Rate = attestation supply or a caller trying to sign grants it is not attested for. Not a custody problem. |
 | `:signing_failed` | `sign/2` rejected, violated its contract, returned a non-64-byte signature, OR the signature did not verify against the resolved public key (wrong-key). | Rate = **custody misconfiguration** — the highest-priority signal this surface offers; a sustained nonzero rate means the handle is signing with the wrong key or failing outright. |
 | `:producer_error` | The protocol's producer or assembler rejected the signing input (bounds, field constraints). | Rate = caller input quality against the protocol contract. |
 

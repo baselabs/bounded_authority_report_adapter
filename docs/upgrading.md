@@ -29,6 +29,13 @@ CHANGELOG; this page covers THIS library's releases.
   gets an error**: pass `%{}` or drop the argument; calling an entry point with two
   arguments still means `%{}`.
 
+### Telemetry gains one result class
+
+A `sign_grant/3` refused with `:invalid_role_attestation` used to be reported with the
+`:signing_failed` result class, the custody alarm. It now reports
+`:invalid_role_attestation`. If a handler or alert matches the result classes exactly, add
+the new one; a `:signing_failed` alert stops firing for role-attestation refusals.
+
 ### The protocol dependency is a range
 
 The protocol requirement moves from the exact `== 0.8.0` to `~> 0.8.0`: the floor is the

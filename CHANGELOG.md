@@ -57,6 +57,13 @@ release.
 
 ### Fixed
 
+- A `sign_grant/3` refusal with `{:error, :invalid_role_attestation}` was reported in
+  telemetry as the `:signing_failed` result class, the custody-misconfiguration alarm,
+  because the classifier had no clause for that atom. It now has its own class,
+  `:invalid_role_attestation`, documented in the telemetry guide; the result-class axis
+  gains that one value. A new test reads every error atom from the `*_sign_error` types of
+  both suite surfaces and requires each to be classified, with only `:signing_failed` as
+  the custody alarm.
 - `t:BoundedAuthorityReportAdapter.V3.grant_sign_error/0` now lists `:invalid_role_attestation`,
   which `V3.sign_grant/3` has always returned when the options carry `:role_attestation`.
   A new test requires each V3 error type to equal its major-1 namesake and calls
