@@ -96,9 +96,10 @@
 - The README quick start now runs as written: a development key handle, an issuer signing
   a grant, a holder signing a proof, and a verifier checking the envelope. The getting-started
   guide walks the same loop step by step; the consumer-integration guide's verifier is a
-  complete module; the telemetry guide's handler, the HSM, KMS and Plug recipes and the
-  content-assertion example run as written. Excerpts that cannot run on their own are
-  labeled as fragments.
+  complete module; the telemetry guide's handler and the content-assertion example run as
+  written; the HSM and KMS recipes' handles run against a real local signer, and the Plug
+  recipe runs in the example app's tests. Excerpts that cannot run on their own are labeled
+  as fragments and compiled with their free variables as stub parameters.
 - Every public signing function's documentation lists its parameters, options, return
   value and closed error set, with an example; `BoundedAuthorityReportAdapter.V3`'s
   documentation adds a development P-256 key handle showing the DER-to-raw conversion.
@@ -118,11 +119,17 @@
 
 - `test/doc_samples_test.exs` runs every Elixir code block in the README and the guides, in
   order, and every example in the API documentation, and checks each `#=> value` line. A
-  block that is marked as a fragment must parse; a fragment-only page may not carry an
-  unmarked block. It also runs the consumer-integration verifier against a real envelope
-  (accepted) and against a different identity, a different body and a missing header
-  (rejected), and checks that the README and getting-started define the same development
-  key handle.
+  block that is marked as a fragment must compile, with its free variables bound as stub
+  parameters; a fragment-only page may not carry an unmarked block. It also runs the
+  consumer-integration verifier against a real envelope (accepted) and against a different
+  identity, a different body and a missing header (rejected); runs the HSM and KMS
+  recipes' handles against a real local Ed25519 signer and verifies what they sign
+  (including a contained client timeout); and checks that the README and getting-started
+  define the same development key handle.
+- `examples/edge_agent/test/plug_recipe_test.exs` runs the Plug recipe as written in the
+  example app (which has Plug), wired to the consumer-integration verifier and the README's
+  key handle: a real envelope is accepted once, and a replay, another identity's key and a
+  missing header get 401.
 - `test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` runs the Livebook's cells
   against the repository source and compares each returned value with the output pinned under
   the cell; the evaluated-cell count must equal the pinned-output count. It also fails when a

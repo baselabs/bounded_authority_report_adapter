@@ -24,6 +24,7 @@ edge_agent/
   config/config.exs             # shared config (agent + receiver in sync)
   test/edge_agent_test.exs      # the round-trip + the four rejection classes
   test/local_loopback_test.exs  # the loopback profile over IPv4 and IPv6
+  test/plug_recipe_test.exs     # runs the library's Plug recipe as written
 ```
 
 ## Run it

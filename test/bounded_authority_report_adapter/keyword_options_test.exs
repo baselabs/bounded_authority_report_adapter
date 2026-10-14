@@ -88,6 +88,10 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
 
   use ExUnit.Case, async: true
 
+  # The generative tests draw from :rand, which ExUnit seeds for each test from the run's
+  # seed (printed as "Running ExUnit with seed: N"); a failure message repeats it, so
+  # `mix test --seed N` reproduces the failing draw.
+
   alias BoundedAuthorityProtocol.ContentAssertion
   alias BoundedAuthorityProtocol.RoleAttestation
   alias BoundedAuthorityProtocol.V1
@@ -181,7 +185,6 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
 
   test "any options value that is neither a map nor a keyword list is refused before any callback (property)",
        context do
-    :rand.seed(:exsss, {4, 5, 6})
     probe = {BoundedAuthorityReportAdapter.RefusalProbeHandle, :ref}
 
     for {name, _call, input_error} <- entry_points(context),
@@ -190,7 +193,8 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
       {^name, call, _input_error} = probe_call(name, context, probe)
 
       assert call.(opts) == {:error, input_error},
-             "#{name} with #{inspect(opts)} did not return {:error, #{inspect(input_error)}}"
+             "#{name} with #{inspect(opts)} did not return {:error, #{inspect(input_error)}} " <>
+               "(rerun with --seed #{ExUnit.configuration()[:seed]})"
 
       refute_received {:callback_called, _callback}
     end
@@ -269,7 +273,7 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
       opts = if form == :map, do: Map.new(opts), else: opts
 
       assert call.(opts) == {:error, input_error},
-             "#{name} accepted #{inspect(opts)} (run seed #{ExUnit.configuration()[:seed]})"
+             "#{name} accepted #{inspect(opts)} (rerun with --seed #{ExUnit.configuration()[:seed]})"
 
       refute_received {:callback_called, _callback}
     end
@@ -319,8 +323,6 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
   end
 
   test "map and keyword options produce byte-identical results (property)", context do
-    :rand.seed(:exsss, {1, 2, 3})
-
     for {name, call, _input_error} <- entry_points(context) do
       results =
         for iteration <- 1..@iterations do
@@ -330,7 +332,8 @@ defmodule BoundedAuthorityReportAdapter.KeywordOptionsTest do
           result = call.(Map.new(options))
 
           assert result == call.(keyword),
-                 "#{name}: the map and keyword forms of #{inspect(options)} differ"
+                 "#{name}: the map and keyword forms of #{inspect(options)} differ " <>
+                   "(rerun with --seed #{ExUnit.configuration()[:seed]})"
 
           result
         end

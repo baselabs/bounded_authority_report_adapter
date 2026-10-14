@@ -99,7 +99,7 @@ reporter's metric list):
 
 <!-- doc-sample: fragment -->
 ```elixir
-summary("bounded_authority_report_adapter.sign.stop.duration",
+Telemetry.Metrics.summary("bounded_authority_report_adapter.sign.stop.duration",
   unit: {:native, :millisecond},
   tags: [:object, :result_class]
 )

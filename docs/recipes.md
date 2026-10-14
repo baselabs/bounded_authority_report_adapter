@@ -2,11 +2,13 @@
 
 Four integration shapes: the local-loopback development listener, a network-HSM key
 handle, a KMS key-identity handle and a Plug consumer, plus a note on porting the signing
-side to another language. The handle and Plug modules compile as written; the test suite
-compiles each one. Each names an integration module that is yours to write (`MyApp.HsmClient`,
-`MyApp.KmsClient`, `MyApp.NonceLedger`), so compiling one before you write that module
-warns that the module is undefined, and nothing else. The loopback recipe is a fragment:
-its variables come from your application.
+side to another language. Each recipe module names an integration module that is yours to
+write (`MyApp.HsmClient`, `MyApp.KmsClient`, `MyApp.NonceLedger`). The test suite runs the
+HSM and KMS handles as written against a real local Ed25519 signer standing in for the
+HSM and the KMS, and verifies what they sign; the example app's tests run the Plug recipe
+as written with real `Plug.Conn` requests. The loopback recipe is a fragment (its
+variables come from your application); the test suite compiles it with those variables
+as stub parameters.
 
 ## Recipe: the local-loopback development listener
 

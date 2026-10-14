@@ -64,8 +64,12 @@ honest:
 
 - `test/doc_samples_test.exs` runs every Elixir code block in the README and guides, and
   every example in the API docs, and checks each `#=> value` line. A block that cannot
-  run as written is marked `<!-- doc-sample: fragment -->` and said to be a fragment in
-  the text.
+  run as written is marked `<!-- doc-sample: fragment -->`, said to be a fragment in the
+  text, and must still compile with its free variables as stub parameters. The HSM and
+  KMS recipes run against a real local signer; the Plug recipe runs in
+  `examples/edge_agent/test/plug_recipe_test.exs`.
+- The generative tests in `test/bounded_authority_report_adapter/keyword_options_test.exs`
+  draw from the run's random seed; a failure prints it, and `mix test --seed N` repeats it.
 - `test/docs_currency_test.exs` checks the error tables, the function references and the
   install snippets against the code.
 - `test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` runs the Livebook
