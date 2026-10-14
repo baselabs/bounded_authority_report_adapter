@@ -17,18 +17,24 @@
   point: `sign_report/3`, `sign_local_loopback_report/3`, `sign_grant/3` (with and without the
   role-attestation gate), `sign_anchor/3`, `sign_key_transition/3`, `sign_content_assertion/3`
   and the four ES256 entry points in `BoundedAuthorityReportAdapter.V3`, including low-S output
-  from a key handle that returns high-S. Each section verifies with the public protocol package
-  and ends with a fail-closed cell that returns the real error values. Keys are generated when
-  the notebook runs.
+  from a key handle that returns high-S. Each signer verifies with the public protocol package
+  and is shown failing closed with the real error values, including the adapter's own wrong-key
+  guard (`:signing_failed`) and `V3.sign_grant/3` refusing the role-attestation option. Keys are
+  generated when the notebook runs.
+- The README, getting-started, recipes and consumer-integration guides, the install task's
+  generated comment, the package smoke check and the `edge_agent` example compute the raw holder
+  thumbprint with the protocol package's documented `V1.Jwk.encode_public/2` and
+  `V1.Jwk.thumbprint/2` instead of the undocumented `V1.Jwk.public_key_thumbprint_raw/2`.
 
 ### Added
 
 - `test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` runs the Livebook's cells
   against the repository source and compares each returned value with the output pinned under
-  the cell. It also fails when the library exports a `sign_*/3` entry point the notebook never
-  calls, when a cell is not formatted, and when the release or protocol requirement the notebook
-  states differs from `mix.exs`. It runs in `mix test`, so in `mix ci` and CI (ADR-0011
-  amendment).
+  the cell; the evaluated-cell count must equal the pinned-output count. It also fails when a
+  `sign_*/3` exported by a `lib/` module is never called in the notebook's code, when a cell is
+  not formatted, and when the notebook's statement of the source version, protocol requirement
+  and release state disagrees with `mix.exs` and the CHANGELOG. It runs in `mix test`, so in
+  `mix ci` and CI (ADR-0011 amendment).
 
 ## [0.10.0] — 2026-10-13
 

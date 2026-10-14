@@ -119,9 +119,12 @@ native-Windows developer path is maintained (owner direction, October 4, 2026). 
 `test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` evaluates every cell
 except the `Mix.install/1` setup cell against the repo source and compares each returned
 value with the output pinned under the cell, so editing a cell means re-pinning its output.
-It also reds when the library exports a `sign_*/3` the notebook never calls, or when the
-release / protocol requirement the notebook states drifts from `mix.exs` (update the
-notebook in the same commit as a version or range move).
+Every fenced `elixir` block counts as a cell (attributes or not), and the evaluated-cell
+count must equal the pinned-output count. It also reds when a `lib/` module exports a
+`sign_*/3` the notebook's code never calls (comments do not count), or when the notebook's
+statement of the source version, protocol requirement and release state drifts from
+`mix.exs` and the CHANGELOG (update the notebook in the same commit as a version or range
+move, and when the range is released).
 
 **Local CI parity: `mix ci`** (root mix.exs alias) reproduces the workflow
 step-for-step — both jobs (the example job through `scripts/ci_example.exs`, its steps

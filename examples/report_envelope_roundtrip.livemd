@@ -9,8 +9,9 @@ public `bounded_authority_protocol` package, and then shows each check failing c
 database, no container and no other running service. Every key is generated in the notebook when
 it runs. Run the cells in order; the value under each cell is the result it returns.
 
-It tracks release 0.10.0 of `bounded_authority_report_adapter`, which depends on
-`bounded_authority_protocol` `~> 0.8.0`. The repository's test suite runs these same cells against
+It runs against this repository's source: version 0.10.0 in `mix.exs`, which declares
+`bounded_authority_protocol` `~> 0.8.0`. That range is unreleased; the published 0.10.0 release
+pins `== 0.8.0` (see the CHANGELOG). The repository's test suite runs these same cells against
 the repository source and compares each result with the value pinned under its cell, so a cell
 that stops running, or starts returning something else, fails the build.
 
@@ -119,9 +120,14 @@ defmodule Demo.Ed25519Handle do
   @impl true
   def public_key(%{public: public}), do: {:ok, public}
 
+  # The raw RFC 7638 thumbprint, from the protocol package's documented JWK functions.
   @impl true
-  def thumbprint(%{public: public}),
-    do: BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public, %{})
+  def thumbprint(%{public: public}) do
+    with {:ok, jwk} <- BoundedAuthorityProtocol.V1.Jwk.encode_public(public, %{}),
+         {:ok, thumbprint} <- BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{}) do
+      {:ok, Base.url_decode64!(thumbprint, padding: false)}
+    end
+  end
 
   # Key id and public key in one call, so a rotating key store cannot split them.
   @impl true
@@ -157,7 +163,7 @@ defmodule Demo.P256Handle do
   def thumbprint(%{public: public}) do
     with {:ok, jwk} <- BoundedAuthorityProtocol.V3.EcJwk.encode_public(public, %{}),
          {:ok, thumbprint} <- BoundedAuthorityProtocol.V3.EcJwk.thumbprint(jwk, %{}) do
-      Base.url_decode64(thumbprint, padding: false)
+      {:ok, Base.url_decode64!(thumbprint, padding: false)}
     end
   end
 
@@ -332,7 +338,9 @@ holder_declared_issuer_key = {Demo.Ed25519Handle, %{issuer | role: :holder}}
 
 A handle's role is only its own claim. With `:role_attestation`, `sign_grant/3` first checks an
 attestation signed by the authority (`bap-role-attestation/1`) that binds the issuer role to the
-handle's own key, and refuses before it signs anything if the check fails. The authority signs
+handle's own key, and refuses before it signs anything if the check fails. The expired case
+uses an attestation that was valid a minute ago: evaluated at a time inside its window it passes,
+so only the expiry is being tested. The authority signs
 the attestation with the protocol package; this is not the adapter's job.
 
 ```elixir
@@ -357,6 +365,14 @@ gate = fn attestation, at ->
   %{role_attestation: %{compact: attest.(attestation), attestor: validity.(attestor), now: at}}
 end
 
+# Valid from ten minutes ago until one minute ago; the attestor key itself is valid throughout.
+expired_attestation = %{
+  issuer_attestation
+  | jti: "urn:example:attestation:2",
+    nbf: now - 600,
+    exp: now - 60
+}
+
 attested_grant =
   with {:ok, %{grant: attested}} <-
          Adapter.sign_grant(grant_input, issuer_handle, gate.(issuer_attestation, now)),
@@ -379,7 +395,9 @@ attested_grant =
       gate.(%{issuer_attestation | key_id: holder.key_id, public_key: holder.public}, now)
     ),
   attestation_expired:
-    Adapter.sign_grant(grant_input, issuer_handle, gate.(issuer_attestation, now + 7_200))
+    Adapter.sign_grant(grant_input, issuer_handle, gate.(expired_attestation, now)),
+  same_attestation_before_expiry:
+    elem(Adapter.sign_grant(grant_input, issuer_handle, gate.(expired_attestation, now - 120)), 0)
 ]
 ```
 
@@ -390,7 +408,8 @@ attested_grant =
   issuer_attested: :signed_and_verified,
   holder_attested: {:error, :invalid_role_attestation},
   attests_another_key: {:error, :invalid_role_attestation},
-  attestation_expired: {:error, :invalid_role_attestation}
+  attestation_expired: {:error, :invalid_role_attestation},
+  same_attestation_before_expiry: :ok
 ]
 ```
 
@@ -820,6 +839,13 @@ end
 
 ### Issuer and holder under ES256
 
+The protocol package's V3 verify functions take the same input structs as V1
+(`V1.Credentials`, `V1.ExpectedRequest`, `V1.TrustedIssuer`, `V1.ExpectedGrant`,
+`V1.HistoricalPublicKey` and the expected anchor and key-transition structs). Those structs carry
+only the caller's context: trusted keys, the expected issuer, audience and request, the time and
+the bounds. The suite is chosen by which module's function you call, and the key bytes inside
+the structs are what differ: here a 65-byte P-256 point.
+
 ```elixir
 ec_issuer_handle = {Demo.P256Handle, ec_issuer}
 ec_holder_handle = {Demo.P256Handle, ec_holder}
@@ -911,7 +937,9 @@ The handle returned high-S every time; both compacts carry low-S, and both verif
 
 The same checks as Part 1, plus the boundary between suites: a major-1 verifier rejects major-3
 credentials, the V3 signer refuses an Ed25519 handle before signing, and it refuses to pair a
-major-3 proof with a major-1 grant.
+major-3 proof with a major-1 grant. `V3.sign_grant/3` has no role-attestation gate (the
+`bap-role-attestation/1` profile binds Ed25519 keys only), so it refuses the option rather than
+ignore it.
 
 ```elixir
 ec_stranger_handle = {Demo.P256Handle, p256_key.("stranger-ec-key-1", :holder)}
@@ -928,7 +956,9 @@ ec_stranger_handle = {Demo.P256Handle, p256_key.("stranger-ec-key-1", :holder)}
     V3.check_envelope(ec_credentials, %{ec_expected | audience: "https://other.example"}),
   major_1_verifier: V1.check_envelope(ec_credentials, ec_expected),
   ed25519_handle: Adapter.V3.sign_report(ec_report, holder_handle),
-  major_1_grant: Adapter.V3.sign_report(%{ec_report | grant_compact: grant}, ec_holder_handle)
+  major_1_grant: Adapter.V3.sign_report(%{ec_report | grant_compact: grant}, ec_holder_handle),
+  role_attestation_option:
+    Adapter.V3.sign_grant(ec_grant_input, ec_issuer_handle, gate.(issuer_attestation, now))
 ]
 ```
 
@@ -941,7 +971,8 @@ ec_stranger_handle = {Demo.P256Handle, p256_key.("stranger-ec-key-1", :holder)}
   wrong_audience: {:error, :invalid},
   major_1_verifier: {:error, :invalid},
   ed25519_handle: {:error, :invalid_key_handle},
-  major_1_grant: {:error, :invalid_report}
+  major_1_grant: {:error, :invalid_report},
+  role_attestation_option: {:error, :invalid_role_attestation}
 ]
 ```
 
@@ -1027,20 +1058,68 @@ ec_expected_transition = %{
 ]
 ```
 
+## The adapter's own wrong-key guard
+
+Before it returns anything, the adapter checks the signature the handle produced against the
+public key the handle reported. A handle that signs with a different key than it reports, or a
+P-256 handle that returns OTP's DER encoding instead of the raw `r || s` form, gets
+`:signing_failed` and no compact.
+
+```elixir
+defmodule Demo.P256DerHandle do
+  @moduledoc false
+  @behaviour BoundedAuthorityReportAdapter
+
+  # Returns OTP's native DER signature, which is not an ES256 wire form.
+  @impl true
+  def sign(message, %{private: private}),
+    do: {:ok, :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])}
+
+  @impl true
+  def public_key(key), do: Demo.P256Handle.public_key(key)
+
+  @impl true
+  def thumbprint(key), do: Demo.P256Handle.thumbprint(key)
+end
+
+stranger = ed25519_key.("stranger-key-2", :holder)
+mismatched_holder = {Demo.Ed25519Handle, %{holder | private: stranger.private}}
+
+ec_stranger = p256_key.("stranger-ec-key-2", :holder)
+mismatched_ec_holder = {Demo.P256Handle, %{ec_holder | private: ec_stranger.private}}
+
+[
+  ed25519_signs_with_another_key: Adapter.sign_report(report, mismatched_holder),
+  p256_signs_with_another_key: Adapter.V3.sign_report(ec_report, mismatched_ec_holder),
+  p256_returns_der: Adapter.V3.sign_report(ec_report, {Demo.P256DerHandle, ec_holder})
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  ed25519_signs_with_another_key: {:error, :signing_failed},
+  p256_signs_with_another_key: {:error, :signing_failed},
+  p256_returns_der: {:error, :signing_failed}
+]
+```
+
 ## What just happened
 
-| Role         | Who does it in production                            | What ran here                                                                                           |
-| ------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **Issuer**   | the authority runtime, or an issuer with its own key | `sign_grant/3` and `V3.sign_grant/3` through an issuer-role handle, with and without a role attestation |
-| **Holder**   | the edge, using **this adapter**                     | `sign_report/3`, `sign_local_loopback_report/3` and `V3.sign_report/3`: the adapter's one job           |
-| **Verifier** | any party with the public protocol package           | `check_envelope/2`, `verify_grant/3` and the other public verify functions                              |
+| Role         | Who does it in production                            | What ran here                                                                                            |
+| ------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Issuer**   | the authority runtime, or an issuer with its own key | `sign_grant/3` (with and without a role attestation) and `V3.sign_grant/3` through an issuer-role handle |
+| **Holder**   | the edge, using **this adapter**                     | `sign_report/3`, `sign_local_loopback_report/3` and `V3.sign_report/3`: the adapter's one job            |
+| **Verifier** | any party with the public protocol package           | `check_envelope/2`, `verify_grant/3` and the other public verify functions                               |
 
 The same handle-based signing path also produced a boundary anchor and a key transition under both
 suites, and a content assertion. Every signed object verified with the public protocol package.
 Every changed byte, wrong key, wrong audience and wrong context was rejected: by a verifier, with
-the protocol's `{:error, :invalid}`, or by the adapter before it signed anything, with one of its
-closed errors (`:invalid_key_handle`, `:invalid_role_attestation`, `:invalid_report`,
-`:invalid_transition`, `:invalid_content_assertion` or `{:producer_error, :invalid}`).
+the protocol's `{:error, :invalid}`, or by the adapter, which then returned no compact, with one
+of its closed errors (`:invalid_key_handle`, `:invalid_role_attestation`, `:invalid_report`,
+`:invalid_transition`, `:invalid_content_assertion`, `:signing_failed` or
+`{:producer_error, :invalid}`).
 
 The adapter signs and nothing more. It is not a verifier, not an issuer runtime, not a transport
 and not a database. A real consumer also binds each verified envelope to the authenticated

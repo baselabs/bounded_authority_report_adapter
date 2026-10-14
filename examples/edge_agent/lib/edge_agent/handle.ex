@@ -38,8 +38,11 @@ defmodule EdgeAgent.Handle do
 
   @impl true
   def thumbprint({public_key, _private_key}) do
-    {:ok, raw_thumbprint} = Jwk.public_key_thumbprint_raw(public_key, %{})
-    {:ok, raw_thumbprint}
+    # The raw RFC 7638 thumbprint, from the protocol package's documented JWK functions.
+    with {:ok, jwk} <- Jwk.encode_public(public_key, %{}),
+         {:ok, thumbprint} <- Jwk.thumbprint(jwk, %{}) do
+      {:ok, Base.url_decode64!(thumbprint, padding: false)}
+    end
   end
 
   def thumbprint(_handle), do: {:error, :invalid_handle}

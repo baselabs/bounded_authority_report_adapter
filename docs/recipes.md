@@ -151,8 +151,10 @@ defmodule MyApp.HsmHandle do
 
   @impl true
   def thumbprint(key_ref) do
-    with {:ok, public_key} <- public_key(key_ref) do
-      BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
+    with {:ok, public_key} <- public_key(key_ref),
+         {:ok, jwk} <- BoundedAuthorityProtocol.V1.Jwk.encode_public(public_key, %{}),
+         {:ok, thumbprint} <- BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{}) do
+      {:ok, Base.url_decode64!(thumbprint, padding: false)}
     end
   end
 
@@ -204,8 +206,10 @@ defmodule MyApp.KmsHandle do
 
   @impl true
   def thumbprint(key_ref) do
-    with {:ok, {_key_id, public_key}} <- key_identity(key_ref) do
-      BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public_key, %{})
+    with {:ok, {_key_id, public_key}} <- key_identity(key_ref),
+         {:ok, jwk} <- BoundedAuthorityProtocol.V1.Jwk.encode_public(public_key, %{}),
+         {:ok, thumbprint} <- BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{}) do
+      {:ok, Base.url_decode64!(thumbprint, padding: false)}
     end
   end
 

@@ -40,9 +40,14 @@ defmodule MyApp.HolderKey do
   @impl true
   def public_key(ref), do: {:ok, MyApp.Custody.public_key(ref)}
 
+  # The raw RFC 7638 thumbprint, from the protocol package's documented JWK functions.
   @impl true
-  def thumbprint(ref),
-    do: BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(MyApp.Custody.public_key(ref), %{})
+  def thumbprint(ref) do
+    with {:ok, jwk} <- BoundedAuthorityProtocol.V1.Jwk.encode_public(MyApp.Custody.public_key(ref), %{}),
+         {:ok, thumbprint} <- BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{}) do
+      {:ok, Base.url_decode64!(thumbprint, padding: false)}
+    end
+  end
 
   @impl true
   def key_identity(ref), do: {:ok, {"holder-key-1", MyApp.Custody.public_key(ref)}}

@@ -37,7 +37,13 @@ consumer's cheapest option.
    self-contained — it inlines its own throwaway seeded keypairs + a minimal
    handle instead of importing the reference impl. A future notebook that
    wants `Keys.RawKey` must run under `:test`, not pull support code into a
-   shipped env.
+   shipped env. *(Amended 2026-10-14: the notebook now generates random
+   keypairs each time it runs, no seeds, and defines its own handles
+   (`Demo.Ed25519Handle`, `Demo.P256Handle`, `Demo.P256DerHandle`); it still
+   imports nothing from `test/support/`. The library's test suite evaluates
+   its cells under `:test`
+   (`test/bounded_authority_report_adapter/livebook_walkthrough_test.exs`),
+   but the cells reference no support module, so the decision stands.)*
 4. **The dependency-direction wall still SCANS `test/support/`** (ADR-0003):
    the directory carries signing-path code, so a forbidden dep or
    runtime-internal reference planted there matters even though the code

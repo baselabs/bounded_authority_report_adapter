@@ -34,9 +34,11 @@ the adapter does and does not do:
 It also signs a boundary anchor, a key transition and a content assertion
 (`sign_content_assertion/3`), and repeats the grant, proof, anchor and key-transition flow under
 ES256 with P-256 keys (`BoundedAuthorityReportAdapter.V3`), showing that the adapter emits low-S
-signatures even when the key handle returns the high-S spelling. Every section ends with a
-fail-closed cell: a changed byte, a wrong key, a wrong audience or a wrong context, each returning
-the real error value.
+signatures even when the key handle returns the high-S spelling. Every signer is shown failing
+closed, mostly in a cell right after its success: a changed byte, a wrong key, a wrong audience
+or a wrong context, each returning the real error value. A final section shows the adapter's own
+wrong-key guard (`:signing_failed`) for a handle that signs with a different key than it reports
+and for a P-256 handle that returns DER.
 
 ### Run it
 
@@ -48,11 +50,14 @@ notebook runs. The value under each cell is the result that cell returns.
 ### CI
 
 The notebook is executed by the library's test suite:
-`test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` reads the notebook, skips the
-`Mix.install/1` setup cell, evaluates every other cell in order against the repository source, and
-requires each cell's returned value to equal the output pinned under it. It also fails when the
-library exports a `sign_*/3` entry point the notebook never calls, and when the release or the
-protocol requirement the notebook states differs from `mix.exs`. It runs in `mix test`, so in
+`test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` reads every fenced `elixir`
+cell (with or without attributes), skips the `Mix.install/1` setup cell, evaluates every other
+cell in order against the repository source, and requires each cell's returned value to equal the
+output pinned under it; the number of evaluated cells must equal the number of pinned outputs. It
+also fails when a `sign_*/3` exported by a `lib/` module is never called in the notebook's code
+(read from the parsed code, so a comment does not count), when a cell is not formatted, and when
+the notebook's statement of the source version, the protocol requirement and whether that
+requirement is released disagrees with `mix.exs` and the CHANGELOG. It runs in `mix test`, so in
 `mix ci` and in CI.
 
 ### What this is not

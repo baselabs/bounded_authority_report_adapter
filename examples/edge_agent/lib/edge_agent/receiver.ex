@@ -216,7 +216,10 @@ defmodule EdgeAgent.Receiver do
   # (the envelope's holder is not the identity this transport authenticated)
   # rejects; then the nonce is atomically claimed (a replay rejects).
   defp bind_and_dedupe(holder_thumbprint, identity_raw_key, nonce) do
-    with {:ok, identity_thumbprint} <- Jwk.public_key_thumbprint_raw(identity_raw_key, %{}) do
+    with {:ok, jwk} <- Jwk.encode_public(identity_raw_key, %{}),
+         {:ok, thumbprint} <- Jwk.thumbprint(jwk, %{}) do
+      identity_thumbprint = Base.url_decode64!(thumbprint, padding: false)
+
       cond do
         identity_thumbprint != holder_thumbprint -> {:error, :not_bound}
         not is_binary(nonce) -> {:error, :no_nonce}

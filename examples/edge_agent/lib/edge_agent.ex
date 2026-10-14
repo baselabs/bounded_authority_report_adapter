@@ -55,8 +55,7 @@ defmodule EdgeAgent do
   @spec run(keyword()) :: {:ok, non_neg_integer(), binary()} | {:error, term()}
   def run(opts \\ []) do
     holder = holder_keypair()
-    {holder_pub, _holder_priv} = holder
-    {:ok, holder_thumbprint} = V1.Jwk.public_key_thumbprint_raw(holder_pub, %{})
+    {:ok, holder_thumbprint} = EdgeAgent.Handle.thumbprint(holder)
 
     # Prod: the grant arrives issuer-signed out-of-band. Demo: mint from config.
     {grant_compact, _issuer_pub} = EdgeAgent.DemoIssuer.signed_grant(holder_thumbprint)
@@ -113,8 +112,7 @@ defmodule EdgeAgent do
           {:ok, non_neg_integer(), binary()} | {:error, term()}
   def run_local_loopback(opts \\ []) do
     holder = holder_keypair()
-    {holder_pub, _holder_priv} = holder
-    {:ok, holder_thumbprint} = V1.Jwk.public_key_thumbprint_raw(holder_pub, %{})
+    {:ok, holder_thumbprint} = EdgeAgent.Handle.thumbprint(holder)
 
     {grant_compact, _issuer_pub} = EdgeAgent.DemoIssuer.signed_grant(holder_thumbprint)
 

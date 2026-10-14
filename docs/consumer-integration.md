@@ -165,20 +165,22 @@ parity with a body-signature scheme (which is bound to the reporter's key by con
 
 ```elixir
 # bind_holder_to_identity/2 returns :ok | {:error, _} (NOT a boolean — a `?`-suffix boolean
-# never matches :ok <- and rejects every request). The thumbprint helper is the PUBLIC
-# BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(raw_key, %{}) — do NOT roll your
-# own RFC-7638 thumbprint; use this one so the comparison is raw-32-byte to raw-32-byte.
+# never matches :ok <- and rejects every request). The thumbprint comes from the protocol
+# package's documented BoundedAuthorityProtocol.V1.Jwk.encode_public/2 and thumbprint/2 (the
+# canonical base64url RFC 7638 thumbprint, decoded here to its raw 32 bytes) — do NOT roll your
+# own RFC 7638 thumbprint; the comparison is raw-32-byte to raw-32-byte.
 defp bind_holder_to_identity(bound_holder_thumbprint, identity) do
   with {:ok, identity_raw_key} <- identity_ed25519_raw_key(identity),
-       {:ok, identity_thumbprint} <-
-         BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(identity_raw_key, %{}) do
+       {:ok, jwk} <- BoundedAuthorityProtocol.V1.Jwk.encode_public(identity_raw_key, %{}),
+       {:ok, thumbprint} <- BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{}) do
+    identity_thumbprint = Base.url_decode64!(thumbprint, padding: false)
     if identity_thumbprint == bound_holder_thumbprint, do: :ok, else: {:error, :not_bound}
   end
 end
 ```
 
 A conforming consumer binds the authenticated identity's Ed25519 key to the BA holder key and
-asserts `facts.holder_thumbprint == Jwk.public_key_thumbprint_raw(identity_raw_key, %{})`.
+asserts that `facts.holder_thumbprint` equals the raw RFC 7638 thumbprint of that identity key.
 A consumer that does NOT bind the envelope to the authenticated identity carries the
 cross-identity-replay gap — do not enable BA without this binding.
 

@@ -316,10 +316,9 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
 
       @impl true
       def thumbprint(_handle) do
-        {:ok, raw} =
-          BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(elem(keypair(), 0), %{})
-
-        {:ok, raw}
+        {:ok, jwk} = BoundedAuthorityProtocol.V1.Jwk.encode_public(elem(keypair(), 0), %{})
+        {:ok, thumbprint} = BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{})
+        {:ok, Base.url_decode64!(thumbprint, padding: false)}
       end
 
       @impl true
