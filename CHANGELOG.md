@@ -35,7 +35,7 @@
 
 ### Fixed
 
-- `BoundedAuthorityReportAdapter.V3.grant_sign_error/0` now lists `:invalid_role_attestation`,
+- `t:BoundedAuthorityReportAdapter.V3.grant_sign_error/0` now lists `:invalid_role_attestation`,
   which `V3.sign_grant/3` has always returned when the options carry `:role_attestation`.
   A new test requires each V3 error type to equal its major-1 namesake and calls
   `V3.sign_grant/3` to pin the atom against the declared type.
