@@ -49,6 +49,12 @@ and demo contexts, and lets demo deps ride the library's dependency graph;
    reds the gate, not a provision attempt.
 4. The Livebook (`examples/report_envelope_roundtrip.livemd`) is NOT run in CI —
    its round-trip is covered by the library's `sign_report_test.exs`.
+   *(Amended 2026-10-14: the Livebook IS now run, inside the library's `gate` job
+   rather than as a third job. `test/bounded_authority_report_adapter/livebook_walkthrough_test.exs`
+   evaluates every cell except the `Mix.install/1` setup cell against the repo
+   source and requires each returned value to equal the output pinned under the
+   cell; it needs no Livebook runtime and no network, so the reasons for keeping
+   the notebook out of CI no longer hold.)*
 
 ## Consequences
 

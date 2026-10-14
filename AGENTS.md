@@ -115,8 +115,13 @@ supported OTP major 27-29 (ADR-0019; 25/26 are excluded: BAP's codecs decode thr
 macOS and Linux is a property of the developer setup, not a CI leg; Windows developers
 use WSL2 (clone inside the WSL filesystem, not under `/mnt/c`), the Linux path, and no
 native-Windows developer path is maintained (owner direction, October 4, 2026). The Livebook
-(`examples/report_envelope_roundtrip.livemd`) is NOT run in CI — its round-trip is
-covered by the library's `sign_report_test.exs`.
+(`examples/report_envelope_roundtrip.livemd`) IS run by the library's test suite:
+`test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` evaluates every cell
+except the `Mix.install/1` setup cell against the repo source and compares each returned
+value with the output pinned under the cell, so editing a cell means re-pinning its output.
+It also reds when the library exports a `sign_*/3` the notebook never calls, or when the
+release / protocol requirement the notebook states drifts from `mix.exs` (update the
+notebook in the same commit as a version or range move).
 
 **Local CI parity: `mix ci`** (root mix.exs alias) reproduces the workflow
 step-for-step — both jobs (the example job through `scripts/ci_example.exs`, its steps

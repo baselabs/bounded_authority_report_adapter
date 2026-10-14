@@ -162,8 +162,9 @@ content appears. A sustained `:signing_failed` rate means custody is misconfigur
 - [Changelog](CHANGELOG.md): release notes.
 - [Contributing](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md).
 
-Runnable examples live in the repository's `examples/` directory: a Livebook that plays
-issuer, holder and verifier, and an `edge_agent` app that runs the full loop over HTTP.
+Runnable examples live in the repository's `examples/` directory: a Livebook that runs every
+signing entry point and plays issuer, holder and verifier (the test suite executes it), and an
+`edge_agent` app that runs the full loop over HTTP.
 
 ## Development
 

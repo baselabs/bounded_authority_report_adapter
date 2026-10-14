@@ -1,288 +1,1049 @@
----
-livebook: {"persist_outputs": true}
----
+<!-- livebook:{"persist_outputs":true} -->
 
-# Bounded Authority Report Adapter — see it work, in one notebook
+# Bounded Authority Report Adapter: every signer in one notebook
 
-## Section
+## What this notebook shows
 
-> **You don't need to know anything about signing authorities to follow this.** It runs the whole
-> thing in one notebook — no database, no Docker, no other project running — and each step prints
-> a plain `✅` / `❌` line. Run it cell-by-cell.
+This notebook runs every signing entry point the adapter exposes, verifies each result with the
+public `bounded_authority_protocol` package, and then shows each check failing closed. It needs no
+database, no container and no other running service. Every key is generated in the notebook when
+it runs. Run the cells in order; the value under each cell is the result it returns.
 
-## The problem this solves (the one-minute version)
+It tracks release 0.10.0 of `bounded_authority_report_adapter`, which depends on
+`bounded_authority_protocol` `~> 0.8.0`. The repository's test suite runs these same cells against
+the repository source and compares each result with the value pinned under its cell, so a cell
+that stops running, or starts returning something else, fails the build.
 
-An **API key** answers *"who sent this?"* It does **not** answer *"were they allowed to do this?"*
-If an API key leaks, whoever has it can send anything until you rotate it.
+## The problem this solves
 
-This library is part of a system that answers the second question. Instead of (or alongside) an
-API key, a report carries a **capability** — a digital *grant* that the authority issued ahead of
-time, plus a *proof* the sender signs at the moment of the report. Think of it like a VIP pass
-(the grant) plus a signature that matches the ID of the person holding it (the proof): possessing
-the pass alone isn't enough; the signature has to match *you*, and the pass has to be for *this
-event*. A leaked API key alone can't forge one.
+An API key answers "who sent this?" It does not answer "were they allowed to do this?" If an API
+key leaks, whoever has it can send anything until it is rotated.
 
-This library's **only** job is to produce that **proof**. Not the pass, not the check — just the
-proof.
+The Bounded Authority Protocol answers the second question. A request carries a **grant**, signed
+ahead of time by an issuer, that names one holder key and the operations that key may perform. The
+holder adds a **proof**: a signature made with its own key, at the moment of the request, over that
+grant and that exact request. A leaked grant is useless without the holder's key, and a proof made
+for one request does not verify for another.
 
-## The model — three roles, kept separate on purpose
+## Three roles, kept separate on purpose
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Issuer as Issuer<br/>(the authority runtime)
-    participant Holder as Holder<br/>(the edge — THIS adapter)
-    participant Verifier as Verifier<br/>(the verifier / anyone)
+    participant Holder as Holder<br/>(the edge, using THIS adapter)
+    participant Verifier as Verifier<br/>(any party)
     Note over Issuer: holds the issuer key
     Note over Holder: holds the holder key
     Note over Verifier: holds only PUBLIC keys
-    Issuer->>Holder: a signed grant<br/>(issued ahead of time, out of band)
-    Note over Holder: report arrives
-    Holder->>Holder: adapter.sign_report(grant, report, key)<br/>→ signs a PROOF binding them
-    Holder->>Verifier: send the report + {grant, proof}
-    Verifier->>Verifier: check_envelope(grant, proof)<br/>vs the published issuer + holder keys
-    Verifier-->>Holder: ✅ accept  /  ❌ reject (offline)
+    Issuer->>Holder: a signed grant (ahead of time)
+    Holder->>Holder: sign_report(report, holder_handle)<br/>signs a PROOF over grant + request
+    Holder->>Verifier: the request + {grant, proof}
+    Verifier->>Verifier: check_envelope(credentials, expected)<br/>against published public keys
+    Verifier-->>Holder: accept or reject, offline
 ```
 
-Why three separate roles? Two reasons that **are** the security property:
+* **The verifier never holds a signing key**, so a compromised verifier cannot forge anything.
+* **The issuer never sees each request.** The holder proves possession offline, with no call home.
 
-* **The verifier never holds a signing key.** So a compromised verifier can't forge anything.
-* **The issuer never sees each report.** The holder proves possession of the grant offline — no
-  call home on every report.
+The shape is the same as DPoP (RFC 9449). The adapter's one job is the **holder** box: it signs.
+It never verifies, transports or stores anything. The same signing path also serves the other
+objects a key holder signs (an issuer's grant, a chain checkpoint, a key rotation, a content
+assertion), so this notebook covers each of them too.
 
-This is the same shape as **DPoP** (RFC 9449), used for OAuth. This adapter is the **Holder**
-box — nothing more. The other two boxes are played below only so you can see the full loop.
+| Entry point                    | Signs                                          | Suite                  | Verified with                            |
+| ------------------------------ | ---------------------------------------------- | ---------------------- | ---------------------------------------- |
+| `sign_report/3`                | holder proof                                   | Ed25519 (major 1)      | `V1.check_envelope/2`                    |
+| `sign_local_loopback_report/3` | holder proof for a loopback listener           | Ed25519 (major 1)      | `LocalLoopbackHttp.V1.check_envelope/2`  |
+| `sign_grant/3`                 | grant (issuer role, optional role attestation) | Ed25519 (major 1)      | `V1.verify_grant/3`                      |
+| `sign_anchor/3`                | boundary anchor (chain checkpoint)             | Ed25519 (major 1)      | `V1.verify_historical_anchor/3`          |
+| `sign_key_transition/3`        | key transition (rotation)                      | Ed25519 (major 1)      | `V1.verify_key_transition/4`             |
+| `sign_content_assertion/3`     | content assertion                              | Ed25519 (own profile)  | `ContentAssertion.V1.verify_assertion/2` |
+| `V3.sign_report/3`             | holder proof                                   | ES256, P-256 (major 3) | `V3.check_envelope/2`                    |
+| `V3.sign_grant/3`              | grant (issuer role)                            | ES256, P-256 (major 3) | `V3.verify_grant/3`                      |
+| `V3.sign_anchor/3`             | boundary anchor                                | ES256, P-256 (major 3) | `V3.verify_historical_anchor/3`          |
+| `V3.sign_key_transition/3`     | key transition                                 | ES256, P-256 (major 3) | `V3.verify_key_transition/4`             |
+
+The adapter has no role-attestation signer: a role attestation is signed by the authority. The
+adapter consumes one, through `sign_grant/3`'s `:role_attestation` option, as a gate before it
+signs a grant.
 
 ## Setup
 
-<!-- livebook:{"output":true} -->
+The adapter comes from this repository; the protocol package resolves from Hex.
 
 ```elixir
-# Pulls this repo (the adapter) + its one dependency, bounded_authority_protocol (the public
-# format/verifier package, resolved from hex.pm — no private remote, no access needed).
-adapter_path = __DIR__ |> Path.join("..") |> Path.expand()
-
 Mix.install([
-  {:bounded_authority_report_adapter, path: adapter_path}
+  {:bounded_authority_report_adapter, path: Path.expand("..", __DIR__)}
 ])
+```
 
+```elixir
 alias BoundedAuthorityProtocol.V1
-```
+alias BoundedAuthorityProtocol.V3
+alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopback
+alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertion
+alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestation
+alias BoundedAuthorityReportAdapter, as: Adapter
 
+to_string(Application.spec(:bounded_authority_report_adapter, :vsn))
 ```
-BoundedAuthorityProtocol.V1
-```
-
-## The key-handle contract — how the adapter signs *without ever seeing the private key*
-
-The adapter never receives a private key. You hand it a `{module, term}` **handle**: a module with
-`sign/2` + `public_key/1` callbacks, and an opaque term (the key reference) that only the module
-understands. In production that module fronts an HSM / KMS / key server. Here it's four lines:
 
 <!-- livebook:{"output":true} -->
 
+```
+"0.10.0"
+```
+
+## Key handles: the adapter signs without ever holding a private key
+
+The adapter never receives a private key. The caller passes a `{module, term}` **handle**: a
+module that implements the `BoundedAuthorityReportAdapter` behavior, and an opaque term only that
+module understands. In production the module forwards the message to an HSM, a cloud KMS or a key
+server. Here the term is a map with the key pair in it, which is acceptable only in a demo.
+
+Two handles cover both suites. The P-256 handle converts OTP's DER signature to the raw `r || s`
+form ES256 requires, and then deliberately returns the **high-S** spelling of the signature. Many
+signing devices return either spelling; this one always returns the one the protocol refuses, so
+the ES256 section below can show the adapter normalizing it.
+
 ```elixir
-defmodule Demo.Handle do
+defmodule Demo.Ed25519Handle do
   @moduledoc false
-  def sign(message, {_pub, priv}),
-    do: {:ok, :crypto.sign(:eddsa, :ed25519, message, [priv, :ed25519])}
+  @behaviour BoundedAuthorityReportAdapter
 
-  def public_key({pub, _priv}), do: {:ok, pub}
+  @impl true
+  def sign(message, %{private: private}),
+    do: {:ok, :crypto.sign(:eddsa, :none, message, [private, :ed25519])}
+
+  @impl true
+  def public_key(%{public: public}), do: {:ok, public}
+
+  @impl true
+  def thumbprint(%{public: public}),
+    do: BoundedAuthorityProtocol.V1.Jwk.public_key_thumbprint_raw(public, %{})
+
+  # Key id and public key in one call, so a rotating key store cannot split them.
+  @impl true
+  def key_identity(%{key_id: key_id, public: public}), do: {:ok, {key_id, public}}
+
+  # Role, key id and public key in one call; sign_grant/3 requires the :issuer role.
+  @impl true
+  def signing_identity(%{role: role, key_id: key_id, public: public}),
+    do: {:ok, {role, key_id, public}}
 end
-```
 
-```
-:ok
-```
+defmodule Demo.P256Handle do
+  @moduledoc false
+  @behaviour BoundedAuthorityReportAdapter
 
-## Two keypairs (one per role that holds a key)
+  # The order of the P-256 group.
+  @n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+
+  @impl true
+  def sign(message, %{private: private}) do
+    der = :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
+    <<0x30, _, 0x02, r_size, r::binary-size(r_size), 0x02, s_size, s::binary-size(s_size)>> = der
+    r = :binary.decode_unsigned(r)
+    s = :binary.decode_unsigned(s)
+    high_s = if s > div(@n, 2), do: s, else: @n - s
+    {:ok, <<r::unsigned-big-256, high_s::unsigned-big-256>>}
+  end
+
+  @impl true
+  def public_key(%{public: public}), do: {:ok, public}
+
+  @impl true
+  def thumbprint(%{public: public}) do
+    with {:ok, jwk} <- BoundedAuthorityProtocol.V3.EcJwk.encode_public(public, %{}),
+         {:ok, thumbprint} <- BoundedAuthorityProtocol.V3.EcJwk.thumbprint(jwk, %{}) do
+      Base.url_decode64(thumbprint, padding: false)
+    end
+  end
+
+  @impl true
+  def key_identity(%{key_id: key_id, public: public}), do: {:ok, {key_id, public}}
+
+  @impl true
+  def signing_identity(%{role: role, key_id: key_id, public: public}),
+    do: {:ok, {role, key_id, public}}
+end
+
+[Demo.Ed25519Handle, Demo.P256Handle]
+```
 
 <!-- livebook:{"output":true} -->
 
+```
+[Demo.Ed25519Handle, Demo.P256Handle]
+```
+
+## Keys and small helpers
+
+Each party would keep its own key in its own place. They share one notebook here only so the whole
+loop can run in one process.
+
 ```elixir
-# ISSUER keypair — lives in the authority runtime in production, NOT in this adapter.
-{issuer_pub, issuer_priv} = :crypto.generate_key(:eddsa, :ed25519, <<1::256>>)
-
-# HOLDER keypair — lives on the edge (the party that calls this adapter).
-{holder_pub, holder_priv} = :crypto.generate_key(:eddsa, :ed25519, <<2::256>>)
-holder = {Demo.Handle, {holder_pub, holder_priv}}
-
 now = System.system_time(:second)
-"issuer + holder keypairs generated. (In production these live in separate places.)"
-```
 
-```
-issuer + holder keypairs generated. (In production these live in separate places.)
-```
+ed25519_key = fn key_id, role ->
+  {public, private} = :crypto.generate_key(:eddsa, :ed25519)
+  %{key_id: key_id, role: role, public: public, private: private}
+end
 
-## Role 1 — ISSUER: mint a grant  ⚠️ NOT the adapter's job
+p256_key = fn key_id, role ->
+  {public, private} = :crypto.generate_key(:ecdh, :prime256v1)
+  %{key_id: key_id, role: role, public: public, private: private}
+end
 
-The authority signs a *grant* authorizing a holder (identified by the holder key's thumbprint) to
-perform an operation. We do it here **only** so the demo has a real grant to sign a proof over.
+# Ed25519 keys (contract-major 1 and the content-assertion profile).
+issuer = ed25519_key.("issuer-key-1", :issuer)
+holder = ed25519_key.("holder-key-1", :holder)
+attestor = ed25519_key.("attestor-key-1", :attestor)
+chain_key = ed25519_key.("chain-key-1", :chain)
+next_chain_key = ed25519_key.("chain-key-2", :chain)
+publisher = ed25519_key.("publisher-key-1", :publisher)
+
+# P-256 keys (contract-major 3, ES256).
+ec_issuer = p256_key.("issuer-ec-key-1", :issuer)
+ec_holder = p256_key.("holder-ec-key-1", :holder)
+ec_chain_key = p256_key.("chain-ec-key-1", :chain)
+ec_next_chain_key = p256_key.("chain-ec-key-2", :chain)
+
+# What a verifier is told about a key: its id, its public half, and when it is valid.
+validity = fn key ->
+  %V1.HistoricalPublicKey{
+    key_id: key.key_id,
+    public_key: key.public,
+    valid_from: now - 3_600,
+    valid_before: now + 3_600
+  }
+end
+
+# Selected fields of a result, in a fixed order (a map would print in no fixed order).
+facts_of = fn struct, keys -> Enum.map(keys, &{&1, Map.fetch!(struct, &1)}) end
+
+# Flip one bit in the first byte of a compact's signature segment.
+flip_one_byte = fn compact ->
+  [header, payload, signature] = String.split(compact, ".")
+  <<first, rest::binary>> = Base.url_decode64!(signature, padding: false)
+  flipped = Base.url_encode64(<<Bitwise.bxor(first, 1), rest::binary>>, padding: false)
+  Enum.join([header, payload, flipped], ".")
+end
+
+[
+  ed25519_public_key_bytes: byte_size(holder.public),
+  p256_public_key_bytes: byte_size(ec_holder.public)
+]
+```
 
 <!-- livebook:{"output":true} -->
 
-```elixir
-{:ok, holder_thumbprint} = V1.Jwk.public_key_thumbprint_raw(holder_pub, %{})
+```
+[ed25519_public_key_bytes: 32, p256_public_key_bytes: 65]
+```
 
-grant = %V1.Grant{
-  key_id: "demo-issuer",
-  issuer: "https://demo-issuer.test",
-  grant_id: "urn:demo:grant:1",
-  audiences: ["https://demo-verifier.test"],
+## Part 1: Ed25519 (contract-major 1)
+
+### Role 1, issuer: sign a grant
+
+In production the authority runtime issues grants. The adapter can sign one for an issuer that
+keeps its key behind a handle: `sign_grant/3` takes the key id from the handle, never from the
+input, and refuses unless the handle declares the `:issuer` role. The grant below lets one holder
+key submit sensor readings and run a tool on a local listener.
+
+```elixir
+issuer_handle = {Demo.Ed25519Handle, issuer}
+holder_handle = {Demo.Ed25519Handle, holder}
+{:ok, holder_thumbprint} = Demo.Ed25519Handle.thumbprint(holder)
+
+grant_input = %{
+  issuer: "https://issuer.example",
+  grant_id: "urn:example:grant:greenhouse-1",
+  audiences: ["https://telemetry.example"],
   issued_at: now - 60,
   not_before: now - 60,
-  expires_at: now + 3600,
+  expires_at: now + 3_600,
   holder_thumbprint: holder_thumbprint,
-  operations: [%V1.Operation{name: "report_demo", selectors: [:all]}]
+  operations: [
+    %V1.Operation{name: "submit_reading", selectors: [:all]},
+    %V1.Operation{name: "run_local_tool", selectors: [:all]}
+  ]
 }
 
-{:ok, grant_input} = V1.grant_signing_input(grant, %{})
-grant_sig = :crypto.sign(:eddsa, :ed25519, grant_input.message, [issuer_priv, :ed25519])
-{:ok, grant_compact} = V1.assemble_compact(grant_input, grant_sig)
+{:ok, %{grant: grant}} = Adapter.sign_grant(grant_input, issuer_handle)
 
-# (Output pinned WITHOUT the byte size / thumbprint slice — those are volatile
-# across versions; the pinned verdict is that the grant minted and what it authorizes.)
-"🎟️ issuer-signed grant minted. " <>
-  "It authorizes the holder (by raw thumbprint) to perform operation \"report_demo\"."
-```
+trusted_issuer = %V1.TrustedIssuer{key_id: issuer.key_id, public_key: issuer.public}
 
-```
-🎟️ issuer-signed grant minted. It authorizes the holder (by raw thumbprint) to perform operation "report_demo".
-```
-
-## Role 2 — HOLDER: **the adapter signs the proof**  ✅ THIS is the adapter's one job
-
-The edge calls `sign_report/3` with the grant + the report fields + the holder key-handle. The
-adapter builds the proof, signs it through the handle, double-checks the signature against the
-holder's public key, and returns `{grant, proof}`. **It signs the proof only — never the grant.**
-
-<!-- livebook:{"output":true} -->
-
-```elixir
-report = %{
-  grant_compact: grant_compact,
-  operation: "report_demo",
-  method: "POST",
-  target_uri: "https://demo-verifier.test/report",
-  invocation_id: "00000000-0000-4000-8000-000000000001",
-  # cast_arguments is the report body in BAP's tagged form. In production this is
-  # V1.Json.decode(raw_report_body_bytes). A small value here keeps the demo readable.
-  cast_arguments: {:object, [{"signal", {:string, "ok"}}]},
-  nonce: "demo-nonce-1"
-}
-
-{:ok, %{grant: ^grant_compact, proof: proof}} =
-  BoundedAuthorityReportAdapter.sign_report(report, holder, %{issued_at: now - 10})
-
-# (Output pinned WITHOUT the proof byte size — volatile; the pinned verdict is
-# proof-signed-grant-untouched.)
-"✍️ adapter signed the PROOF, binding the grant to this report. " <>
-  "The grant passed through untouched."
-```
-
-```
-✍️ adapter signed the PROOF, binding the grant to this report. The grant passed through untouched.
-```
-
-## Role 3 — VERIFIER: check the envelope  (any party with the public protocol package)
-
-The verifier (or any third party) verifies grant + proof against **published keys only**,
-fully offline. It reconstructs what it expects the proof to bind; `check_envelope` checks both
-signatures and every binding.
-
-<!-- livebook:{"output":true} -->
-
-```elixir
-expected = %V1.ExpectedRequest{
-  trusted_issuer: %V1.TrustedIssuer{key_id: "demo-issuer", public_key: issuer_pub},
-  issuer: "https://demo-issuer.test",
-  audience: "https://demo-verifier.test",
-  method: "POST",
-  target_uri: "https://demo-verifier.test/report",
-  invocation_id: "00000000-0000-4000-8000-000000000001",
-  operation: "report_demo",
-  cast_arguments: {:object, [{"signal", {:string, "ok"}}]},
+expected_grant = %V1.ExpectedGrant{
+  issuer: "https://issuer.example",
+  audience: "https://telemetry.example",
   evaluation_time: now,
   clock_skew: 60,
-  proof_max_age: 300,
-  nonce: {:required, "demo-nonce-1"},
   bounds: V1.Bounds.maximum()
 }
 
-case V1.check_envelope(%V1.Credentials{grant: grant_compact, proof: proof}, expected) do
-  {:ok, _facts} ->
-    "✅ VERIFIED — the grant is genuine, the proof matches this report, the holder is the one the grant was issued to."
-
-  {:error, :invalid} ->
-    "❌ rejected"
-end
+{:ok, grant_facts} = V1.verify_grant(grant, trusted_issuer, expected_grant)
+facts_of.(grant_facts, [:version, :grant_id, :matched_audience, :authorization])
 ```
-
-```
-✅ VERIFIED — the grant is genuine, the proof matches this report, the holder is the one the grant was issued to.
-```
-
-## Now prove the crypto is real — flip one byte of the proof
 
 <!-- livebook:{"output":true} -->
 
+```
+[
+  version: 1,
+  grant_id: "urn:example:grant:greenhouse-1",
+  matched_audience: "https://telemetry.example",
+  authorization: :not_evaluated
+]
+```
+
+`authorization: :not_evaluated` is deliberate: a verified grant proves only that the bytes are
+genuine. Whether to act on it is the consumer's policy decision.
+
+The grant fails closed. A handle that declares the holder role cannot sign one, and the verifier
+rejects a changed byte, the wrong issuer key, and an audience the grant does not name.
+
 ```elixir
-[protected, payload, sig_b64] = String.split(proof, ".")
-<<sig_bytes::binary-size(63), last>> = Base.url_decode64!(sig_b64, padding: false)
-flipped = Base.url_encode64(<<sig_bytes::binary, Bitwise.bxor(last, 1)>>, padding: false)
-tampered_proof = [protected, payload, flipped] |> Enum.join(".")
+holder_declared_issuer_key = {Demo.Ed25519Handle, %{issuer | role: :holder}}
 
-case V1.check_envelope(%V1.Credentials{grant: grant_compact, proof: tampered_proof}, expected) do
-  {:ok, _} -> "❌ UNEXPECTED — a tampered proof verified (that would be a bug)"
-  {:error, :invalid} -> "✅ tampered proof REJECTED — one flipped byte breaks the signature"
-end
+[
+  holder_role_handle: Adapter.sign_grant(grant_input, holder_declared_issuer_key),
+  tampered_grant: V1.verify_grant(flip_one_byte.(grant), trusted_issuer, expected_grant),
+  wrong_issuer_key:
+    V1.verify_grant(grant, %{trusted_issuer | public_key: holder.public}, expected_grant),
+  wrong_audience:
+    V1.verify_grant(grant, trusted_issuer, %{expected_grant | audience: "https://other.example"})
+]
 ```
-
-```
-✅ tampered proof REJECTED — one flipped byte breaks the signature
-```
-
-## And prove the binding is real — a proof from a *different* holder key
-
-The grant was issued to the original holder's thumbprint. A proof signed by a completely different
-key must be rejected (otherwise anyone could forge a proof for someone else's grant).
 
 <!-- livebook:{"output":true} -->
 
+```
+[
+  holder_role_handle: {:error, :invalid_key_handle},
+  tampered_grant: {:error, :invalid},
+  wrong_issuer_key: {:error, :invalid},
+  wrong_audience: {:error, :invalid}
+]
+```
+
+### The role-attestation gate on `sign_grant/3`
+
+A handle's role is only its own claim. With `:role_attestation`, `sign_grant/3` first checks an
+attestation signed by the authority (`bap-role-attestation/1`) that binds the issuer role to the
+handle's own key, and refuses before it signs anything if the check fails. The authority signs
+the attestation with the protocol package; this is not the adapter's job.
+
 ```elixir
-{wrong_pub, wrong_priv} = :crypto.generate_key(:eddsa, :ed25519, <<9::256>>)
-{:ok, %{proof: wrong_proof}} =
-  BoundedAuthorityReportAdapter.sign_report(
-    report,
-    {Demo.Handle, {wrong_pub, wrong_priv}},
-    %{issued_at: now - 10}
+attest = fn attestation ->
+  {:ok, input} = RoleAttestation.attestation_signing_input(attestation, %{})
+  signature = :crypto.sign(:eddsa, :none, input.message, [attestor.private, :ed25519])
+  {:ok, compact} = RoleAttestation.assemble_compact(input, signature)
+  compact
+end
+
+issuer_attestation = %RoleAttestation.RoleAttestation{
+  attestor_key_id: attestor.key_id,
+  jti: "urn:example:attestation:1",
+  key_id: issuer.key_id,
+  public_key: issuer.public,
+  role: "issuer",
+  nbf: now - 60,
+  exp: now + 3_600
+}
+
+gate = fn attestation, at ->
+  %{role_attestation: %{compact: attest.(attestation), attestor: validity.(attestor), now: at}}
+end
+
+attested_grant =
+  with {:ok, %{grant: attested}} <-
+         Adapter.sign_grant(grant_input, issuer_handle, gate.(issuer_attestation, now)),
+       {:ok, _facts} <- V1.verify_grant(attested, trusted_issuer, expected_grant) do
+    :signed_and_verified
+  end
+
+[
+  issuer_attested: attested_grant,
+  holder_attested:
+    Adapter.sign_grant(
+      grant_input,
+      issuer_handle,
+      gate.(%{issuer_attestation | role: "holder"}, now)
+    ),
+  attests_another_key:
+    Adapter.sign_grant(
+      grant_input,
+      issuer_handle,
+      gate.(%{issuer_attestation | key_id: holder.key_id, public_key: holder.public}, now)
+    ),
+  attestation_expired:
+    Adapter.sign_grant(grant_input, issuer_handle, gate.(issuer_attestation, now + 7_200))
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  issuer_attested: :signed_and_verified,
+  holder_attested: {:error, :invalid_role_attestation},
+  attests_another_key: {:error, :invalid_role_attestation},
+  attestation_expired: {:error, :invalid_role_attestation}
+]
+```
+
+### Role 2, holder: sign the proof (the adapter's one job)
+
+The edge calls `sign_report/3` with the grant, the request fields and the holder handle. The
+adapter builds the proof, signs it through the handle, checks the signature against the holder's
+public key, and returns `{grant, proof}`. The grant passes through unchanged.
+
+```elixir
+reading = {:object, [{"sensor", {:string, "greenhouse-4"}}, {"celsius", {:integer, 21}}]}
+
+report = %{
+  grant_compact: grant,
+  operation: "submit_reading",
+  method: "POST",
+  target_uri: "https://telemetry.example/readings",
+  invocation_id: "6f1c2a3b-4d5e-4f60-8a71-92b3c4d5e6f7",
+  # The request body in the protocol's tagged JSON form. A real consumer gets this with
+  # V1.Json.decode(raw_body_bytes), on both sides, from the same bytes.
+  cast_arguments: reading,
+  nonce: "nonce-reading-1"
+}
+
+{:ok, %{grant: ^grant, proof: proof}} =
+  Adapter.sign_report(report, holder_handle, %{issued_at: now - 5})
+
+# Decoding is not verifying; this only shows what the proof binds.
+{:ok, decoded_proof} = V1.decode_proof(proof, %{})
+
+facts_of.(decoded_proof, [:operation, :method, :target_uri, :nonce, :verification]) ++
+  [holder_matches_grant: decoded_proof.holder_thumbprint == holder_thumbprint]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  operation: "submit_reading",
+  method: "POST",
+  target_uri: "https://telemetry.example/readings",
+  nonce: "nonce-reading-1",
+  verification: :not_evaluated,
+  holder_matches_grant: true
+]
+```
+
+### Role 3, verifier: check the envelope
+
+The verifier rebuilds what it expects the request to be and checks the grant and proof together
+against public keys only, offline.
+
+```elixir
+credentials = %V1.Credentials{grant: grant, proof: proof}
+
+expected = %V1.ExpectedRequest{
+  trusted_issuer: trusted_issuer,
+  issuer: "https://issuer.example",
+  audience: "https://telemetry.example",
+  method: "POST",
+  target_uri: "https://telemetry.example/readings",
+  invocation_id: "6f1c2a3b-4d5e-4f60-8a71-92b3c4d5e6f7",
+  operation: "submit_reading",
+  cast_arguments: reading,
+  evaluation_time: now,
+  clock_skew: 60,
+  proof_max_age: 300,
+  nonce: {:required, "nonce-reading-1"},
+  bounds: V1.Bounds.maximum()
+}
+
+{:ok, envelope_facts} = V1.check_envelope(credentials, expected)
+facts_of.(envelope_facts, [:version, :operation, :matched_audience, :authorization])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  version: 1,
+  operation: "submit_reading",
+  matched_audience: "https://telemetry.example",
+  authorization: :not_evaluated
+]
+```
+
+### The proof fails closed
+
+A changed byte breaks the signature. A proof from a key other than the one the grant names is
+refused. So is the envelope when the audience, the request body or the nonce differs from what the
+verifier expects.
+
+```elixir
+stranger_handle = {Demo.Ed25519Handle, ed25519_key.("stranger-key-1", :holder)}
+
+{:ok, %{proof: stranger_proof}} =
+  Adapter.sign_report(report, stranger_handle, %{issued_at: now - 5})
+
+hotter = {:object, [{"sensor", {:string, "greenhouse-4"}}, {"celsius", {:integer, 35}}]}
+
+[
+  tampered_proof: V1.check_envelope(%{credentials | proof: flip_one_byte.(proof)}, expected),
+  stranger_holder_key: V1.check_envelope(%{credentials | proof: stranger_proof}, expected),
+  wrong_audience: V1.check_envelope(credentials, %{expected | audience: "https://other.example"}),
+  different_body: V1.check_envelope(credentials, %{expected | cast_arguments: hotter}),
+  different_nonce:
+    V1.check_envelope(credentials, %{expected | nonce: {:required, "nonce-reading-2"}})
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  tampered_proof: {:error, :invalid},
+  stranger_holder_key: {:error, :invalid},
+  wrong_audience: {:error, :invalid},
+  different_body: {:error, :invalid},
+  different_nonce: {:error, :invalid}
+]
+```
+
+### A listener on the loopback interface: `sign_local_loopback_report/3`
+
+A development listener on `127.0.0.1` or `[::1]` uses a separate proof profile
+(`bap-application-proof/local-loopback-http/1`, header `typ: "ba+loopback-proof"`). The function
+name selects it; nothing else does. The nonce is required, and the target must be a canonical
+literal-loopback `http://` URI. Plain loopback HTTP has no TLS, so the listener's operator must
+reserve each nonce to stop replays.
+
+```elixir
+local_report = %{
+  report
+  | operation: "run_local_tool",
+    target_uri: "http://127.0.0.1:4000/tools/summarize",
+    invocation_id: "0b9d8c7e-6f5a-4b3c-9d2e-1f0a9b8c7d6e",
+    cast_arguments: {:object, [{"file", {:string, "notes.txt"}}]},
+    nonce: "nonce-local-1"
+}
+
+{:ok, %{proof: local_proof}} =
+  Adapter.sign_local_loopback_report(local_report, holder_handle, %{issued_at: now - 5})
+
+local_credentials = %V1.Credentials{grant: grant, proof: local_proof}
+
+local_expected = %{
+  expected
+  | operation: "run_local_tool",
+    target_uri: "http://127.0.0.1:4000/tools/summarize",
+    invocation_id: "0b9d8c7e-6f5a-4b3c-9d2e-1f0a9b8c7d6e",
+    cast_arguments: {:object, [{"file", {:string, "notes.txt"}}]},
+    nonce: {:required, "nonce-local-1"}
+}
+
+{:ok, local_facts} = LocalLoopback.check_envelope(local_credentials, local_expected)
+
+[
+  verified: facts_of.(local_facts, [:operation, :target_uri, :authorization]),
+  wrong_nonce:
+    LocalLoopback.check_envelope(
+      local_credentials,
+      %{local_expected | nonce: {:required, "nonce-local-2"}}
+    ),
+  standard_verifier: V1.check_envelope(local_credentials, local_expected),
+  localhost_name:
+    Adapter.sign_local_loopback_report(
+      %{local_report | target_uri: "http://localhost:4000/tools/summarize"},
+      holder_handle
+    ),
+  missing_nonce: Adapter.sign_local_loopback_report(%{local_report | nonce: nil}, holder_handle)
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  verified: [
+    operation: "run_local_tool",
+    target_uri: "http://127.0.0.1:4000/tools/summarize",
+    authorization: :not_evaluated
+  ],
+  wrong_nonce: {:error, :invalid},
+  standard_verifier: {:error, :invalid},
+  localhost_name: {:error, {:producer_error, :invalid}},
+  missing_nonce: {:error, :invalid_report}
+]
+```
+
+### A chain checkpoint and a key rotation: `sign_anchor/3` and `sign_key_transition/3`
+
+A boundary anchor is a signed checkpoint of an append-only chain, such as an audit log: its id,
+its sequence number and the hash of the chain so far. A key transition is the retiring key's
+signed statement naming its successor. For both, the key id comes from the handle's single
+`key_identity/1` call, never from the input.
+
+```elixir
+chain_handle = {Demo.Ed25519Handle, chain_key}
+{:ok, chain_fingerprint} = Demo.Ed25519Handle.thumbprint(chain_key)
+{:ok, next_chain_fingerprint} = Demo.Ed25519Handle.thumbprint(next_chain_key)
+
+anchor_input = %{
+  anchor_id: "urn:example:anchor:audit-log-42",
+  chain_id: "urn:example:chain:audit-log",
+  sequence: 42,
+  chain_hash: :crypto.hash(:sha256, "audit log entries 1 through 42")
+}
+
+{:ok, %{anchor: anchor}} = Adapter.sign_anchor(anchor_input, chain_handle, %{anchored_at: now})
+
+expected_anchor = %V1.ExpectedAnchor{
+  anchor_id: "urn:example:anchor:audit-log-42",
+  anchored_at: now,
+  chain_id: "urn:example:chain:audit-log",
+  sequence: 42,
+  chain_hash: anchor_input.chain_hash,
+  key_id: chain_key.key_id,
+  key_fingerprint: chain_fingerprint,
+  bounds: V1.Bounds.maximum()
+}
+
+transition_input = %{
+  transition_id: "urn:example:transition:audit-log-1",
+  chain_id: "urn:example:chain:audit-log",
+  effective_at: now,
+  next_key_id: next_chain_key.key_id,
+  next_public_key: next_chain_key.public
+}
+
+{:ok, %{key_transition: transition}} = Adapter.sign_key_transition(transition_input, chain_handle)
+
+expected_transition = %V1.ExpectedKeyTransition{
+  transition_id: "urn:example:transition:audit-log-1",
+  chain_id: "urn:example:chain:audit-log",
+  effective_at: now,
+  current_key_id: chain_key.key_id,
+  current_key_fingerprint: chain_fingerprint,
+  next_key_id: next_chain_key.key_id,
+  next_key_fingerprint: next_chain_fingerprint,
+  bounds: V1.Bounds.maximum()
+}
+
+{:ok, anchor_facts} = V1.verify_historical_anchor(anchor, validity.(chain_key), expected_anchor)
+
+{:ok, transition_facts} =
+  V1.verify_key_transition(
+    transition,
+    validity.(chain_key),
+    validity.(next_chain_key),
+    expected_transition
   )
 
-case V1.check_envelope(%V1.Credentials{grant: grant_compact, proof: wrong_proof}, expected) do
-  {:ok, _} -> "❌ UNEXPECTED — a stranger's proof verified (that would be a bug)"
-  {:error, :invalid} -> "✅ stranger's proof REJECTED — the proof must come from the holder the grant was issued to"
-end
+later_hash = :crypto.hash(:sha256, "audit log entries 1 through 43")
+
+[
+  anchor_verified: facts_of.(anchor_facts, [:sequence, :verification, :trust]),
+  tampered_anchor:
+    V1.verify_historical_anchor(flip_one_byte.(anchor), validity.(chain_key), expected_anchor),
+  different_chain_hash:
+    V1.verify_historical_anchor(
+      anchor,
+      validity.(chain_key),
+      %{expected_anchor | chain_hash: later_hash}
+    ),
+  transition_verified: facts_of.(transition_facts, [:verification, :trust]),
+  wrong_successor:
+    V1.verify_key_transition(
+      transition,
+      validity.(chain_key),
+      %{validity.(next_chain_key) | public_key: holder.public},
+      expected_transition
+    ),
+  rotation_to_itself:
+    Adapter.sign_key_transition(
+      %{transition_input | next_key_id: chain_key.key_id, next_public_key: chain_key.public},
+      chain_handle
+    )
+]
 ```
 
+<!-- livebook:{"output":true} -->
+
 ```
-✅ stranger's proof REJECTED — the proof must come from the holder the grant was issued to
+[
+  anchor_verified: [sequence: 42, verification: :signature_and_window, trust: :not_evaluated],
+  tampered_anchor: {:error, :invalid},
+  different_chain_hash: {:error, :invalid},
+  transition_verified: [verification: :authenticated_transition, trust: :not_evaluated],
+  wrong_successor: {:error, :invalid},
+  rotation_to_itself: {:error, {:producer_error, :invalid}}
+]
+```
+
+### A content assertion: `sign_content_assertion/3`
+
+A content assertion (`bap-content-assertion/1`) binds the SHA-256 digest of exact bytes, here a
+published air-quality dataset, to an issuer, an audience, a lineage subject, a schema profile, a
+validity window and a predecessor (`gen` and `prev`; the first assertion in a lineage has
+`gen: 1` and an all-zero `prev`). It grants nothing; it says only that this key signed these
+bytes under these terms.
+
+```elixir
+dataset = ~s({"station":"riverside","pm25":[8.1,7.9,8.4]})
+{:ok, content_digest} = ContentAssertion.content_digest(dataset, %{})
+profile_digest = :crypto.hash(:sha256, "urn:example:profile:air-quality/1 schema")
+publisher_handle = {Demo.Ed25519Handle, publisher}
+
+assertion_input = %{
+  jti: "urn:example:assertion:riverside-1",
+  iss: "urn:example:publisher",
+  aud: "urn:example:archive",
+  sub: "urn:example:dataset:riverside-air-quality",
+  profile: "urn:example:profile:air-quality/1",
+  profile_digest: profile_digest,
+  content_digest: content_digest,
+  gen: 1,
+  prev: <<0::256>>,
+  iat: now - 60,
+  nbf: now - 60,
+  exp: now + 3_600
+}
+
+{:ok, %{content_assertion: assertion}} =
+  Adapter.sign_content_assertion(assertion_input, publisher_handle)
+
+expected_assertion = %ContentAssertion.ExpectedContentAssertion{
+  attestor: validity.(publisher),
+  issuer: "urn:example:publisher",
+  audience: "urn:example:archive",
+  subject: "urn:example:dataset:riverside-air-quality",
+  profile: "urn:example:profile:air-quality/1",
+  profile_digest: profile_digest,
+  content_digest: content_digest,
+  now: now,
+  bounds: V1.Bounds.maximum()
+}
+
+{:ok, assertion_facts} = ContentAssertion.verify_assertion(assertion, expected_assertion)
+facts_of.(assertion_facts, [:sub, :gen, :verification, :trust])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  sub: "urn:example:dataset:riverside-air-quality",
+  gen: 1,
+  verification: :signature_and_window,
+  trust: :not_evaluated
+]
+```
+
+It fails closed on a changed byte, on edited content (one added space), on the wrong publisher
+key and on the wrong audience. The adapter itself refuses an input with a missing field.
+
+```elixir
+{:ok, edited_digest} = ContentAssertion.content_digest(dataset <> " ", %{})
+
+[
+  tampered_assertion:
+    ContentAssertion.verify_assertion(flip_one_byte.(assertion), expected_assertion),
+  edited_content:
+    ContentAssertion.verify_assertion(assertion, %{
+      expected_assertion
+      | content_digest: edited_digest
+    }),
+  wrong_publisher_key:
+    ContentAssertion.verify_assertion(assertion, %{
+      expected_assertion
+      | attestor: %{validity.(publisher) | public_key: holder.public}
+    }),
+  wrong_audience:
+    ContentAssertion.verify_assertion(assertion, %{
+      expected_assertion
+      | audience: "urn:example:other-archive"
+    }),
+  missing_field:
+    Adapter.sign_content_assertion(Map.delete(assertion_input, :content_digest), publisher_handle)
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  tampered_assertion: {:error, :invalid},
+  edited_content: {:error, :invalid},
+  wrong_publisher_key: {:error, :invalid},
+  wrong_audience: {:error, :invalid},
+  missing_field: {:error, :invalid_content_assertion}
+]
+```
+
+## Part 2: ES256 with P-256 keys (contract-major 3)
+
+`BoundedAuthorityReportAdapter.V3` signs the same four standard objects under the
+`BAP3-ES256-SHA256` suite: P-256 keys (the 65-byte uncompressed point) and the raw 64-byte
+`r || s` signature. Every ECDSA signature has two valid spellings, `s` and `n - s`; the protocol
+accepts only the low one. Producing it is the signer's duty, so the adapter normalizes whatever
+the handle returns and then checks the result against the public key. The loopback and
+content-assertion profiles have no ES256 signer.
+
+First, confirm the demo handle really returns the high spelling.
+
+```elixir
+p256_n = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+
+low_s? = fn <<_r::binary-size(32), s::unsigned-big-256>> -> s <= div(p256_n, 2) end
+
+signature_of = fn compact ->
+  compact |> String.split(".") |> List.last() |> Base.url_decode64!(padding: false)
+end
+
+{:ok, device_signature} = Demo.P256Handle.sign("any message", ec_issuer)
+
+[
+  device_signature_bytes: byte_size(device_signature),
+  device_signature_low_s: low_s?.(device_signature)
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[device_signature_bytes: 64, device_signature_low_s: false]
+```
+
+### Issuer and holder under ES256
+
+```elixir
+ec_issuer_handle = {Demo.P256Handle, ec_issuer}
+ec_holder_handle = {Demo.P256Handle, ec_holder}
+{:ok, ec_holder_thumbprint} = Demo.P256Handle.thumbprint(ec_holder)
+
+ec_grant_input = %{
+  issuer: "https://issuer.example",
+  grant_id: "urn:example:grant:inspection-1",
+  audiences: ["https://maintenance.example"],
+  issued_at: now - 60,
+  not_before: now - 60,
+  expires_at: now + 3_600,
+  holder_thumbprint: ec_holder_thumbprint,
+  operations: [%V3.Operation{name: "schedule_inspection", selectors: [:all]}]
+}
+
+{:ok, %{grant: ec_grant}} = Adapter.V3.sign_grant(ec_grant_input, ec_issuer_handle)
+
+ec_trusted_issuer = %V1.TrustedIssuer{key_id: ec_issuer.key_id, public_key: ec_issuer.public}
+
+{:ok, ec_grant_facts} =
+  V3.verify_grant(ec_grant, ec_trusted_issuer, %{
+    expected_grant
+    | audience: "https://maintenance.example"
+  })
+
+inspection =
+  {:object, [{"asset", {:string, "pump-station-2"}}, {"window", {:string, "next-week"}}]}
+
+ec_report = %{
+  grant_compact: ec_grant,
+  operation: "schedule_inspection",
+  method: "POST",
+  target_uri: "https://maintenance.example/inspections",
+  invocation_id: "3e4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7",
+  cast_arguments: inspection,
+  nonce: nil
+}
+
+{:ok, %{grant: ^ec_grant, proof: ec_proof}} =
+  Adapter.V3.sign_report(ec_report, ec_holder_handle, %{issued_at: now - 5})
+
+ec_credentials = %V1.Credentials{grant: ec_grant, proof: ec_proof}
+
+ec_expected = %V1.ExpectedRequest{
+  trusted_issuer: ec_trusted_issuer,
+  issuer: "https://issuer.example",
+  audience: "https://maintenance.example",
+  method: "POST",
+  target_uri: "https://maintenance.example/inspections",
+  invocation_id: "3e4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7",
+  operation: "schedule_inspection",
+  cast_arguments: inspection,
+  evaluation_time: now,
+  clock_skew: 60,
+  proof_max_age: 300,
+  nonce: :not_required,
+  bounds: V1.Bounds.maximum()
+}
+
+{:ok, ec_facts} = V3.check_envelope(ec_credentials, ec_expected)
+
+[
+  grant_verified: facts_of.(ec_grant_facts, [:version, :grant_id, :authorization]),
+  grant_signature_low_s: low_s?.(signature_of.(ec_grant)),
+  envelope_verified: facts_of.(ec_facts, [:version, :operation, :authorization]),
+  proof_signature_low_s: low_s?.(signature_of.(ec_proof))
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  grant_verified: [
+    version: 3,
+    grant_id: "urn:example:grant:inspection-1",
+    authorization: :not_evaluated
+  ],
+  grant_signature_low_s: true,
+  envelope_verified: [version: 3, operation: "schedule_inspection", authorization: :not_evaluated],
+  proof_signature_low_s: true
+]
+```
+
+The handle returned high-S every time; both compacts carry low-S, and both verify.
+
+### ES256 fails closed, and the majors stay apart
+
+The same checks as Part 1, plus the boundary between suites: a major-1 verifier rejects major-3
+credentials, the V3 signer refuses an Ed25519 handle before signing, and it refuses to pair a
+major-3 proof with a major-1 grant.
+
+```elixir
+ec_stranger_handle = {Demo.P256Handle, p256_key.("stranger-ec-key-1", :holder)}
+
+{:ok, %{proof: ec_stranger_proof}} =
+  Adapter.V3.sign_report(ec_report, ec_stranger_handle, %{issued_at: now - 5})
+
+[
+  tampered_proof:
+    V3.check_envelope(%{ec_credentials | proof: flip_one_byte.(ec_proof)}, ec_expected),
+  stranger_holder_key:
+    V3.check_envelope(%{ec_credentials | proof: ec_stranger_proof}, ec_expected),
+  wrong_audience:
+    V3.check_envelope(ec_credentials, %{ec_expected | audience: "https://other.example"}),
+  major_1_verifier: V1.check_envelope(ec_credentials, ec_expected),
+  ed25519_handle: Adapter.V3.sign_report(ec_report, holder_handle),
+  major_1_grant: Adapter.V3.sign_report(%{ec_report | grant_compact: grant}, ec_holder_handle)
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  tampered_proof: {:error, :invalid},
+  stranger_holder_key: {:error, :invalid},
+  wrong_audience: {:error, :invalid},
+  major_1_verifier: {:error, :invalid},
+  ed25519_handle: {:error, :invalid_key_handle},
+  major_1_grant: {:error, :invalid_report}
+]
+```
+
+### Chain checkpoint and key rotation under ES256
+
+```elixir
+ec_chain_handle = {Demo.P256Handle, ec_chain_key}
+{:ok, ec_chain_fingerprint} = Demo.P256Handle.thumbprint(ec_chain_key)
+{:ok, ec_next_chain_fingerprint} = Demo.P256Handle.thumbprint(ec_next_chain_key)
+
+{:ok, %{anchor: ec_anchor}} =
+  Adapter.V3.sign_anchor(anchor_input, ec_chain_handle, %{anchored_at: now})
+
+ec_expected_anchor = %{
+  expected_anchor
+  | key_id: ec_chain_key.key_id,
+    key_fingerprint: ec_chain_fingerprint
+}
+
+ec_transition_input = %{
+  transition_input
+  | next_key_id: ec_next_chain_key.key_id,
+    next_public_key: ec_next_chain_key.public
+}
+
+{:ok, %{key_transition: ec_transition}} =
+  Adapter.V3.sign_key_transition(ec_transition_input, ec_chain_handle)
+
+ec_expected_transition = %{
+  expected_transition
+  | current_key_id: ec_chain_key.key_id,
+    current_key_fingerprint: ec_chain_fingerprint,
+    next_key_id: ec_next_chain_key.key_id,
+    next_key_fingerprint: ec_next_chain_fingerprint
+}
+
+{:ok, ec_anchor_facts} =
+  V3.verify_historical_anchor(ec_anchor, validity.(ec_chain_key), ec_expected_anchor)
+
+{:ok, ec_transition_facts} =
+  V3.verify_key_transition(
+    ec_transition,
+    validity.(ec_chain_key),
+    validity.(ec_next_chain_key),
+    ec_expected_transition
+  )
+
+[
+  anchor_verified: facts_of.(ec_anchor_facts, [:sequence, :verification]),
+  anchor_signature_low_s: low_s?.(signature_of.(ec_anchor)),
+  tampered_anchor:
+    V3.verify_historical_anchor(
+      flip_one_byte.(ec_anchor),
+      validity.(ec_chain_key),
+      ec_expected_anchor
+    ),
+  transition_verified: facts_of.(ec_transition_facts, [:verification]),
+  wrong_successor:
+    V3.verify_key_transition(
+      ec_transition,
+      validity.(ec_chain_key),
+      %{validity.(ec_next_chain_key) | public_key: ec_holder.public},
+      ec_expected_transition
+    ),
+  ed25519_successor:
+    Adapter.V3.sign_key_transition(
+      %{transition_input | next_public_key: next_chain_key.public},
+      ec_chain_handle
+    )
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  anchor_verified: [sequence: 42, verification: :signature_and_window],
+  anchor_signature_low_s: true,
+  tampered_anchor: {:error, :invalid},
+  transition_verified: [verification: :authenticated_transition],
+  wrong_successor: {:error, :invalid},
+  ed25519_successor: {:error, :invalid_transition}
+]
 ```
 
 ## What just happened
 
-| Role         | Who does it in production              | What runs here                                |
-| ------------ | -------------------------------------- | --------------------------------------------- |
-| **Issuer**   | the `bounded_authority` runtime        | a demo cell (so there's a grant to sign over) |
-| **Holder**   | the edge agent, using **this adapter** | `sign_report/3` ← the adapter's one job     |
-| **Verifier** | the verifier / any third party    | the public `check_envelope/2`                 |
+| Role         | Who does it in production                            | What ran here                                                                                           |
+| ------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Issuer**   | the authority runtime, or an issuer with its own key | `sign_grant/3` and `V3.sign_grant/3` through an issuer-role handle, with and without a role attestation |
+| **Holder**   | the edge, using **this adapter**                     | `sign_report/3`, `sign_local_loopback_report/3` and `V3.sign_report/3`: the adapter's one job           |
+| **Verifier** | any party with the public protocol package           | `check_envelope/2`, `verify_grant/3` and the other public verify functions                              |
 
-So this library is a **self-contained signing helper**: it takes a grant + a report + a key-handle,
-and returns a capability envelope any public-package verifier accepts. It is **not** a verifier,
-**not** an issuer, **not** a transport, **not** a database.
+The same handle-based signing path also produced a boundary anchor and a key transition under both
+suites, and a content assertion. Every signed object verified with the public protocol package.
+Every changed byte, wrong key, wrong audience and wrong context was rejected: by a verifier, with
+the protocol's `{:error, :invalid}`, or by the adapter before it signed anything, with one of its
+closed errors (`:invalid_key_handle`, `:invalid_role_attestation`, `:invalid_report`,
+`:invalid_transition`, `:invalid_content_assertion` or `{:producer_error, :invalid}`).
 
-> **A real consumer does two more things this demo skips**, because they're the *consumer's* job,
-> not the adapter's: (a) bind the verified envelope to the authenticated reporter so a captured
-> envelope can't be replayed under a different identity (`docs/consumer-integration.md` §8); and
-> (b) dedupe nonces against a replay ledger (§9). The adapter produces the bytes; the consumer
-> binds + persists + dedupes. That's the only place a database enters — and it's not here.
+The adapter signs and nothing more. It is not a verifier, not an issuer runtime, not a transport
+and not a database. A real consumer also binds each verified envelope to the authenticated
+sender, so a captured envelope cannot be replayed under another identity
+(`docs/consumer-integration.md` §8), and records each nonce in a replay ledger (§9). Those steps
+belong to the consumer, and that is where a database enters; it is not here.

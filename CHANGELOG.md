@@ -13,6 +13,22 @@
   release. The dependency wall asserts the range shape (floor, ceiling, locked version) and
   fails on a requirement that admits 0.7.x, on an exact pin, and on a range that crosses the
   ceiling.
+- The Livebook (`examples/report_envelope_roundtrip.livemd`) now covers every signing entry
+  point: `sign_report/3`, `sign_local_loopback_report/3`, `sign_grant/3` (with and without the
+  role-attestation gate), `sign_anchor/3`, `sign_key_transition/3`, `sign_content_assertion/3`
+  and the four ES256 entry points in `BoundedAuthorityReportAdapter.V3`, including low-S output
+  from a key handle that returns high-S. Each section verifies with the public protocol package
+  and ends with a fail-closed cell that returns the real error values. Keys are generated when
+  the notebook runs.
+
+### Added
+
+- `test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` runs the Livebook's cells
+  against the repository source and compares each returned value with the output pinned under
+  the cell. It also fails when the library exports a `sign_*/3` entry point the notebook never
+  calls, when a cell is not formatted, and when the release or protocol requirement the notebook
+  states differs from `mix.exs`. It runs in `mix test`, so in `mix ci` and CI (ADR-0011
+  amendment).
 
 ## [0.10.0] — 2026-10-13
 
