@@ -314,7 +314,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
   test "each optional-callback advisory names every entry point that calls the callback" do
     assert %{advisories: advisories} = Doctor.check(MinimalHandle, :ref, false)
 
-    for {callback, entry_points} <- BoundedAuthorityReportAdapter.__optional_callback_users__() do
+    for {callback, entry_points} <- BoundedAuthorityReportAdapter.OptionalCallbacks.users() do
       advisory = Enum.find(advisories, &String.starts_with?(&1, "#{callback}/1 absent"))
       assert advisory, "no advisory for a missing #{callback}/1"
 

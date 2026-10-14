@@ -318,7 +318,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
     if Code.ensure_loaded?(module) do
       # The entry points that call each optional callback come from the adapter itself
       # (a test derives that list from the entry points' behavior).
-      for {callback, entry_points} <- BoundedAuthorityReportAdapter.__optional_callback_users__(),
+      for {callback, entry_points} <- BoundedAuthorityReportAdapter.OptionalCallbacks.users(),
           not function_exported?(module, callback, 1),
           do: "#{callback}/1 absent — blocks #{entry_point_list(entry_points)}"
     else

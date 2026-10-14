@@ -925,27 +925,6 @@ defmodule BoundedAuthorityReportAdapter do
   defp content_assertion_opts(opts),
     do: normalize_opts(opts, :invalid_content_assertion, :content_assertion)
 
-  @doc false
-  # Which entry points call each optional callback, so require it. The doctor's advisories
-  # are built from this; test/bounded_authority_report_adapter/optional_callback_users_test.exs
-  # derives the same map by calling every public sign_*/3 with a recording handle, so this
-  # cannot drift from the code.
-  @spec __optional_callback_users__() :: [{atom(), [{module(), atom()}]}]
-  def __optional_callback_users__ do
-    v3 = BoundedAuthorityReportAdapter.V3
-
-    [
-      key_identity: [
-        {__MODULE__, :sign_anchor},
-        {__MODULE__, :sign_key_transition},
-        {__MODULE__, :sign_content_assertion},
-        {v3, :sign_anchor},
-        {v3, :sign_key_transition}
-      ],
-      signing_identity: [{__MODULE__, :sign_grant}, {v3, :sign_grant}]
-    ]
-  end
-
   # ---------------------------------------------------------------------------
   # The shared signing tail (the universal-companion primitive).
   #
