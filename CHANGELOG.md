@@ -112,6 +112,8 @@
   cover `sign_content_assertion/3` and the `V3` entry points; usage rule 11 describes the
   protocol range instead of an exact pin; `CONTRIBUTING.md` runs `MIX_ENV=test mix ci`.
 - The package description names every object the library signs.
+- `SECURITY.md` points reporters to GitHub private vulnerability reporting, now enabled
+  on the repository (the Security tab, "Report a vulnerability").
 - Example operation names, URIs and values span several domains, and the guides no longer
   use internal planning identifiers.
 

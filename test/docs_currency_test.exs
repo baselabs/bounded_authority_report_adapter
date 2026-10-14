@@ -172,6 +172,16 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     end
   end
 
+  test "SECURITY.md sends reporters to GitHub private vulnerability reporting" do
+    security = File.read!("SECURITY.md") |> String.replace(~r/\s+/, " ")
+
+    assert security =~ "Report a vulnerability"
+    assert security =~ "https://github.com/baselabs/bounded_authority_report_adapter/security"
+
+    assert security =~
+             "https://github.com/baselabs/bounded_authority_report_adapter/security/advisories/new"
+  end
+
   test "the docs describe how mix ci reports failure as it behaves" do
     # `mix ci` runs its steps in order in one VM. Some failing steps end the run at once,
     # but others (the test suite among them) record a non-zero exit status and let the

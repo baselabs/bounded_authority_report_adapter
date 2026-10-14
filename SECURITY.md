@@ -30,9 +30,13 @@ The properties a report is measured against (the long form is the
 
 ## Reporting a vulnerability
 
-Use GitHub's private vulnerability-reporting / security-advisory flow for
-`baselabs/bounded_authority_report_adapter`. Do not open a public issue containing an
-exploit, credential, private key, or unreleased vulnerability detail.
+Report privately through GitHub: open the repository's
+[Security tab](https://github.com/baselabs/bounded_authority_report_adapter/security) and
+choose **Report a vulnerability**, or go straight to
+[the private report form](https://github.com/baselabs/bounded_authority_report_adapter/security/advisories/new)
+(you need to be signed in to GitHub). Only you and the maintainers see the report. Do not
+open a public issue containing an exploit, credential, private key, or unreleased
+vulnerability detail.
 
 A report should include:
 
