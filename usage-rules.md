@@ -1,80 +1,69 @@
 # Usage rules
 
 1. Treat `sign_report/3` output as a cryptographic artifact, not an authorization decision.
-   The envelope proves the holder signed THIS report under THAT grant — whether the action
-   is allowed is the verifier's authority decision ([consumer integration
+   The envelope proves the holder signed this request under that grant; whether the action
+   is allowed is the verifier's decision ([consumer integration
    §8](docs/consumer-integration.md)).
-2. The private key never enters this library. You hold it behind a `{module, term}` key
-   handle implementing the `BoundedAuthorityReportAdapter` behaviour (`sign/2`,
-   `public_key/1`, `thumbprint/1`, `key_identity/1`, `signing_identity/1`). If you find
-   yourself passing key bytes INTO the adapter, the integration is wrong — see
+2. The private key never enters this library. Keep it behind a `{module, term}` key handle
+   implementing the `BoundedAuthorityReportAdapter` behavior (`sign/2`, `public_key/1`,
+   `thumbprint/1`, and as needed `key_identity/1` and `signing_identity/1`). If you find
+   yourself passing key bytes into the adapter, the integration is wrong; see
    [Getting started](docs/getting-started.md).
-3. `sign_grant/3`'s role gate is declaration-rejection by default; with the optional `:role_attestation` input (RA11) it is BA-asserted cryptographic role binding through BAP's `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2`.
-   A handle whose `signing_identity/1` does not resolve `{:issuer, _, _}` is rejected with
-   `:invalid_key_handle` BEFORE `sign/2` is called — but a handle that consistently lies
-   (returns `:issuer` while holding a holder key) passes the gate. Key-role separation is
-   a custody property, not something this gate adds to. (ADR-0006/0007.)
-4. Never trust caller-supplied `key_id` or `public_key` content. `sign_anchor/3` and
-   `sign_key_transition/3` resolve BOTH key identifiers from ONE atomic `key_identity/1`
-   snapshot on the handle — a caller-supplied `:current_key_id` is ignored. Keep it that
-   way: a caller-named kid over a differently-signed anchor is the forgery that shape
-   enables.
-5. Pin `:issued_at` (and `:anchored_at`) when the verifier's evaluation time is far from
-   your wall clock. The default is `System.system_time(:second)` — replayed tests and
-   offline flows against a pinned `evaluation_time` need the explicit option, or the
-   proof falls outside `proof_max_age`.
-6. `cast_arguments` must be BAP's tagged `Json.value()` form, produced by
-   `BoundedAuthorityProtocol.V1.Json.decode/2` of the SAME raw bytes on BOTH sides. A
-   raw map is rejected; feeding the two sides DIFFERENT bytes (or a re-encoding, instead
-   of the original bytes) is the divergence this rule prevents — same bytes + same
-   deterministic decode is byte-agreement by construction
-   ([consumer integration §3–§4](docs/consumer-integration.md)).
-7. Consumer-side identity binding and nonce-ledger replay protection are obligations, not
-   options. This library signs; the consuming verifier must bind the holder thumbprint to
-   its own identity source and dedupe nonces ([consumer integration
-   §8/§9](docs/consumer-integration.md)).
-8. Errors are closed atoms — there is no value-echoing. `{:producer_error, :invalid}` is
-   exactly that tuple; key ids, message bytes, and report content never appear in an
-   error. Do not wrap losses into logs by inspecting inputs on failure — the atoms are
-   the whole story ([Errors](docs/errors.md)).
-9. A signature that does not verify against the resolved public key is `:signing_failed`
-   — the wrong-key guard runs on EVERY object. If your handle signs with a different key
-   than `public_key/1` reports, you get a red, never a false success. Fix the handle,
-   never the guard.
-10. Attach telemetry BEFORE the first production sign if you want the custody alarm:
-    `[:bounded_authority_report_adapter, :sign, :stop]` with `result_class:
-    :signing_failed` is the custody-misconfiguration signal. Metadata is value-free;
-    never extend it with key material ([Telemetry](docs/telemetry.md)).
-11. Pin the protocol dependency and treat a version bump as a reviewed change — the
-    dependency-direction wall pins the locked version, and a silent `mix deps.update`
-    crosses an unreviewed protocol span (ADR-0023).
-12. Production handles never come from this library. The `{pub, priv}` reference handle
-    in the source repo's `test/support/` is TEST-ONLY and deliberately not shipped in the
-    package — shipping it would pave the road to exactly the custody failure the separate
-    key-handle contract exists to prevent (design C5, ADR-0014).
+3. `sign_grant/3` signs only for a handle whose `signing_identity/1` declares
+   `{:issuer, _, _}`; any other handle gets `:invalid_key_handle` before `sign/2` is called.
+   The adapter cannot check that the declaration is true: a handle that returns `:issuer`
+   for a holder's key passes. Keep issuer keys in issuer custody, or pass the
+   `:role_attestation` option so the role must also be backed by a role attestation that
+   `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` accepts.
+4. Never trust caller-supplied key ids or public keys. `sign_anchor/3`,
+   `sign_key_transition/3` and `sign_content_assertion/3` read the key id and public key
+   from one `key_identity/1` call, and `sign_grant/3` from one `signing_identity/1` call;
+   a key id in the input (`:key_id`, `:current_key_id`) is ignored. Keep it that way: an
+   object that names one key while signed by another is the forgery that shape enables.
+5. Set `:issued_at` (and `:anchored_at`) when the verifier's evaluation time is far from
+   your wall clock. The default is `System.system_time(:second)`; tests and offline flows
+   that verify at a fixed `evaluation_time` need the option, or the proof falls outside
+   `proof_max_age`.
+6. `cast_arguments` must be the protocol's tagged `Json.value()` form, produced by
+   `BoundedAuthorityProtocol.V1.Json.decode/2` from the same raw bytes on both sides. A
+   raw map is refused (`{:producer_error, :invalid}`). Decoding different bytes on the two
+   sides, or a re-encoding instead of the bytes sent, is the mismatch this rule prevents
+   ([consumer integration §3 and §4](docs/consumer-integration.md)).
+7. Identity binding and a nonce ledger are verifier obligations, not options. This library
+   signs; the verifier must bind the holder thumbprint to the identity it authenticated
+   and reject a nonce it has seen ([consumer integration §8 and
+   §9](docs/consumer-integration.md)).
+8. Errors are closed atoms with no values. `{:producer_error, :invalid}` is exactly that
+   tuple; key ids, message bytes and report content never appear in an error. Do not add
+   them back by logging the inputs on failure ([Errors](docs/errors.md)).
+9. A signature that does not verify against the handle's public key is `:signing_failed`;
+   the check runs on every object. If your handle signs with a different key than
+   `public_key/1` reports, you get an error, never a bad signature. Fix the handle.
+10. Attach telemetry before the first production signing call if you want the custody
+    alarm: `[:bounded_authority_report_adapter, :sign, :stop]` with
+    `result_class: :signing_failed`. Metadata carries no values; never extend it with key
+    material ([Telemetry](docs/telemetry.md)).
+11. Review protocol upgrades. This package declares a range of compatible
+    `bounded_authority_protocol` releases; your application's `mix.lock` decides which one
+    you run. Read the protocol's changelog before moving that lock.
+12. Production handles never come from this library. The reference handles in the source
+    repository's `test/support/` hold private keys in memory, are test-only, and are not
+    shipped in the package.
+13. The local-loopback profile is an explicit decision, never an inference.
+    `sign_local_loopback_report/3` is the only way to produce `ba+loopback-proof` bytes;
+    there is no profile option on `sign_report/3`, and nothing detects the transport for
+    you. The nonce is mandatory, only canonical `http://127.0.0.1` and `http://[::1]`
+    targets sign, and the verifying host owns the nonce, replay control and the expected
+    target. Loopback HTTP is not equivalent to HTTPS; see
+    [Recipes](docs/recipes.md#recipe-the-local-loopback-development-listener).
+14. A content assertion is not authorization. `sign_content_assertion/3` takes the twelve
+    fields listed in its documentation, with raw 32-byte digests, and a handle with
+    `key_identity/1`. It does not read the content, consume a role attestation or resolve
+    trust. The consumer verifies with
+    `BoundedAuthorityProtocol.ContentAssertion.V1.verify_assertion/2`, supplying the
+    expected identifiers, digests, trusted key, time and bounds, and keeps its own state
+    if it must reject replays or check a lineage.
 
 See [Getting started](docs/getting-started.md), [Errors](docs/errors.md),
-[Telemetry](docs/telemetry.md), and
+[Telemetry](docs/telemetry.md) and
 [Consumer integration](docs/consumer-integration.md) for the long forms.
-
-13. The local-loopback profile is an explicit decision, never an inference.
-   `sign_local_loopback_report/3` is the ONLY way to produce
-   `ba+loopback-proof` bytes; there is no profile option on `sign_report/3`
-   and nothing detects the transport for you. The nonce is mandatory, only
-   canonical `http://127.0.0.1`/`http://[::1]` targets sign, and the verifying
-   host owns nonce reservation, replay control, and the listener-derived
-   target. Loopback HTTP is not equivalent to HTTPS — see
-   [Recipes](docs/recipes.md#recipe-the-local-loopback-development-listener).
-
-## Content assertions
-
-`sign_content_assertion/3` takes the exact twelve caller payload fields documented
-in the README; digests are raw 32-byte values. Supply a key handle implementing
-atomic `key_identity/1` and `sign/2`. The protected key identifier is signer-owned;
-caller-supplied identity aliases do not override it. The signer does not consume a
-role attestation, inspect the external content, resolve trust, or evaluate policy.
-The consumer must verify the compact with BAP using explicitly expected identifiers,
-profile/content digests, public key window, time and bounds. Parsing or signing
-is not authorization, and pairwise successor verification does not prevent replay
-without consumer-owned durable state. See
-[ADR-0022](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/adr/0022-content-assertion-signing.md).

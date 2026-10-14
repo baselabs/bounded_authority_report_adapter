@@ -1,31 +1,28 @@
 # Strategy — Bounded Authority Report Adapter
 
-**Status:** Governing — reconciled 2026-08-24 to the shipped API and public package (original
-2026-08-09 draft) · **Companion to:** `docs/charter.md` (the what),
+**Status:** Governing · **Companion to:** `docs/charter.md` (the what),
 `docs/ROADMAP.md` (the build order). This doc carries the *how* and *why* of the
 engineering + release posture.
 
 ## 1. Release posture: public package and public source
 
-The owner superseded the original private-not-Hex posture on 2026-08-20 (ADR
-0004). `bounded_authority_report_adapter` is public on Hex and consumes the
+`bounded_authority_report_adapter` is public on Hex (ADR 0004 records the earlier
+posture and its replacement) and consumes the
 public `bounded_authority_protocol` Hex package. Its GitHub source is public and
 the release tags are the durable source identities. The adapter is pre-1.0 and every
 release remains responsible for its own compatibility, conformance, provenance,
 security, and clean-consumer evidence.
 
-The `bounded_authority` runtime is a separate private commercial application. It
-is not published on public Hex, is not currently published through a private Hex
-organization because no paid private-package subscription exists, and is never a
-library dependency of BARA. A future private Hex release requires an active
-subscription and fresh approval for that exact release and destination; it cannot be
-inferred from BARA or BAP publication.
+The authority runtime (the service that issues and revokes grants) is a separate
+application. It is never a library dependency of this adapter, and nothing about its
+distribution can be inferred from this package's or the protocol package's
+publication.
 
 ## 2. "Public" terminology
 
-"Public" means the registry, source, and portable-contract boundary for BAP and
-BARA. It does not mean their APIs are 1.0-stable, and it does not make the private
-BA runtime public or publishable.
+"Public" means the registry, source, and portable-contract boundary for the protocol
+package and this adapter. It does not mean their APIs are 1.0-stable, and it says
+nothing about the authority runtime.
 
 ## 3. Dependencies — the edge-path constraint
 
@@ -39,13 +36,13 @@ bounded_authority_report_adapter
 
 - **The adapter depends only on the public protocol package.** This is the
   governing acceptance clause: the adapter depends only on the public protocol
-  package and has no private-runtime dependency. A verifier application consumes
+  package and has no runtime-service dependency. A verifier application consumes
   BAP directly and never needs this signer as a dependency.
-- **The runtime (`bounded_authority`) is NOT a dependency.** The adapter signs
+- **The authority runtime is NOT a dependency.** The adapter signs
   with a holder key it already holds; it does not call the runtime at sign time.
   Grant issuance + revocation are out of band (the runtime talks to the consuming
   application, not to this adapter).
-- **No transport libs.** `replicant`/`capstan` stay free of protocol code; this
+- **No transport libraries.** Transports stay free of protocol code; this
   adapter is called by the edge agent, not embedded in the transport.
 
 A dependency-direction test in this repo's suite proves the "only BAP"
@@ -80,10 +77,12 @@ re-architecture, not a refactor.
   signatures cross the boundary.
 - **Deterministic signing inputs** from BAP (`proof_signing_input`,
   `boundary_anchor_signing_input`, `grant_signing_input`,
-  `key_transition_signing_input`) — the adapter does NOT construct canonical
+  `key_transition_signing_input`, the local-loopback profile's
+  `proof_signing_input` and the content-assertion profile's
+  `assertion_signing_input`) — the adapter does NOT construct canonical
   bytes itself; it calls BAP and signs what BAP returns. This keeps the wire
   format owned by the protocol package (single source of truth) and makes the
-  adapter a thin glue layer across all four instantiations. In the
+  adapter a thin glue layer across every object it signs. In the
   `sign_report/3` flow the grant arrives issuer-signed as input and the
   adapter signs only the proof; grant signing is the issuer-role
   instantiation's concern (`sign_grant/3`, ADR-0007) (charter §2/§4).
@@ -98,9 +97,8 @@ re-architecture, not a refactor.
 - **0.x is public** — pre-1.0; compatibility follows the package's declared
   pre-1.0 policy and every change must retain conformance and release evidence.
 - **1.0.0** — cut only when the public API, consumer evidence, source identity,
-  and release operations meet the owner repository's 1.0 acceptance contract, AND
-  the release line has seen real consumer use with the surface settled (owner
-  direction, 2026-08-26 — the 0.3.0 cut deliberately defers 1.0).
+  and release operations meet the 1.0 acceptance contract, and the release line has
+  seen real consumer use with the surface settled.
 - Package publication and source-repository visibility are separate operations;
   neither may be inferred from the other.
 
@@ -117,8 +115,8 @@ are the explicit identities that gate an adapter bump.
 
 `sign_content_assertion/3` (0.9.0, [ADR-0022](adr/0022-content-assertion-signing.md))
 shows the release order this library follows: BAP publishes a release with its own
-normative contract, certified corpus, and independent SDK agreement; BARA moves its exact
-pin to that published release and qualifies the adoption with its own suite
-([ADR-0023](adr/0023-pin-follows-bap-releases.md)). No consumer's pin or schedule is a
-precondition; consumers, including the authority runtime, adopt BAP and BARA releases on
-their own schedule.
+normative contract, certified corpus, and independent SDK agreement; this adapter moves
+its protocol requirement and lock to that published release and qualifies the adoption
+with its own suite ([ADR-0023](adr/0023-pin-follows-bap-releases.md)). No consumer's pin
+or schedule is a precondition; consumers adopt protocol and adapter releases on their own
+schedules.

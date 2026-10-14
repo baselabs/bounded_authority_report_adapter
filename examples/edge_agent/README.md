@@ -1,4 +1,4 @@
-# edge_agent — a runnable end-to-end reference (ROADMAP RA9)
+# edge_agent — a runnable end-to-end reference
 
 A minimal but real Elixir app that proves the adapter works in a deployment: an
 **edge agent** signs an application report with `BoundedAuthorityReportAdapter.sign_report/3`
@@ -17,12 +17,13 @@ edge_agent/
   lib/
     edge_agent.ex               # the agent: mint → sign_report/3 → POST (Req)
     edge_agent/handle.ex        # DEMO proof-only key-handle (prod = HSM/KMS)
-    edge_agent/demo_issuer.ex   # DEMO grant minter (prod = the BA runtime)
+    edge_agent/demo_issuer.ex   # DEMO grant minter (prod = your authority service)
     edge_agent/receiver.ex      # the consumer: a Plug (Bandit) that verifies
     edge_agent/receiver/
       nonce_ledger.ex           # the §9 replay ledger (an ETS table)
   config/config.exs             # shared config (agent + receiver in sync)
   test/edge_agent_test.exs      # the round-trip + the four rejection classes
+  test/local_loopback_test.exs  # the loopback profile over IPv4 and IPv6
 ```
 
 ## Run it
@@ -45,7 +46,7 @@ mix run -e 'EdgeAgent.run() |> IO.inspect(label: "result")'
 # EdgeAgent.run_local_loopback/1, POST; the receiver's profile mode derives its
 # target from its own bound ip/port, refuses to boot on a non-loopback
 # interface, and consumes the challenge atomically at verification
-# (tests/local_loopback_test.exs runs it over real IPv4 AND IPv6 listeners).
+# (test/local_loopback_test.exs runs it over real IPv4 AND IPv6 listeners).
 # Loopback HTTP is plain HTTP — not equivalent to HTTPS.
 ```
 
@@ -85,17 +86,19 @@ function, so `cast_arguments` agrees by construction.
 mix test
 ```
 
-Six tests: the happy path (via `EdgeAgent.run/1` and a hand-built envelope) plus
-the four rejection classes that prove the defenses are real, not vacuous — a
+`test/edge_agent_test.exs` has six tests: the happy path (via `EdgeAgent.run/1` and a
+hand-built envelope) plus the four rejection classes that prove the defenses are real, not vacuous — a
 tampered proof, a stranger's proof, a wrong identity (the §8 binding catches an
 envelope `check_envelope` would otherwise accept), and a replayed nonce (the §9
-ledger catches a second identical request).
+ledger catches a second identical request). `test/local_loopback_test.exs` runs the
+loopback profile flow over real IPv4 and IPv6 listeners, and
+`test/protocol_lock_parity_test.exs` keeps this app's protocol lock equal to the library's.
 
 ## Development notes (gotchas specific to this app)
 
 This is its **own mix project** (`examples/edge_agent/mix.exs`), separate from the
 library at the repo root. Its deps (req/bandit/plug) live HERE — they never touch
-the library's `mix.exs`, so the library's dependency-direction wall (RA3, which
+the library's `mix.exs`, so the library's dependency-direction wall (which
 scans `lib`/`test/support`/`mix.exs`/`mix.lock` — **not `examples/`**) stays green.
 See the repo-root [`AGENTS.md`](../../AGENTS.md) for the full operational picture.
 
@@ -115,8 +118,8 @@ See the repo-root [`AGENTS.md`](../../AGENTS.md) for the full operational pictur
 ## What this is, and is not
 
 - **Not a production issuer.** `DemoIssuer` mints the grant from a demo issuer key
-  so the loop is self-contained. A real grant is minted by the `bounded_authority`
-  authority runtime and arrives at the edge out-of-band.
+  so the loop is self-contained. A real grant is minted by your authority service
+  and arrives at the edge out of band.
 - **Not production key custody.** `EdgeAgent.Handle` holds a `{pub, priv}` tuple in
   memory. A production edge agent implements the handle callbacks against an HSM,
   the OS keychain, or a key server — that swap is the ONE place custody enters.

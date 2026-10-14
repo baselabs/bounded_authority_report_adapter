@@ -34,7 +34,7 @@ config :edge_agent,
   issuer: "https://demo-issuer.test",
   grant_id: "urn:demo:grant:1",
   audience: "https://demo-verifier.test",
-  operation: "report_external_materialization",
+  operation: "submit_status_report",
   # --- the request-field contract (§3) — IDENTICAL on both sides ---------------
   target_uri: "https://receiver.local/report",
   report_body: ~s({"record":{"region":"us-east","signal":"ok"}}),

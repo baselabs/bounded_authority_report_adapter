@@ -2,11 +2,11 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   @shortdoc "Preflight-checks a key-handle module against the adapter's contract"
 
   @moduledoc """
-  Preflight-checks a key-handle module against the adapter's behaviour contract.
+  Preflight-checks a key-handle module against the adapter's behavior contract.
 
       mix bounded_authority_report_adapter.doctor --handle MyApp.HolderKey [--ref term] [--live] [--major 1|3]
 
-  The adapter has two suite surfaces (ADR-0021): the major-1 surface
+  The adapter has two suite surfaces: the major-1 surface
   (`BoundedAuthorityReportAdapter`, Ed25519, 32-byte keys) and the major-3
   surface (`BoundedAuthorityReportAdapter.V3`, `ES256`, 65-byte
   uncompressed-SEC1 P-256 keys). The doctor accepts a valid key of EITHER
@@ -29,16 +29,17 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   ADVISORY (reported, exit stays zero if nothing fatal):
 
-    * `key_identity/1` absent — blocks `sign_anchor/3` + `sign_key_transition/3`;
-    * `signing_identity/1` absent — blocks `sign_grant/3`;
+    * `key_identity/1` absent: `sign_anchor/3`, `sign_key_transition/3` and
+      `sign_content_assertion/3` will refuse the handle (the advisory line names the
+      first two);
+    * `signing_identity/1` absent: `sign_grant/3` will refuse the handle;
     * with `--ref` + `--live`: a synthetic-message `sign/2` probe whose
       signature does not verify against `public_key/1`'s key (the same
       wrong-key guard the adapter enforces on every real sign; the probe
       verifies with the key's own suite algorithm). The probe signs a
       DOCTOR-GENERATED synthetic message only — never caller data. For a
       P-256 handle, a high-S probe return is its own advisory: the adapter
-      normalizes it (the low-S producer duty is the adapter's, per ADR-0021
-      Decision 4), but a custodian that can emit low-S directly should.
+      normalizes it, but a custodian that can emit low-S directly should.
 
   `--ref` is an Elixir term, evaluated in the doctor's VM (`--ref "{:demo, 1}"`) —
   a dev-tool affordance over your own configuration, nothing more. Read/probe

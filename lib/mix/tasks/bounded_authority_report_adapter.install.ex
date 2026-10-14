@@ -39,7 +39,7 @@ if Code.ensure_loaded?(Igniter) do
       |> Igniter.create_new_file(path, starter_handle_source(module))
     end
 
-    # The starter: all five callbacks defined (so the behaviour compiles clean) but
+    # The starter: all five callbacks defined (so the behavior compiles clean) but
     # every body raises — the implementations are sketches in comments. Which
     # operation needs which callback is stated inline (the moduledoc contract table
     # of BoundedAuthorityReportAdapter, as comments).
@@ -52,7 +52,7 @@ if Code.ensure_loaded?(Igniter) do
         Implement each callback against your real custody store (HSM, KMS, key
         server). The adapter calls THESE functions and never sees the private key.
 
-        Two suite surfaces share this behaviour (ADR-0021): the major-1
+        Two suite surfaces share this behavior: the major-1
         surface (BoundedAuthorityReportAdapter — Ed25519, 32-byte keys) and
         the major-3 surface (BoundedAuthorityReportAdapter.V3 — ES256,
         65-byte uncompressed-SEC1 P-256 points, raw r||s signatures with
@@ -61,17 +61,17 @@ if Code.ensure_loaded?(Igniter) do
         mix bounded_authority_report_adapter.doctor to check yours.
 
         Which callback matters for which operation:
-          sign_report/3         -> sign/2, public_key/1 (thumbprint/1 is NOT
-                                   called by the adapter — the proof's thumbprint
-                                   is computed internally from the resolved public
-                                   key; your thumbprint/1 exists for caller-side
-                                   self-checking and must use the SUITE'S RFC 7638
-                                   preimage: OKP members for Ed25519, EC members
-                                   for P-256)
-          sign_anchor/3         -> sign/2, key_identity/1 (atomic kid+pub snapshot)
-          sign_grant/3          -> sign/2, signing_identity/1 (must declare :issuer)
-          sign_key_transition/3 -> sign/2, key_identity/1
+          sign_report/3,
+          sign_local_loopback_report/3 -> sign/2, public_key/1
+          sign_grant/3                 -> sign/2, signing_identity/1 (must declare :issuer)
+          sign_anchor/3,
+          sign_key_transition/3,
+          sign_content_assertion/3     -> sign/2, key_identity/1 (atomic kid+pub snapshot)
           V3.sign_report/3 and siblings -> the same callbacks over P-256 keys
+
+        thumbprint/1 is not called by the adapter; it exists so you can check this
+        handle against a grant's cnf.jkt, and must use the suite's RFC 7638
+        preimage: OKP members for Ed25519, EC members for P-256.
         \"\"\"
 
         @behaviour BoundedAuthorityReportAdapter
@@ -129,7 +129,7 @@ if Code.ensure_loaded?(Igniter) do
         @impl true
         def signing_identity(_handle) do
           # {role, key_id, public_key}; :issuer ONLY if this key really is the
-          # issuer's — the C1 gate rejects non-issuer declarations, it does not
+          # issuer's: the adapter rejects non-issuer declarations, it does not
           # verify them (docs/security.md).
           #   {:ok, {:holder, key_id, public_key}} = ...
           raise "wire #{inspect(module)}.signing_identity/1"

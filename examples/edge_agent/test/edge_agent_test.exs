@@ -172,7 +172,7 @@ defmodule EdgeAgentTest do
 
     %{
       grant_compact: grant_compact,
-      operation: "report_external_materialization",
+      operation: "submit_status_report",
       method: "POST",
       target_uri: "https://receiver.local/report",
       invocation_id: invocation_id,

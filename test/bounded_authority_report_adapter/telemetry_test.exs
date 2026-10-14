@@ -19,6 +19,8 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
   # capture to this suite's own calls.
   use ExUnit.Case, async: false
 
+  doctest BoundedAuthorityReportAdapter.Telemetry
+
   alias BoundedAuthorityProtocol.V1
   alias BoundedAuthorityReportAdapter.Keys.RawKey
   alias BoundedAuthorityReportAdapter.Telemetry
@@ -317,7 +319,7 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
     # EVERY `` | `:atom` | `` row in each table (not just the known atoms), so
     # a documented phantom row reds here instead of passing silent.
     doc_classes = section_atoms(doc, "Result classes (the classified outcome of a span):")
-    doc_objects = section_atoms(doc, "Objects (one per signing entry point):")
+    doc_objects = section_atoms(doc, "Objects (one per object kind):")
 
     assert Enum.sort(doc_classes) == Enum.sort(Telemetry.classes()),
            "phantom or missing classes in docs/telemetry.md: #{inspect(doc_classes)}"

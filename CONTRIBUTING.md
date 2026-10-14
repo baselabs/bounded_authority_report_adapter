@@ -21,11 +21,12 @@ Then the one-command whole-repo check (both projects, every gate, aborts at the 
 step — the local parity of CI):
 
 ```sh
-mix ci
+MIX_ENV=test mix ci
 ```
 
 `MIX_ENV=test` matters: a bare compile runs in `:dev` and misses warnings in
-`test/support/`, which only compiles under `:test`.
+`test/support/`, which only compiles under `:test`, and `mix ci` refuses to run in any
+other environment.
 
 ## Commits
 
@@ -56,6 +57,17 @@ repository documentation and are not shipped in the package).
 
 ## Docs
 
-Docs for a capability ship in the same landing as the capability. The doc-currency
-tripwire (`test/docs_currency_test.exs`) diffs the shipped guides against the code — if
-you rename an API, fix the docs in the same commit; the suite will tell you which ones.
+Docs for a capability ship in the same change as the capability. Three tests keep them
+honest:
+
+- `test/doc_samples_test.exs` runs every Elixir code block in the README and guides, and
+  every example in the API docs, and checks each `#=> value` line. A block that cannot
+  run as written is marked `<!-- doc-sample: fragment -->` and said to be a fragment in
+  the text.
+- `test/docs_currency_test.exs` checks the error tables, the function references and the
+  install snippets against the code.
+- `test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` runs the Livebook
+  and compares each cell's value with the output pinned under it; edit a cell and you
+  re-pin its output in the same commit.
+
+If you rename an API, fix the docs in the same commit; the suite tells you which ones.

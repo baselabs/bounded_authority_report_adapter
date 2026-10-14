@@ -1,169 +1,254 @@
 # Getting started
 
-`bounded_authority_report_adapter` targets Elixir `~> 1.18` — supported minors 1.18/1.19/1.20 —
-on Erlang/OTP 27 through 29 (the protocol package's codecs decode through OTP 27's `:json`
-module, so OTP 25/26 are unsupported; the repository refuses to compile outside the set —
-ADR-0019). CI runs one lane per supported major — 1.18/27, 1.19/28, 1.20/29 — on Linux only.
-Developer portability across macOS and Linux is a property of the developer setup,
-proven on a developer machine, not a CI leg; Windows developers use WSL2 (clone inside the WSL
-filesystem, not under `/mnt/c`), which is the Linux path. The package is published on
-[Hex](https://hex.pm/packages/bounded_authority_report_adapter).
+This guide signs a grant, signs a proof over it, and verifies the pair, then shows what
+changes for a production key handle. Every Elixir block after the install line runs as
+written, in order, in one `iex -S mix` session of a project that depends on this package;
+the test suite runs them the same way.
 
+## Install
+
+<!-- doc-sample: fragment -->
 ```elixir
 {:bounded_authority_report_adapter, "~> 0.10.0"}
 ```
 
-Or scaffold the starter key-handle with [Igniter](https://hexdocs.pm/igniter)
-(add `{:igniter, "~> 0.8"}` to your dev deps first):
+Add that line to `deps/0` in `mix.exs` and run `mix deps.get`. The package supports Elixir
+1.18, 1.19 and 1.20 on Erlang/OTP 27 through 29; OTP 25 and 26 are not supported because
+the protocol package decodes JSON through OTP 27's `:json` module.
+
+To scaffold a starter key-handle module, add `{:igniter, "~> 0.8", only: [:dev, :test]}`
+to your dependencies and run:
 
 ```sh
 mix bounded_authority_report_adapter.install --module MyApp.HolderKey
 ```
 
-The scaffold compiles clean and raises on every callback until you wire your
-custody store — it signs nothing by accident.
+The generated module compiles, and every callback raises until you wire it to your key
+store, so it cannot sign anything by accident.
 
 ## The shape of the thing
 
-This library is a HOLDER-side signer. It never sees your private key: you hand it a
-`{module, term}` key handle whose module implements the `BoundedAuthorityReportAdapter`
-behaviour, and it signs protocol objects (holder proofs, boundary anchors, grants, key
-transitions) through that handle. Verification is the protocol package's job
-(`BoundedAuthorityProtocol.V1.check_envelope/2` and friends) — this adapter never
-verifies.
+The adapter never sees your private key. You pass a `{module, term}` key handle: the module
+implements the `BoundedAuthorityReportAdapter` behavior, and the term is a key reference
+only that module understands. The adapter asks the handle for its public key, asks it to
+sign the exact bytes the protocol package produced, checks the signature against that
+public key, and assembles the compact form.
 
-## Your first sign, in minutes
+Holders use it to sign proofs. Issuers can use it to sign grants. Any key holder can use it
+to sign boundary anchors, key transitions and content assertions. Verifying is the protocol
+package's job (`BoundedAuthorityProtocol.V1.check_envelope/2` and the other verify
+functions); this adapter never verifies a credential.
 
-A development handle is ~25 lines: a seeded Ed25519 pair behind the five callbacks
-(an `ES256` P-256 pair serves the `V3` surface the same way — the key's wire shape
-selects the surface, ADR-0021). (The
-source repository carries a reference implementation under `test/support/` — it is
-TEST-ONLY and deliberately NOT shipped in the package; in production the handle fronts
-an HSM, OS keychain, or key server.)
+## 1. A development key handle
+
+A development handle needs five callbacks. This one derives each Ed25519 key from its name
+in process, which is acceptable only for development. The repository's own test-only
+handles live under `test/support/` and are not shipped in the package.
 
 ```elixir
-defmodule MyApp.DevHandle do
+defmodule MyApp.DevKey do
+  @moduledoc "Development only: derives an Ed25519 key from its name. Never use in production."
   @behaviour BoundedAuthorityReportAdapter
 
-  @seed <<2::256>>  # DEV ONLY — never a real key
-  defp keypair, do: :crypto.generate_key(:eddsa, :ed25519, @seed)
+  # The handle term is {role, name}. The role matters only to sign_grant/3.
+  @impl true
+  def sign(message, {_role, name}),
+    do: {:ok, :crypto.sign(:eddsa, :none, message, [private_key(name), :ed25519])}
 
   @impl true
-  def sign(message, _handle) when is_binary(message) do
-    {_pub, priv} = keypair()
-    {:ok, :crypto.sign(:eddsa, :none, message, [priv, :ed25519])}
+  def public_key({_role, name}), do: {:ok, public_key_of(name)}
+
+  # The raw RFC 7638 thumbprint, from the protocol package's documented JWK functions.
+  @impl true
+  def thumbprint({_role, name}) do
+    with {:ok, jwk} <- BoundedAuthorityProtocol.V1.Jwk.encode_public(public_key_of(name), %{}),
+         {:ok, thumbprint} <- BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{}) do
+      {:ok, Base.url_decode64!(thumbprint, padding: false)}
+    end
   end
 
-  def sign(_message, _handle), do: {:error, :invalid_handle}
-
+  # Key id and public key in one call, so a rotating key store cannot split them.
   @impl true
-  def public_key(_handle), do: {:ok, elem(keypair(), 0)}
+  def key_identity({_role, name}), do: {:ok, {name, public_key_of(name)}}
 
+  # Role, key id and public key in one call. sign_grant/3 requires the :issuer role.
   @impl true
-  def thumbprint(_handle) do
-    {:ok, jwk} = BoundedAuthorityProtocol.V1.Jwk.encode_public(elem(keypair(), 0), %{})
-    {:ok, thumbprint} = BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{})
-    {:ok, Base.url_decode64!(thumbprint, padding: false)}
+  def signing_identity({role, name}), do: {:ok, {role, name, public_key_of(name)}}
+
+  defp private_key(name), do: :crypto.hash(:sha256, "development only: " <> name)
+
+  defp public_key_of(name) do
+    {public_key, _private_key} = :crypto.generate_key(:eddsa, :ed25519, private_key(name))
+    public_key
   end
-
-  @impl true
-  def key_identity(_handle), do: {:ok, {"my-dev-key-001", elem(keypair(), 0)}}
-
-  @impl true
-  def signing_identity(_handle), do: {:ok, {:holder, "my-dev-key-001", elem(keypair(), 0)}}
 end
 ```
 
-Sign a report against an issuer-signed grant (the grant arrives out-of-band from your
-issuer — mint one for the dev loop the way the
-[example app](https://github.com/baselabs/bounded_authority_report_adapter/tree/master/examples/edge_agent)
-does):
+Which callbacks each entry point calls:
+
+| Entry point | Callbacks |
+|---|---|
+| `sign_report/3`, `sign_local_loopback_report/3` | `sign/2`, `public_key/1` |
+| `sign_grant/3` | `sign/2`, `signing_identity/1` (must declare `:issuer`) |
+| `sign_anchor/3`, `sign_key_transition/3`, `sign_content_assertion/3` | `sign/2`, `key_identity/1` |
+
+`thumbprint/1` is required by the behavior but the adapter does not call it; it exists so
+you can check your handle against a grant's holder binding. `key_identity/1` and
+`signing_identity/1` are optional callbacks: a handle that only signs proofs can omit them.
+
+## 2. The issuer signs a grant
+
+In production your authority service issues grants and the holder receives one out of
+band. Here the same session plays the issuer. The grant names the holder's key by its
+RFC 7638 thumbprint and lists the operations that key may perform.
 
 ```elixir
-# cast_arguments MUST be BAP's tagged form — decode the SAME raw bytes both sides use:
-{:ok, cast_arguments} = BoundedAuthorityProtocol.V1.Json.decode(raw_report_body, %{})
-
-report = %{
-  grant_compact: issuer_signed_grant_compact,   # binds YOUR thumbprint via cnf.jkt
-  operation: "report_external_materialization",
-  method: "POST",
-  target_uri: "https://api.example.test/invoke",
-  invocation_id: "123e4567-e89b-42d3-a456-426614174000",
-  cast_arguments: cast_arguments,
-  nonce: "challenge-001"
-}
-
-{:ok, %{grant: grant, proof: proof}} =
-  BoundedAuthorityReportAdapter.sign_report(report, {MyApp.DevHandle, :dev}, %{})
-
-# Verify through the protocol's own verifier (the CONSUMER's side of the contract):
 alias BoundedAuthorityProtocol.V1
 
-{:ok, _facts} =
-  V1.check_envelope(
-    %V1.Credentials{grant: grant, proof: proof},
-    %V1.ExpectedRequest{
-      trusted_issuer: %V1.TrustedIssuer{key_id: issuer_kid, public_key: issuer_pub},
-      issuer: "https://issuer.example.test",
-      audience: "https://verifier.example.test",
-      method: "POST",
-      target_uri: "https://api.example.test/invoke",
-      invocation_id: report.invocation_id,
-      operation: report.operation,
-      cast_arguments: cast_arguments,
-      evaluation_time: System.system_time(:second),
-      clock_skew: 60,
-      proof_max_age: 300,
-      nonce: {:required, "challenge-001"},
-      bounds: V1.Bounds.maximum()
-    }
+issuer = {MyApp.DevKey, {:issuer, "issuer-key-1"}}
+holder = {MyApp.DevKey, {:holder, "holder-key-1"}}
+now = System.system_time(:second)
+{:ok, holder_thumbprint} = MyApp.DevKey.thumbprint({:holder, "holder-key-1"})
+
+{:ok, %{grant: grant}} =
+  BoundedAuthorityReportAdapter.sign_grant(
+    %{
+      issuer: "https://issuer.example",
+      grant_id: "urn:example:grant:rooms-1",
+      audiences: ["https://calendar.example"],
+      issued_at: now,
+      not_before: now,
+      expires_at: now + 3600,
+      holder_thumbprint: holder_thumbprint,
+      operations: [%V1.Operation{name: "book_room", selectors: [:all]}]
+    },
+    issuer
   )
 ```
 
-If that comes back `{:ok, _}`, you have signed a proof the protocol's verifier accepts.
-If it comes back `{:error, :invalid}`: the adapter verified only the PROOF it just
-signed and passed your grant through untouched, so a rejection can be an
-expected-request field mismatch (times, nonce, audience, arguments) OR the verifier
-rejecting the GRANT itself (issuer signature, window, thumbprint binding). The
-adapter-side signing errors are a different surface — [Errors](errors.md) covers those.
+A handle that declares `:holder` cannot sign a grant:
 
-## The invocation-id trap (read this before your first 401)
+```elixir
+BoundedAuthorityReportAdapter.sign_grant(%{}, holder)
+#=> {:error, :invalid_key_handle}
+```
 
-`invocation_id` is caller-supplied and gated by the protocol's UUID grammar
-(`valid_uuid?` — canonical dashed lowercase hex, version + variant nibbles). Two
-consequences that bite in practice:
+## 3. The holder signs a proof
 
-- A malformed id (uppercase, undashed, wrong version nibbles) is rejected far
-  from the cause — your proof verifies fine byte-wise, but the verifier's
-  expected-request comparison fails as a bare `{:error, :invalid}`. Use
-  `Ecto.UUID.generate/0`, a UUIDv4 library, or the shape in the examples.
-- It is part of what the proof BINDS: the verifier reconstructs it from the
-  request line. Same grant, same key, different invocation id = rejected. That
-  is the point (per-invocation binding); it just means you cannot reuse a
-  signed envelope for a retried request with a fresh id.
+`cast_arguments` is the request body in the protocol's tagged form. Decode it from the raw
+bytes you send, with `BoundedAuthorityProtocol.V1.Json.decode/2`; the verifier decodes the
+same raw bytes it receives, so both sides agree by construction.
+
+```elixir
+raw_body = ~s({"room":"harbor-3","start":"2026-11-02T09:00:00Z","minutes":45})
+{:ok, cast_arguments} = V1.Json.decode(raw_body)
+
+report = %{
+  grant_compact: grant,
+  operation: "book_room",
+  method: "POST",
+  target_uri: "https://calendar.example/bookings",
+  invocation_id: "2f6c9d1a-3b4e-4f5a-8b6c-7d8e9f0a1b2c",
+  cast_arguments: cast_arguments,
+  nonce: "nonce-booking-1"
+}
+
+{:ok, %{grant: grant, proof: proof}} = BoundedAuthorityReportAdapter.sign_report(report, holder)
+```
+
+The grant comes back unchanged; the proof is new. The adapter verified the proof's
+signature against the holder's public key before returning it, so a handle that signs
+with a different key than it reports gets `{:error, :signing_failed}`, never a bad proof.
+
+## 4. The verifier checks the envelope
+
+The verifier depends only on the protocol package. It rebuilds the request it expects and
+checks the grant and proof together against the issuer's public key.
+
+```elixir
+{:ok, issuer_public_key} = MyApp.DevKey.public_key({:issuer, "issuer-key-1"})
+
+expected = %V1.ExpectedRequest{
+  trusted_issuer: %V1.TrustedIssuer{key_id: "issuer-key-1", public_key: issuer_public_key},
+  issuer: "https://issuer.example",
+  audience: "https://calendar.example",
+  method: "POST",
+  target_uri: "https://calendar.example/bookings",
+  invocation_id: report.invocation_id,
+  operation: "book_room",
+  cast_arguments: cast_arguments,
+  evaluation_time: now,
+  clock_skew: 60,
+  proof_max_age: 300,
+  nonce: {:required, "nonce-booking-1"},
+  bounds: V1.Bounds.maximum()
+}
+
+{:ok, facts} = V1.check_envelope(%V1.Credentials{grant: grant, proof: proof}, expected)
+facts.operation
+#=> "book_room"
+```
+
+Any difference between the request and what the verifier expects is a rejection:
+
+```elixir
+credentials = %V1.Credentials{grant: grant, proof: proof}
+V1.check_envelope(credentials, %{expected | nonce: {:required, "nonce-booking-2"}})
+#=> {:error, :invalid}
+```
+
+A verifier's `{:error, :invalid}` does not say which check failed. The adapter checked
+only the proof it signed and passed the grant through untouched, so look at both: an
+expected-request field that differs (times, nonce, audience, body, invocation id), or the
+grant itself (issuer key, validity window, holder thumbprint). The adapter's own errors
+are a different set; [Errors](errors.md) lists them.
+
+## The invocation id
+
+`invocation_id` is yours to supply, and the protocol requires a canonical lowercase,
+dashed UUID with valid version and variant digits. Two consequences:
+
+- A malformed id (uppercase, no dashes, wrong version digit) signs nothing:
+  `sign_report/3` returns `{:error, {:producer_error, :invalid}}`. Generate ids with
+  `Ecto.UUID.generate/0` or another UUID v4 generator.
+- The proof binds it. The same grant and key with a different invocation id is a
+  different request, so a signed envelope cannot be reused for a retry under a new id.
 
 ## The path to a production handle
 
-Swap `MyApp.DevHandle` for one whose `sign/2` calls your HSM/KMS and whose
-`key_identity/1`/`signing_identity/1` return the registry's real `key_id` — the adapter's
-contract is identical. Two non-negotiables:
+Replace `MyApp.DevKey` with a module whose `sign/2` calls your HSM or KMS and whose
+`key_identity/1` and `signing_identity/1` return your key registry's real key id. The
+adapter's contract does not change. Two rules:
 
-- `public_key/1` (and the identity callbacks) must describe the SAME key `sign/2` uses —
-  the adapter verifies every signature against the resolved public key and a mismatch is
-  `:signing_failed` (the wrong-key guard).
-- The private key never enters the library. If an integration passes key bytes to the
-  adapter, it is wrong ([Usage rules](../usage-rules.md) #2).
+- `public_key/1` and the identity callbacks must describe the same key `sign/2` uses. The
+  adapter verifies every signature against the resolved public key, and a mismatch is
+  `:signing_failed`.
+- Never pass key bytes to the adapter. If your integration does, it is wrong
+  ([Usage rules](../usage-rules.md), rule 2).
 
-For grants, the handle must resolve `{:issuer, _, _}` from `signing_identity/1` — that is
-the C1 declaration gate, and it is declaration-rejection, not cryptographic role
-separation (Usage rules #3).
+For grants, `signing_identity/1` must return `{:issuer, key_id, public_key}`. The adapter
+rejects any other declared role, but it cannot check that the declaration is true; keep
+issuer keys in issuer custody, or require a role attestation
+([Usage rules](../usage-rules.md), rule 3).
+
+Check a handle module against the contract before you use it:
+
+```sh
+mix bounded_authority_report_adapter.doctor --handle MyApp.DevKey --ref '{:holder, "holder-key-1"}' --live
+```
+
+For an ES256 (P-256) handle, see `BoundedAuthorityReportAdapter.V3` and the P-256 notes in
+[Recipes](recipes.md).
 
 ## Where to next
 
-- [Usage rules](../usage-rules.md) — the twelve-rule version of everything above.
-- [Errors](errors.md) — every closed atom, what it means, what to check.
-- [Telemetry](telemetry.md) — the value-free sign events and the custody alarm.
-- [Consumer integration](consumer-integration.md) — the verifier side: raw bytes,
-  identity binding, the nonce ledger.
-- The runnable [edge-agent example app](https://github.com/baselabs/bounded_authority_report_adapter/tree/master/examples/edge_agent)
-  — a full sign → POST → verify loop over HTTP.
+- [Usage rules](../usage-rules.md): the integration contract as a checklist.
+- [Errors](errors.md): every error, what it means, what to check.
+- [Recipes](recipes.md): HSM and KMS handles, a Plug consumer, the loopback listener.
+- [Telemetry](telemetry.md): the value-free signing events and the custody alarm.
+- [Consumer integration](consumer-integration.md): the verifier side, including identity
+  binding and the nonce ledger.
+- The repository's [edge-agent example app](https://github.com/baselabs/bounded_authority_report_adapter/tree/master/examples/edge_agent)
+  runs sign, POST and verify over HTTP, and its
+  [Livebook](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/examples/report_envelope_roundtrip.livemd)
+  runs every signing entry point.

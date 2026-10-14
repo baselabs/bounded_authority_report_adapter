@@ -71,22 +71,22 @@
     <div class="larrow">→</div>
 <a class="lstep" href="https://baselabs.github.io/charter_agreement_protocol/"><span class="lmark"><i>[</i>CAP<i>]</i></span><div><b>Agree the terms</b><small>Charter revisions bind ABP release digests (abp_bindings); every receipt records the action’s deployment digest — signed by both parties</small></div></a>
     <div class="larrow">→</div>
-<span class="lstep now"><span class="lmark"><i>[</i>BAP<i>]</i></span><div><b>Authorize each request</b><small>Issuer-signed grants + holder proofs govern every call, per request — the authority layer over OAuth</small></div></span>
+<span class="lstep now"><span class="lmark"><i>[</i>BAP<i>]</i></span><div><b>Authorize each request</b><small>Issuer-signed grants + holder proofs govern every call, per request — an authority layer that composes with OAuth</small></div></span>
   </div>
 </section>
 
 <section id="surface" class="wrap">
   <div class="sec-head"><h2>The signing surface</h2>
-  <p>Five entry points, one shared signing tail, one closed error-atom set — identical in shape
-  to the TypeScript port.</p></div>
+  <p>Six entry points, one shared signing tail, closed error atoms. The <code>BoundedAuthorityReportAdapter.V3</code> module signs the four standard objects over ES256 with P-256 keys.</p></div>
   <table class="signers">
     <thead><tr><th>Function</th><th>Object</th><th>Role</th></tr></thead>
     <tbody>
-      <tr><td><code>sign_report/3</code></td><td>holder proof — the grant passes through untouched (major 1, Ed25519; the <code>BoundedAuthorityReportAdapter.V3</code> surface signs the same four objects over ES256/P-256)</td><td><span class="role-badge holder">holder</span></td></tr>
+      <tr><td><code>sign_report/3</code></td><td>holder proof — the grant passes through untouched (major 1, Ed25519)</td><td><span class="role-badge holder">holder</span></td></tr>
       <tr><td><code>sign_local_loopback_report/3</code></td><td>local-loopback application proof (<code>ba+loopback-proof</code>)</td><td><span class="role-badge holder">holder</span></td></tr>
       <tr><td><code>sign_anchor/3</code></td><td>boundary anchor</td><td><span class="role-badge">role-agnostic</span></td></tr>
       <tr><td><code>sign_key_transition/3</code></td><td>key transition</td><td><span class="role-badge">role-agnostic</span></td></tr>
       <tr><td><code>sign_grant/3</code></td><td>capability grant</td><td><span class="role-badge issuer">issuer-only, structurally gated</span></td></tr>
+      <tr><td><code>sign_content_assertion/3</code></td><td>content assertion (<code>ba+content-assertion</code>)</td><td><span class="role-badge">role-agnostic</span></td></tr>
     </tbody>
   </table>
 </section>

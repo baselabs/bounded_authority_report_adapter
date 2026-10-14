@@ -1,53 +1,118 @@
 defmodule BoundedAuthorityReportAdapter.V3 do
   @moduledoc """
-  The contract-major-3 signing surface — the `BAP3-ES256-SHA256` suite
-  (ADR-0021; BAP 0.5.1 / BAP ADR 0035).
+  The signer for contract-major 3 of the Bounded Authority Protocol: the
+  `BAP3-ES256-SHA256` suite, with P-256 keys and ES256 signatures.
 
-  This module is the ES256 sibling of the major-1 surface in
-  `BoundedAuthorityReportAdapter`: the same four standard instantiations,
-  the same `{module(), term()}` key-handle contract, the same closed-atom
-  error sets, the same shared-signing-tail discipline (resolve → sign via the
-  handle → verify against the resolved key → assemble via the protocol
-  package). The differences are exactly the suite's:
+  This module is the ES256 sibling of `BoundedAuthorityReportAdapter`: the same four
+  standard objects (`sign_report/3`, `sign_grant/3`, `sign_anchor/3`,
+  `sign_key_transition/3`), the same key-handle behavior, the same error sets and the same
+  signing path (resolve the key, sign through the handle, verify, assemble through the
+  protocol package). The differences are the suite's:
 
-    * **Keys are EC P-256.** A handle serving these entry points returns the
-      65-byte uncompressed-SEC1 public key (`0x04 || x || y`) from
-      `public_key/1` and the atomic snapshots. The wire shape is the
-      discriminator: every resolver here accepts exactly that shape —
-      width, `0x04` prefix, and on-curve membership validated through the
-      protocol package's certified arithmetic — and rejects an Ed25519
-      key (and every other spelling) as `:invalid_key_handle` before `sign/2`
-      is reached. The major-1 entry points reject the 65-byte shape
-      symmetrically.
-    * **`sign/2` returns the RFC 7518 §3.4 raw form** — exactly 64 bytes,
-      `r || s`, two fixed-width unsigned big-endian integers. DER (OTP
-      `:crypto.sign/5`'s native ECDSA output) is never a v3 wire spelling: a
-      DER return is `{:error, :signing_failed}`, never converted here.
-    * **Low-S is normalized HERE (the producer's duty).** After `sign/2`
-      returns, this library range-checks the raw scalars (`0 < r < n`,
-      `0 < s < n` — BEFORE any arithmetic on `s`), applies the one
-      conditional subtraction (`s ← n − s` when `s > n/2`), and verifies the
-      normalized bytes against the resolved key. A handle that returns a
-      high-S spelling still yields a conforming compact; a wrong-key,
-      out-of-range, or wrong-suite return fails closed as `:signing_failed`.
-      Custody audit note: the compact's signature segment may differ from
-      the bytes the signing device emitted and logged (the `s` half);
-      reconcile on `(r, message)`.
-    * **No local-loopback entry point.** The local-loopback
-      application-proof profile is bound to contract-major 1; the protocol's
-      v3 façade exposes no loopback functions.
+    * **P-256 keys.** `public_key/1`, `key_identity/1` and `signing_identity/1` return the
+      65-byte uncompressed SEC1 point (`0x04 || x || y`). It must be on the curve (checked
+      with the protocol package's `BoundedAuthorityProtocol.V3.EcJwk.encode_public/2`). An
+      Ed25519 key, or any other shape, is refused with `{:error, :invalid_key_handle}`
+      before `sign/2` is called; the major-1 entry points refuse a P-256 key the same way.
+    * **Raw signatures.** `sign/2` returns the raw `r || s` form of RFC 7518 §3.4: exactly
+      64 bytes, two 32-byte big-endian integers. A DER signature (what `:crypto.sign/4`
+      returns for ECDSA) is refused with `{:error, :signing_failed}`; convert it in the
+      handle.
+    * **Low-S is the adapter's job.** After `sign/2` returns, the adapter checks that
+      `0 < r < n` and `0 < s < n`, replaces `s` with `n - s` when `s > n/2`, and verifies
+      the result against the public key. A handle that returns high-S still produces a
+      conforming compact. The signature in the compact can therefore differ from the one
+      your signing device logged in its `s` half; match the two on `r` and the message.
+    * **No local-loopback or content-assertion entry point.** Those profiles are bound to
+      Ed25519; use `BoundedAuthorityReportAdapter`.
+    * **No role-attestation gate.** `sign_grant/3` here refuses the `:role_attestation`
+      option with `{:error, :invalid_role_attestation}` instead of ignoring it, because
+      the role-attestation profile binds Ed25519 keys only.
 
-  There is no v3 signing of major-1 or major-2 objects and no major-1
-  signing through this module: a v3 proof pairs with a v3 grant
-  (`REQ3-EVO-proof-major-equals-grant`), so `sign_report/3` here fails fast
-  with `:invalid_report` when `grant_compact` is not a v3 grant — the same
-  gate the major-1 surface applies in its own direction.
+  A contract-major-3 proof pairs only with a contract-major-3 grant: `sign_report/3` here
+  refuses any other grant with `{:error, :invalid_report}`, as the major-1 surface does in
+  the other direction.
 
-  The key-handle behavior (the `@callback` set, including the atomic
-  `key_identity/1` / `signing_identity/1` snapshots and the C1 issuer-role
-  gate on `sign_grant/3`) is defined on `BoundedAuthorityReportAdapter` and
-  is shared by both surfaces; see that module's callback docs for the
-  suite-parameterized contract.
+  ## A development P-256 key handle
+
+  The function examples below continue the README's quick start (they use its `now` and
+  `alias BoundedAuthorityProtocol.V1`) and this development handle, which derives each
+  P-256 key from its name in process. Never use it in production. Its `sign/2` shows the
+  conversion every P-256 handle needs: OTP returns DER, and the adapter wants raw
+  `r || s`.
+
+  ```elixir
+  defmodule MyApp.DevP256Key do
+    @moduledoc "Development only: derives a P-256 key from its name. Never use in production."
+    @behaviour BoundedAuthorityReportAdapter
+
+    @impl true
+    def sign(message, {_role, name}) do
+      der = :crypto.sign(:ecdsa, :sha256, message, [private_key(name), :prime256v1])
+      # DER: SEQUENCE { INTEGER r, INTEGER s }. Re-encode as two 32-byte integers.
+      <<0x30, _length, 0x02, r_size, r::binary-size(r_size), 0x02, s_size,
+        s::binary-size(s_size)>> = der
+
+      {:ok,
+       <<:binary.decode_unsigned(r)::unsigned-big-256,
+         :binary.decode_unsigned(s)::unsigned-big-256>>}
+    end
+
+    @impl true
+    def public_key({_role, name}), do: {:ok, public_key_of(name)}
+
+    @impl true
+    def thumbprint({_role, name}) do
+      with {:ok, jwk} <-
+             BoundedAuthorityProtocol.V3.EcJwk.encode_public(public_key_of(name), %{}),
+           {:ok, thumbprint} <- BoundedAuthorityProtocol.V3.EcJwk.thumbprint(jwk, %{}) do
+        {:ok, Base.url_decode64!(thumbprint, padding: false)}
+      end
+    end
+
+    @impl true
+    def key_identity({_role, name}), do: {:ok, {name, public_key_of(name)}}
+
+    @impl true
+    def signing_identity({role, name}), do: {:ok, {role, name, public_key_of(name)}}
+
+    # A P-256 private key is a scalar in [1, n - 1]; a SHA-256 digest is below n with
+    # overwhelming probability, which is good enough for a development handle.
+    defp private_key(name), do: :crypto.hash(:sha256, "development only: " <> name)
+
+    defp public_key_of(name) do
+      {public_key, _private_key} =
+        :crypto.generate_key(:ecdh, :prime256v1, private_key(name))
+
+      public_key
+    end
+  end
+
+  ec_issuer = {MyApp.DevP256Key, {:issuer, "ec-issuer-key-1"}}
+  ec_holder = {MyApp.DevP256Key, {:holder, "ec-holder-key-1"}}
+  {:ok, ec_holder_thumbprint} = MyApp.DevP256Key.thumbprint({:holder, "ec-holder-key-1"})
+
+  {:ok, %{grant: ec_grant}} =
+    BoundedAuthorityReportAdapter.V3.sign_grant(
+      %{
+        issuer: "https://issuer.example",
+        grant_id: "urn:example:grant:inspections-1",
+        audiences: ["https://maintenance.example"],
+        issued_at: now,
+        not_before: now,
+        expires_at: now + 3600,
+        holder_thumbprint: ec_holder_thumbprint,
+        operations: [
+          %BoundedAuthorityProtocol.V3.Operation{name: "schedule_inspection", selectors: [:all]}
+        ]
+      },
+      ec_issuer
+    )
+  ```
+
+  `BoundedAuthorityProtocol.V3`'s verify functions take the same input structs as
+  `BoundedAuthorityProtocol.V1`'s (`V1.Credentials`, `V1.ExpectedRequest`,
+  `V1.TrustedIssuer` and the rest), carrying P-256 public keys.
   """
 
   alias BoundedAuthorityProtocol.V1
@@ -154,37 +219,78 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   @scalar_bytes 32
 
   @doc """
-  Binds an issuer-signed v3 grant to an application report by producing the
-  holder proof under the `BAP3-ES256-SHA256` suite. Returns
-  `{:ok, %{grant: grant_compact, proof: proof_compact}}` — the grant passes
-  through untouched; the proof is the holder's EC-key binding, verified
-  green downstream via `BoundedAuthorityProtocol.V3.check_envelope/2`.
+  Signs an ES256 holder proof that binds an issuer-signed contract-major-3 grant to one
+  request.
 
-  The `key_handle` must be a P-256 handle: `public_key/1` returns the
-  65-byte uncompressed-SEC1 point, and `sign/2` returns the raw `r || s`
-  form (64 bytes; DER is rejected as `:signing_failed`). Low-S
-  normalization is this library's duty and happens here.
+  Returns `{:ok, %{grant: grant_compact, proof: proof_compact}}`, with the grant passed
+  through unchanged. A verifier checks the pair with
+  `BoundedAuthorityProtocol.V3.check_envelope/2`.
 
-  ## Options
+  ## Parameters
 
-    * `:bounds` — resource ceilings forwarded unchanged to BAP's producer
-      and assembler (default `%{}`, BAP's maxima).
-    * `:issued_at` — the proof's `iat` (default: `System.system_time(:second)`).
-    * `:proof_id` — the proof's `jti` (default: a generated UUID v4).
+  The same as `BoundedAuthorityReportAdapter.sign_report/3`, except that
+  `:grant_compact` must be a contract-major-3 grant and `key_handle` must be a P-256
+  handle (see the module documentation). Options: `:bounds`, `:issued_at` and
+  `:proof_id`, with the same defaults.
 
-  ## Errors (closed-atom set — no key material or report content in errors)
+  ## Errors
 
-    * `:invalid_report` — a required field is missing, or `grant_compact` is
-      not a v3 grant (the mixed-major fail-fast: a v1 grant here would make
-      a mixed-major credential no verifier accepts).
-    * `:invalid_key_handle` — the handle is malformed, or its `public_key/1`
-      rejected / returned anything other than a valid 65-byte P-256 point.
-    * `:signing_failed` — `sign/2` rejected, returned a non-64-byte
-      signature (including DER), returned out-of-range scalars, violated the
-      `{:ok, _} | {:error, _}` contract, or the signature did not verify
-      against the resolved holder public key.
-    * `{:producer_error, :invalid}` — BAP's producer or assembler rejected
-      the proof.
+    * `:invalid_report` — as for `BoundedAuthorityReportAdapter.sign_report/3`, or
+      `grant_compact` is not a contract-major-3 grant.
+    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, or `public_key/1`
+      failed or returned something other than a 65-byte P-256 point on the curve.
+    * `:signing_failed` — `sign/2` failed, returned something other than 64 bytes
+      (a DER signature, for example), returned `r` or `s` out of range, or returned a
+      signature that does not verify against the public key.
+    * `{:producer_error, :invalid}` — the protocol package refused the proof.
+
+  ## Example
+
+  ```elixir
+  inspection = {:object, [{"asset", {:string, "pump-station-2"}}]}
+
+  ec_report = %{
+    grant_compact: ec_grant,
+    operation: "schedule_inspection",
+    method: "POST",
+    target_uri: "https://maintenance.example/inspections",
+    invocation_id: "6d7e8f90-a1b2-4c3d-8e4f-5a6b7c8d9e0f",
+    cast_arguments: inspection,
+    nonce: nil
+  }
+
+  {:ok, %{grant: ^ec_grant, proof: ec_proof}} =
+    BoundedAuthorityReportAdapter.V3.sign_report(ec_report, ec_holder, %{issued_at: now})
+
+  {:ok, ec_issuer_public_key} = MyApp.DevP256Key.public_key({:issuer, "ec-issuer-key-1"})
+
+  {:ok, _facts} =
+    BoundedAuthorityProtocol.V3.check_envelope(
+      %V1.Credentials{grant: ec_grant, proof: ec_proof},
+      %V1.ExpectedRequest{
+        trusted_issuer: %V1.TrustedIssuer{
+          key_id: "ec-issuer-key-1",
+          public_key: ec_issuer_public_key
+        },
+        issuer: "https://issuer.example",
+        audience: "https://maintenance.example",
+        method: "POST",
+        target_uri: "https://maintenance.example/inspections",
+        invocation_id: "6d7e8f90-a1b2-4c3d-8e4f-5a6b7c8d9e0f",
+        operation: "schedule_inspection",
+        cast_arguments: inspection,
+        evaluation_time: now,
+        clock_skew: 60,
+        proof_max_age: 300,
+        nonce: :not_required,
+        bounds: V1.Bounds.maximum()
+      }
+    )
+
+  # An Ed25519 handle cannot sign on this surface.
+  BoundedAuthorityReportAdapter.V3.sign_report(ec_report, holder)
+  #=> {:error, :invalid_key_handle}
+  ```
   """
   @spec sign_report(report(), key_handle(), opts()) ::
           {:ok, envelope()} | {:error, sign_error()}
@@ -209,13 +315,57 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   end
 
   @doc """
-  Signs a v3 grant — the issuer's authority assertion under the ES256 suite.
-  The C1 gate is the major-1 surface's, over P-256 material: the handle's
-  atomic `signing_identity/1` must resolve `{:issuer, key_id, public_key}`
-  with a valid 65-byte P-256 key; a `:holder` declaration, a missing
-  callback, or any other key shape is `{:error, :invalid_key_handle}` before `sign/2`.
-  The signed header's `kid` comes from the snapshot, never caller input.
-  Verifiable via `BoundedAuthorityProtocol.V3.verify_grant/3`.
+  Signs a contract-major-3 grant with a P-256 issuer key.
+
+  Returns `{:ok, %{grant: grant_compact}}`. A verifier checks it with
+  `BoundedAuthorityProtocol.V3.verify_grant/3`, or with a holder proof through
+  `BoundedAuthorityProtocol.V3.check_envelope/2`.
+
+  The issuer-role gate is the major-1 surface's (see
+  `BoundedAuthorityReportAdapter.sign_grant/3`): the handle's `signing_identity/1` must
+  return `{:issuer, key_id, public_key}` with a P-256 public key, and the grant's `kid` is
+  that `key_id`. There is no role-attestation gate on this surface.
+
+  ## Parameters
+
+    * `grant_input` — as for `BoundedAuthorityReportAdapter.sign_grant/3`, with
+      `:operations` a non-empty list of `BoundedAuthorityProtocol.V3.Operation` structs and
+      `:holder_thumbprint` the holder's raw 32-byte RFC 7638 thumbprint (over the EC
+      members for a P-256 holder key).
+    * `key_handle` — the issuer's P-256 handle; calls `signing_identity/1` and `sign/2`.
+    * `opts` — a map (anything else is treated as `%{}`) with `:bounds`, passed unchanged
+      to the protocol package; default `%{}`.
+
+  ## Errors
+
+    * `:invalid_grant` — as for `BoundedAuthorityReportAdapter.sign_grant/3`.
+    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
+      `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
+      snapshot or a key that is not a 65-byte P-256 point on the curve.
+    * `:invalid_role_attestation` — `opts` contains `:role_attestation` (as a map key or a
+      keyword), whatever its value. The option is refused here, not ignored.
+    * `:signing_failed` — as for `sign_report/3` on this surface.
+    * `{:producer_error, :invalid}` — the protocol package refused the grant.
+
+  ## Example
+
+  ```elixir
+  grant_input = %{
+    issuer: "https://issuer.example",
+    grant_id: "urn:example:grant:inspections-2",
+    audiences: ["https://maintenance.example"],
+    issued_at: now,
+    not_before: now,
+    expires_at: now + 3600,
+    holder_thumbprint: ec_holder_thumbprint,
+    operations: [%BoundedAuthorityProtocol.V3.Operation{name: "close_ticket", selectors: [:all]}]
+  }
+
+  {:ok, %{grant: _grant}} = BoundedAuthorityReportAdapter.V3.sign_grant(grant_input, ec_issuer)
+
+  BoundedAuthorityReportAdapter.V3.sign_grant(grant_input, ec_holder)
+  #=> {:error, :invalid_key_handle}
+  ```
   """
   @spec sign_grant(grant_input(), key_handle(), grant_opts()) ::
           {:ok, grant_compact()} | {:error, grant_sign_error()}
@@ -251,11 +401,42 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   defp option_present?(_opts, _key), do: false
 
   @doc """
-  Signs a v3 boundary anchor — a durable chain checkpoint under the ES256
-  suite, verifiable via `BoundedAuthorityProtocol.V3.verify_historical_anchor/3`.
-  Both key identifiers (`kid` + the 65-byte public key) come from the
-  handle's ONE atomic `key_identity/1` snapshot (the rotation-race defense);
-  caller-supplied key material is ignored.
+  Signs a contract-major-3 boundary anchor with a P-256 key.
+
+  Returns `{:ok, %{anchor: anchor_compact}}`. A verifier checks it with
+  `BoundedAuthorityProtocol.V3.verify_historical_anchor/3`. As on the major-1 surface
+  (`BoundedAuthorityReportAdapter.sign_anchor/3`), the key id and public key come from
+  one `key_identity/1` call, and key material in the input is ignored.
+
+  ## Parameters
+
+  The same as `BoundedAuthorityReportAdapter.sign_anchor/3`, with a P-256 handle. Options:
+  `:anchored_at` and `:bounds`, with the same defaults.
+
+  ## Errors
+
+    * `:invalid_anchor` — as for `BoundedAuthorityReportAdapter.sign_anchor/3`.
+    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
+      `key_identity/1`, or returned an empty key id or a key that is not a 65-byte P-256
+      point on the curve.
+    * `:signing_failed` — as for `sign_report/3` on this surface.
+    * `{:producer_error, :invalid}` — the protocol package refused the anchor.
+
+  ## Example
+
+  ```elixir
+  {:ok, %{anchor: _anchor}} =
+    BoundedAuthorityReportAdapter.V3.sign_anchor(
+      %{
+        anchor_id: "urn:example:anchor:maintenance-log-7",
+        chain_id: "urn:example:chain:maintenance-log",
+        sequence: 7,
+        chain_hash: :crypto.hash(:sha256, "maintenance log entries 1 through 7")
+      },
+      {MyApp.DevP256Key, {:holder, "ec-chain-key-1"}},
+      %{anchored_at: now}
+    )
+  ```
   """
   @spec sign_anchor(anchor_input(), key_handle(), anchor_opts()) ::
           {:ok, anchor_compact()} | {:error, anchor_sign_error()}
@@ -278,12 +459,48 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   end
 
   @doc """
-  Signs a v3 key transition — the current retiring P-256 key's assertion of
-  its successor, verifiable via `BoundedAuthorityProtocol.V3.verify_key_transition/4`.
-  Role-agnostic (mirrors `sign_anchor/3`): the current key's identity comes
-  from the atomic `key_identity/1` snapshot; `next_{key_id, public_key}` are
-  caller-supplied, and `next_public_key` must itself be a valid 65-byte
-  P-256 point (the successor of a v3 chain key is a v3 chain key).
+  Signs a contract-major-3 key transition: the retiring P-256 key's signed statement
+  naming its successor.
+
+  Returns `{:ok, %{key_transition: compact}}`. A verifier checks it with
+  `BoundedAuthorityProtocol.V3.verify_key_transition/4`. As on the major-1 surface
+  (`BoundedAuthorityReportAdapter.sign_key_transition/3`), the current key's id and public
+  key come from one `key_identity/1` call and no role is checked. The successor must also
+  be a P-256 key.
+
+  ## Parameters
+
+  The same as `BoundedAuthorityReportAdapter.sign_key_transition/3`, except that
+  `:next_public_key` is the successor's 65-byte uncompressed P-256 point and the handle is
+  a P-256 handle. Options: `:bounds`.
+
+  ## Errors
+
+    * `:invalid_transition` — `transition_input` is not a map, a field is missing or of
+      the wrong basic type, or `:next_public_key` is not a 65-byte P-256 point on the
+      curve.
+    * `:invalid_key_handle` — as for `sign_anchor/3` on this surface.
+    * `:signing_failed` — as for `sign_report/3` on this surface.
+    * `{:producer_error, :invalid}` — the protocol package refused the transition, for
+      example a successor equal to the current key.
+
+  ## Example
+
+  ```elixir
+  {:ok, next_public_key} = MyApp.DevP256Key.public_key({:holder, "ec-chain-key-2"})
+
+  {:ok, %{key_transition: _compact}} =
+    BoundedAuthorityReportAdapter.V3.sign_key_transition(
+      %{
+        transition_id: "urn:example:transition:maintenance-log-1",
+        chain_id: "urn:example:chain:maintenance-log",
+        effective_at: now,
+        next_key_id: "ec-chain-key-2",
+        next_public_key: next_public_key
+      },
+      {MyApp.DevP256Key, {:holder, "ec-chain-key-1"}}
+    )
+  ```
   """
   @spec sign_key_transition(transition_input(), key_handle(), transition_opts()) ::
           {:ok, transition_compact()} | {:error, transition_sign_error()}

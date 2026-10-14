@@ -1,14 +1,12 @@
 # Errors
 
-Every entry point returns either `{:ok, map}` or `{:error, reason}` where `reason` is a
-closed atom (or one fixed tuple). There is no value-echoing: no key ids, no message
-bytes, no report content ever appear in an error — an atom is the whole story.
+Every entry point returns either `{:ok, map}` or `{:error, reason}`, where `reason` is a
+closed atom or the one fixed tuple `{:producer_error, :invalid}`. Errors carry no values:
+no key ids, no message bytes, no input content.
 
-The five error `@type` sets are identical except for their per-object input
-atom, and the six major-1 entry points share them as mapped below (the
-local-loopback entry point reuses `sign_error/0`):
+Each entry point has one input atom; the others are shared:
 
-| Entry point | Input atom | @type |
+| Entry point | Input atom | Error type |
 |---|---|---|
 | `sign_report/3` | `:invalid_report` | `sign_error/0` |
 | `sign_local_loopback_report/3` | `:invalid_report` | `sign_error/0` |
@@ -17,50 +15,60 @@ local-loopback entry point reuses `sign_error/0`):
 | `sign_key_transition/3` | `:invalid_transition` | `transition_sign_error/0` |
 | `sign_content_assertion/3` | `:invalid_content_assertion` | `content_assertion_sign_error/0` |
 
-## The shared atoms
+Every set also contains `:invalid_key_handle`, `:signing_failed` and
+`{:producer_error, :invalid}`. `grant_sign_error/0` adds `:invalid_role_attestation`.
 
-| Atom | Meaning | What to check | Recovery |
+The `BoundedAuthorityReportAdapter.V3` entry points return the same atoms with the same
+meanings, for P-256 keys; the differences are listed under [The V3 surface](#the-v3-surface).
+
+## The shared errors
+
+| Atom | Meaning | What to check | Fix |
 |---|---|---|---|
-| `:invalid_key_handle` | The handle is malformed (`{module, term}` shape, defined module), or a handle callback (`public_key/1`, `key_identity/1`, `signing_identity/1`) rejected, returned an invalid value (e.g. a non-32-byte public key, or an Ed25519 key BAP's strict rule refuses: small-order, non-canonical, or not on the curve), or exited/raised. For `sign_grant/3` this ALSO covers the C1 role gate: a handle that does not resolve `{:issuer, _, _}`. | The handle module implements the full `BoundedAuthorityReportAdapter` behaviour; the handle term is what its callbacks expect; (grants) the handle really is the issuer's. | Fix the handle wiring. This is never caller-input — it is your key custody configuration. |
-| `:signing_failed` | The `sign/2` callback rejected, violated its `{:ok, binary} \| {:error, term}` contract, returned a non-64-byte signature, OR the signature did not verify against the resolved public key (the wrong-key guard). | Whether `public_key/1`/`key_identity/1` describe the SAME key `sign/2` actually uses; whether the HSM/KMS call is healthy. | Fix the custody side. A sustained rate of this is the custody-misconfiguration alarm — see [Telemetry](telemetry.md). |
-| `{:producer_error, :invalid}` | The protocol's producer or assembler rejected the signing input — a bound or field constraint (bad URI shapes, out-of-bounds sizes, a self-transition, a non-`Json.value()` `cast_arguments`). | The input map against the entry point's `@type` and the protocol's V1 field contracts; `cast_arguments` is the tagged form from `V1.Json.decode/2`. | Fix the caller's input. |
+| `:invalid_key_handle` | The handle is not a `{module, term}` pair; a handle callback the entry point needs (`public_key/1`, `key_identity/1` or `signing_identity/1`) is missing, failed, raised, threw or exited; or it returned an invalid value: an Ed25519 public key that is not 32 bytes or that the protocol's strict rule refuses (small-order, non-canonical, not on the curve), or an empty key id. For `sign_grant/3` it also means the handle did not declare the `:issuer` role. | The handle module implements the callbacks the entry point uses; the handle term is what those callbacks expect; for grants, the key really is the issuer's. | Fix the handle or the key-store connection. It is configuration, never caller input. |
+| `:signing_failed` | `sign/2` failed, raised, threw or exited; returned something other than `{:ok, <<_::512>>}`; or returned a signature that does not verify against the public key the handle reported (the wrong-key guard). | Whether `public_key/1` and the identity callbacks describe the same key `sign/2` uses; whether the HSM or KMS call is healthy. | Fix the custody side. A sustained rate of this error is the custody alarm; see [Telemetry](telemetry.md). |
+| `{:producer_error, :invalid}` | The protocol package refused to produce or assemble the signed object: a value violated a protocol rule or a bound. Examples: a target URI that is not canonical, an invocation id that is not a canonical UUID, a `cast_arguments` value that is not the protocol's tagged form, a digest of the wrong size, an inverted time window, a key transition to the same key. | The input values against the protocol's field rules; `cast_arguments` comes from `BoundedAuthorityProtocol.V1.Json.decode/2`. | Fix the input. |
 
-## The per-object input atoms
+## The input errors
 
-The adapter's input validation is SHAPE-only (required fields present, right basic
-types). SEMANTIC constraints — digest sizes, time-window ordering, thumbprint width,
-selector shapes — are enforced by the protocol's producer and surface as
-`{:producer_error, :invalid}` (see that row above). Do not debug a wrong-size or
-semantically-invalid field against these rows.
+The adapter checks input shape only: required fields are present and have the right basic
+type. The protocol package checks values (digest sizes, time-window order, identifier
+grammar, selectors) and reports them as `{:producer_error, :invalid}`. A field of the
+right type but the wrong value is not one of these errors.
 
-| Atom | Meaning | What to check | Recovery |
+| Atom | Meaning | What to check | Fix |
 |---|---|---|---|
-| `:invalid_report` | A required `report` field is missing or of the wrong basic type (`grant_compact`, `operation`, `method`, `target_uri`, `invocation_id`, `cast_arguments`, `nonce`), or `cast_arguments` is `nil`. For `sign_local_loopback_report/3` this ALSO covers the mandatory nonce: an absent, empty, or non-binary `nonce`. | The map against `report()` (or `local_loopback_report()`) in the moduledoc. | Fix the report fields. |
-| `:invalid_anchor` | An `anchor_input` content field is missing, or `chain_hash` is not a binary. | `anchor_id`, `chain_id`, `sequence`, `chain_hash` presence and basic types. | Fix the anchor fields. |
-| `:invalid_grant` | A `grant_input` field is missing or of the wrong basic type. | `issuer`, `grant_id`, `audiences`, `issued_at`/`not_before`/`expires_at` presence and types. | Fix the grant fields. |
-| `:invalid_role_attestation` | The optional `:role_attestation` input to `sign_grant/3` is malformed, or BAP's `verify_attestation/2` rejected it (BA signature, subject binding, self-attestation, window containment, now-window) or the BA-attested role is not `"issuer"` (RA11). | The compact is a BA-signed `bap-role-attestation/1`; the attestor context is the BA trust-root covering the attestation window at `now`; the attested subject is exactly the handle's atomic signing identity. | Fix the attestation input or the trust-root. The gate binds to the handle snapshot, never to caller-supplied subject values. |
-| `:invalid_content_assertion` | The options are not a plain map, or a `sign_content_assertion/3` input member (`jti`, `iss`, `aud`, `sub`, `profile`, `profile_digest`, `content_digest`, `gen`, `prev`, `iat`, `nbf`, `exp`) is missing or of the wrong basic type. | The input map against `content_assertion_input()`; digests are raw binaries, integers for `gen`/`iat`/`nbf`/`exp`. | Fix the input fields or pass options as a map. Digest widths, the genesis rule, and the time window are the protocol's checks and surface as `{:producer_error, :invalid}`. |
-| `:invalid_transition` | A `transition_input` field is missing, or `next_public_key` is not the surface's key shape (32-byte Ed25519 on major 1; a valid 65-byte P-256 point on `V3` — adapter-checked). | `transition_id`, `chain_id`, `effective_at`, `next_key_id`, `next_public_key`. | Fix the transition fields. |
+| `:invalid_report` | The report is not a map; `grant_compact`, `operation`, `method`, `target_uri` or `invocation_id` is missing or not a string; `cast_arguments` is missing or `nil`; `nonce` is neither `nil` nor a string; or `grant_compact` is not a grant of the entry point's contract-major (major 1 for `sign_report/3`, major 3 for `V3.sign_report/3`). For `sign_local_loopback_report/3`, also a missing, empty or non-string `nonce`. | The map against the `report()` (or `local_loopback_report()`) type; the grant's major. | Fix the report fields, or use the entry point that matches the grant. |
+| `:invalid_anchor` | The input is not a map; `anchor_id`, `chain_id` or `chain_hash` is missing or not a binary; or `sequence` is missing or not a non-negative integer. | The map against `anchor_input()`. | Fix the anchor fields. |
+| `:invalid_grant` | The input is not a map; `issuer`, `grant_id` or `holder_thumbprint` is missing or not a binary; `issued_at`, `not_before` or `expires_at` is missing or not an integer; `audiences` is missing, empty, improper or not all strings; or `operations` is missing, empty or not a list. | The map against `grant_input()`. | Fix the grant fields. |
+| `:invalid_role_attestation` | The `:role_attestation` option of `sign_grant/3` is malformed (including an explicit `nil`); the protocol package's `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` rejected it (attestor signature, subject, self-attestation, window containment, `now` outside `[nbf, exp)`); or the attested role is not `"issuer"`. On the `V3` surface, any `:role_attestation` option. | The compact is a `bap-role-attestation/1` attestation for the handle's own key; the attestor key and its validity window are the ones you trust; `now` is the time you mean. | Fix the attestation or the trusted attestor key. The subject always comes from the handle, never from the option. |
+| `:invalid_content_assertion` | The options are not a map, or a `sign_content_assertion/3` input field (`jti`, `iss`, `aud`, `sub`, `profile`, `profile_digest`, `content_digest`, `prev` as binaries; `gen`, `iat`, `nbf`, `exp` as integers) is missing or of the wrong type. | The map against `content_assertion_input()`; options as a map, not a keyword list. | Fix the input or pass the options as a map. |
+| `:invalid_transition` | The input is not a map; `transition_id`, `chain_id` or `next_key_id` is missing or not a binary; `effective_at` is missing or not an integer; or `next_public_key` is not a 32-byte binary (major 1) or a 65-byte P-256 point on the curve (`V3`). | The map against `transition_input()`. | Fix the transition fields. |
 
-The `{:producer_error, :invalid}` row covers, among others: a `chain_hash` that is not
-32 bytes or a zero hash at a nonzero `sequence`; an inverted grant time window; a
-`holder_thumbprint` that is not a raw 32-byte thumbprint; a non-tagged
-`cast_arguments`. All pass the adapter's shape checks and are rejected by the protocol
-producer.
+## The V3 surface
 
-## Where the atoms live
+`BoundedAuthorityReportAdapter.V3`'s entry points use the atoms above, with P-256 rules:
 
-Each set is a `@type` on `BoundedAuthorityReportAdapter`
-(`sign_error/0`, `anchor_sign_error/0`, `grant_sign_error/0`, `transition_sign_error/0`)
-— dialyze your caller against them; this table is authored against those types.
+- `:invalid_key_handle` when a public key is not a 65-byte uncompressed SEC1 P-256 point
+  on the curve (an Ed25519 key included).
+- `:signing_failed` also when `sign/2` returns a DER signature or a raw signature whose
+  `r` or `s` is out of range. A high-S signature is not an error; the adapter converts it.
+- `:invalid_report` when `grant_compact` is not a contract-major-3 grant.
+- `:invalid_role_attestation` from `V3.sign_grant/3` whenever `:role_attestation` is
+  present in the options: that surface has no role-attestation gate and refuses the option
+  rather than ignore it. (`V3`'s `grant_sign_error/0` type does not list this atom.)
 
-## The local-loopback profile entry point
+## Where the error types live
 
-`sign_local_loopback_report/3` reuses `sign_error/0` unchanged. One reading
-note: a nonce that passes the presence check but violates the profile's
-semantics (oversized for the configured bounds, or not a valid UTF-8 string)
-surfaces as `{:producer_error, :invalid}` — BAP's producer owns profile
-semantics; the library owns presence and shape (the same split every field
-uses). A non-canonical or non-loopback `target_uri` is likewise
-`{:producer_error, :invalid}` — admission is BAP's, and the caller's URI is
-never rewritten.
+Each set is a type on `BoundedAuthorityReportAdapter`: `sign_error/0`,
+`anchor_sign_error/0`, `grant_sign_error/0`, `transition_sign_error/0` and
+`content_assertion_sign_error/0`, with matching types on `BoundedAuthorityReportAdapter.V3`
+for its four entry points. The test suite checks this page against the major-1 types.
+
+## Local-loopback notes
+
+`sign_local_loopback_report/3` uses `sign_error/0` unchanged. The adapter checks that the
+nonce is present and a non-empty string; the protocol package checks the profile's rules.
+A nonce over the bounds or not valid UTF-8, and a `target_uri` that is not a canonical
+literal-loopback HTTP URI, are `{:producer_error, :invalid}`. The adapter never rewrites
+the URI.

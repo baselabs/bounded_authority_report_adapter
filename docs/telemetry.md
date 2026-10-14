@@ -1,12 +1,10 @@
 # Sign telemetry
 
 The adapter emits a closed, value-free telemetry surface for its signing entry
-points — ten across the two suite surfaces (`BoundedAuthorityReportAdapter`
-and `.V3`), six object KINDS: the object axis names the object kind, never the
-entry point or the major. Local-loopback and content assertion are major-1 profile
-siblings. The
-library does NOT attach a handler — a fresh
-application sees nothing until it attaches one.
+points: ten entry points across the two suite surfaces (`BoundedAuthorityReportAdapter`
+and `BoundedAuthorityReportAdapter.V3`) and six object kinds. The object names the kind of
+object signed, never the entry point or the suite. The library does not attach a handler;
+an application sees nothing until it attaches one.
 
 ## Events
 
@@ -22,10 +20,7 @@ operation was slow or failing).
 
 ## The closed axes
 
-One atom per signing object KIND — the v3 surface's entry points emit the same
-four standard kinds; local-loopback and content assertion are separate kinds.
-
-Objects (one per signing entry point):
+Objects (one per object kind):
 
 | Object | Entry point |
 |---|---|
@@ -35,6 +30,9 @@ Objects (one per signing entry point):
 | `:key_transition` | `sign_key_transition/3` |
 | `:local_loopback_report` | `sign_local_loopback_report/3` |
 | `:content_assertion` | `sign_content_assertion/3` |
+
+Each `BoundedAuthorityReportAdapter.V3` entry point emits the object of its major-1
+namesake (`V3.sign_report/3` emits `:report`, and so on).
 
 Result classes (the classified outcome of a span):
 
@@ -64,31 +62,42 @@ are not trusted to redact.
 
 ## Attaching a handler
 
+Attach once at boot, for example in your application's `start/2`. This handler logs each
+signing call's object kind, result class and duration:
+
 ```elixir
-# once at boot (e.g. your application's start/2):
-:telemetry.attach_many(
-  "my-app-bara-sign-metrics",
-  [
+defmodule MyApp.SignTelemetry do
+  require Logger
+
+  @events [
     [:bounded_authority_report_adapter, :sign, :start],
     [:bounded_authority_report_adapter, :sign, :stop]
-  ],
-  fn [:bounded_authority_report_adapter, :sign, phase], measurements, metadata, _config ->
-    case phase do
-      :start -> MyApp.Counter.inc(:sign_attempts, metadata.object)
-      :stop ->
-        MyApp.SignMetrics.record(
-          metadata.object,
-          metadata.result_class,
-          measurements.duration
-        )
-    end
-  end,
-  nil
-)
+  ]
+
+  def attach do
+    :telemetry.attach_many("my-app-sign-telemetry", @events, &__MODULE__.handle_event/4, nil)
+  end
+
+  def handle_event([_, :sign, :start], _measurements, _metadata, _config), do: :ok
+
+  def handle_event([_, :sign, :stop], %{duration: duration}, metadata, _config) do
+    microseconds = System.convert_time_unit(duration, :native, :microsecond)
+    Logger.info(
+      "signed #{metadata.object}: #{metadata.result_class} in #{microseconds} microseconds"
+    )
+  end
+end
+
+MyApp.SignTelemetry.attach()
+#=> :ok
 ```
 
-Or consume via a `Telemetry.Metrics` reporter:
+Keep handlers total: see [If your handler raises](#if-your-handler-raises).
 
+Or report through `Telemetry.Metrics` (a separate package; this is a fragment of a
+reporter's metric list):
+
+<!-- doc-sample: fragment -->
 ```elixir
 summary("bounded_authority_report_adapter.sign.stop.duration",
   unit: {:native, :millisecond},

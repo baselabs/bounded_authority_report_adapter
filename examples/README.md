@@ -4,7 +4,7 @@ Self-contained, runnable demos of the adapter — **no database, no Docker, no o
 running.** The adapter is pure crypto (it signs; it does not persist), so neither demo needs a
 backing store.
 
-## `edge_agent/` — a runnable end-to-end app (RA9)
+## `edge_agent/` — a runnable end-to-end app
 
 A minimal mix app that adds the piece the Livebook does not — **real HTTP transport** between
 an edge signer and a consumer. An **edge agent** calls `sign_report/3` and POSTs the envelope

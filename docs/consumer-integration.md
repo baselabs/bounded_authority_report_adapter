@@ -1,234 +1,218 @@
 # Consuming an envelope from this adapter
 
-This is the **universal consumer contract**: how any verifier consumes a `{grant, proof}` envelope
-produced by `BoundedAuthorityReportAdapter.sign_report/3`. The verifier depends **only on the public
-`bounded_authority_protocol` package** — never on this adapter (the dependency-direction wall).
-An application verifier is the first consumer; the contract is general.
+This guide is the verifier side of the contract: how any service consumes a `{grant, proof}`
+envelope produced by `BoundedAuthorityReportAdapter.sign_report/3`. The verifier depends
+**only on the public `bounded_authority_protocol` package**, never on this adapter.
 
 > **Runnable reference:** the repository's `examples/edge_agent` app implements this whole
-> contract end-to-end — a `Plug`/Bandit receiver (`EdgeAgent.Receiver`) that retains the raw body,
-> runs the one-`with` verify below, binds the holder to the configured identity (§8), and dedupes
-> nonces (§9). It is the first runnable instance of this guide; read it alongside the prose.
+> contract end to end: a Plug receiver on Bandit (`EdgeAgent.Receiver`) that retains the raw
+> body, runs the single `with` from §4, binds the holder to the configured identity (§8),
+> and dedupes nonces (§9). Its tests run it over real HTTP.
 
 ## 1. What the adapter produces
 
-`sign_report/3` returns `{:ok, %{grant: grant_compact, proof: proof_compact}}` — two compact-JWS
-binary strings. The grant is the pass-through of the issuer-signed grant the caller supplied
-(`sign_report/3` never signs the grant — grant signing is the separate issuer-role
-instantiation `sign_grant/3`, not part of this flow); the proof is the holder's
-binding of that grant to the
-report, signed via the holder key behind the `{module(), term()}` key-handle.
+`sign_report/3` returns `{:ok, %{grant: grant_compact, proof: proof_compact}}`: two compact
+JWS strings. The grant is the issuer-signed grant the caller supplied, passed through
+unchanged (`sign_report/3` never signs a grant; grant signing is the separate issuer-role
+`sign_grant/3`). The proof is the holder's binding of that grant to one request, signed
+through the holder's key handle.
 
-## 2. Transport the envelope + retain the raw body
+## 2. Transport the envelope and retain the raw body
 
-Carry the two compacts to the verifier over your transport. The RECOMMENDED wire shape (as used by the first consumer
-instance #1): two request headers, `X-BA-Grant` and `X-BA-Proof`, each one compact string. Presence
-of BOTH is the scheme discriminator (a single header alone is neither a valid BA report nor the
-legacy scheme — it falls to the legacy path and fails closed there). The de facto contract of
-record for this wire shape is the first consumer's own integration.
+Carry the two compacts to the verifier over your transport. A simple wire shape, used by
+the example app: two request headers, `X-BA-Grant` and `X-BA-Proof`, each holding one
+compact string, plus `X-BA-Invocation-Id` and `X-BA-Nonce` for the per-request values.
 
-**Retain the request body's RAW bytes.** `cast_arguments` reconstruction decodes the raw body (not
-the HTTP framework's parsed map — parsing loses both the bytes and the tagged structure). With
-`Plug.Parsers`, pass a `body_reader:` option at the ENDPOINT (where parsers live — a router-pipeline
-plug runs *after* parsing and sees an empty body), **path-conditional to the report route** so an
-unconditional reader doesn't stash a copy of every request on every pipeline (a per-request memory
-amplifier).
+**Retain the request body's raw bytes.** The verifier rebuilds `cast_arguments` by decoding
+the raw body, not your HTTP framework's parsed map: parsing loses both the exact bytes and
+the protocol's tagged structure. With `Plug.Parsers`, pass a `body_reader:` option at the
+endpoint (a router-pipeline plug runs after parsing and sees an empty body), and make it
+conditional on the report route so you do not keep a copy of every request body. A plug
+with no parser in front of it can call `Plug.Conn.read_body/2` directly, as the example
+receiver does.
 
 ## 3. The request-field contract
 
-The proof binds a set of request fields; the verifier reconstructs the *same* values or the proof
-rejects. Both sides derive each field from the SAME source:
+The proof binds a set of request fields; the verifier rebuilds the same values or the proof
+is rejected. Both sides derive each field from the same source:
 
-| Field | At sign time (edge) | At verify time (consumer) |
+| Field | At signing time (holder) | At verification time (verifier) |
 |---|---|---|
-| `method` | `"POST"` | literal `"POST"` |
-| `target_uri` | the configured canonical report URI (https, `Uri.normalize`-stable) | the SAME configured canonical URI (boot-validated) |
-| `invocation_id` | a unique id the edge generates | read from the `X-BA-Invocation-Id` header |
-| `operation` | the normative contract operation constant (the value the issuer's grant authorizes) | the SAME constant |
-| `cast_arguments` | `V1.Json.decode(raw_report_body_bytes)` of the WHOLE body | `V1.Json.decode(raw_request_body_bytes)` of the SAME raw bytes |
-| `nonce` | the report nonce | read from the report-nonce header |
+| `method` | the HTTP method sent | the HTTP method received |
+| `target_uri` | the configured canonical URI of the endpoint | the same configured canonical URI |
+| `invocation_id` | a fresh UUID the holder generates | read from the `X-BA-Invocation-Id` header |
+| `operation` | the operation name the grant authorizes | the same constant for this endpoint |
+| `cast_arguments` | `V1.Json.decode/2` of the raw body bytes sent | `V1.Json.decode/2` of the raw body bytes received |
+| `nonce` | the request nonce | read from the `X-BA-Nonce` header |
 
 Notes:
-- **`target_uri`** is a *configured canonical value*, not derived from the request `Host` (which
-  varies across proxies/LBs). Boot-validate it: a non-`Uri.normalize`-stable / non-https value fails
-  at SIGN time on the edge; surface it as a loud startup failure, not a 401 storm. The single-
-  environment round-trip test cannot catch edge↔verifier config drift — operations must keep them
-  in sync.
-- **`cast_arguments`** is the WHOLE report body decoded into BAP's public tagged `Json.value()`
-  tuple form via `BoundedAuthorityProtocol.V1.Json.decode/1` — the only public way to obtain it.
-  Both sides decode the SAME raw bytes with the SAME function ⇒ byte-agreement by construction.
-  (`definition_version` is an integer ⇒ its tagged form is `{:integer, n}`, not a string.)
-- **`operation`** is a *normative* contract constant: this guide declares it AND the issuer's grant-
-  issuance flow must mint it. A mismatch fails closed (401) — so the prod coordination between this
-  constant and the issued grant is a contract the issuer must honor.
 
-## 4. Call the verifier — ONE `with`, fail closed (the COMPLETE safe path)
+- **`target_uri` is configured, not derived from the request.** The `Host` header varies
+  across proxies and load balancers and is client-controlled. Validate the configured value
+  at boot: a target that is not HTTPS, or not already in the protocol's normalized form
+  (lowercase host, no default port, no dot segments, no query), fails at signing time on
+  the holder as `{:producer_error, :invalid}`, so surface it as a startup failure, not a
+  stream of 401s.
+  Keep the holder's and the verifier's configuration in sync.
+- **`cast_arguments` is the whole body** decoded into the protocol's tagged `Json.value()`
+  form with `BoundedAuthorityProtocol.V1.Json.decode/2`. Both sides decode the same bytes
+  with the same function, so they agree by construction. Integers decode as
+  `{:integer, n}`, strings as `{:string, s}`.
+- **`operation` is part of the contract.** The issuer must mint grants for the same
+  operation name the verifier expects; a mismatch fails closed.
 
-This is the canonical example. It is **not** optional: it includes the identity binding (§8) — a
-consumer copy-pasting only the crypto-verify (without the binding) ships a verifier open to
-cross-identity replay. Bind the verified envelope to the authenticated identity in the SAME `with`.
+## 4. Call the verifier: one `with`, fail closed
 
-```elixir
-# raw_body: the request's RAW bytes (retained via the endpoint body_reader). The whole verify is
-# ONE `with`: a BAP-strict decode failure (Jason-valid-but-BAP-invalid body — duplicate keys,
-# number bounds), a check_envelope failure, AND an identity-binding mismatch ALL collapse to
-# {:error, _} -> :invalid. Decode any configured bytes (the issuer public key) NON-BANG inside
-# the `with` (or boot-validate them) so a malformed config also fails closed. Do NOT use a bare
-# `{:ok, x} = Json.decode(...)` match — it raises on a decode failure (500), breaking the
-# uniform-reject posture.
-with {:ok, cast_arguments} <- BoundedAuthorityProtocol.V1.Json.decode(raw_body),
-     {:ok, facts} <-
-       BoundedAuthorityProtocol.V1.check_envelope(
-         %BoundedAuthorityProtocol.V1.Credentials{grant: grant, proof: proof},
-         %BoundedAuthorityProtocol.V1.ExpectedRequest{
-           trusted_issuer: %BoundedAuthorityProtocol.V1.TrustedIssuer{
-             key_id: <configured issuer kid>,
-             public_key: <configured 32-byte issuer public key>
-           },
-           issuer: <configured issuer URI>,
-           audience: <configured audience>,
-           method: "POST",
-           target_uri: <configured canonical report URI>,
-           invocation_id: <from X-BA-Invocation-Id>,
-           operation: <the normative contract operation constant>,
-           cast_arguments: cast_arguments,
-           evaluation_time: System.system_time(:second),
-           clock_skew: <configured>,
-           proof_max_age: <configured>,
-           nonce: {:required, <from the report-nonce header>},
-           bounds: BoundedAuthorityProtocol.V1.Bounds.maximum()
-         }
-       ),
-     # REQUIRED (§8): bind the verified envelope to the AUTHENTICATED identity, not just "some
-     # holder." returns :ok | {:error, _} — NOT a boolean (a `?`-suffix boolean never matches
-     # :ok <- and rejects EVERY request). See §8 for the thumbprint helper.
-     :ok <- bind_holder_to_identity(facts.holder_thumbprint, authenticated_identity) do
-  :ok       # the envelope verifies AND is bound to this identity — accept
-else
-  _ -> :invalid   # reject (your uniform auth-failure body; no discrimination between causes)
-end
-```
-
-On the edge side, the agent obtains the SAME typed form BEFORE calling `sign_report/3`:
-`cast_arguments = V1.Json.decode(raw_report_body_bytes)` (the adapter takes `cast_arguments` already
-typed as `Json.value()`; it does not type a raw map). The contract is symmetric.
-
-## 5. Fail closed — uniform, value-free
-
-`{:error, :invalid}` ⇒ reject (401 or your surface's uniform auth-failure status). **Collapse every
-BA failure to the SAME closed body your other auth failures use** — the response must not
-discriminate "bad grant" from "bad proof" from "wrong key" from "malformed body" from "decode
-failure." An attacker learns nothing about which factor failed. Telemetry, if any, is value-free
-(an org/tenant id only — no grant/proof/signature bytes).
-
-`BoundedAuthorityProtocol.V1.check_envelope/2` and `Json.decode/1` are total (rescue-wrapped), so a
-single `with` is sufficient for the decode + verify closure — PROVIDED struct construction (decoding
-the configured issuer key, etc.) is also inside the `with` or boot-validated, so a malformed config
-collapses to `:invalid` rather than raising.
-
-## 6. Transition / coexistence with a legacy scheme
-
-During a transition, reports may arrive under the legacy scheme OR the BA scheme. Discriminate by
-the BA envelope's presence (both `X-BA-Grant` + `X-BA-Proof` ⇒ BA path; otherwise the legacy path,
-unchanged). The legacy path stays byte-for-byte intact — a legacy reporter sees zero change. The
-strongest attack class here is availability, not bypass: a MITM who strips BA headers off a BA
-report routes it to the legacy path (where it has no legacy signature ⇒ reject); a MITM who injects
-a stray BA header onto a legacy report routes it to BA (⇒ `:invalid` ⇒ reject). "Both present ⇒ BA"
-minimizes the injection surface. Both cases fail closed.
-
-## 7. Provenance
-
-Record which scheme verified a durable row (a `signature_scheme` column carrying `ba_protocol_v1`
-vs the legacy value), set by the plug from a crypto-verified assign — never from a wire/body field
-(a reporter cannot self-label). A future verifier knows which envelope signed each row.
-
-## 8. Bind the envelope to the authenticated identity (REQUIRED — cross-identity replay)
-
-`check_envelope` verifies the grant + proof cryptographically — it proves *some* holder holds a
-valid grant bound to the report. It does NOT prove the holder is the identity your transport
-authenticated (the api_key / reporter / tenant). A captured envelope (the grant + proof ride every
-report as headers) is **replayable under a different authenticated identity**: the verifier accepts
-the valid envelope, and if your replay-protection is keyed to the transport identity (e.g. a per-org
-nonce ledger), it does not collide cross-identity → the captured envelope is accepted once per
-identity, writing the original body into the replaying identity's scope. This is a real
-cross-tenant/cross-identity authorization gap; the transport-authenticated identity must be bound
-to the verified capability.
-
-**The binding (DPoP-shaped):** the grant is issued to a holder key thumbprint (`cnf.jkt`); the
-identity you authenticate (the reporter) holds a holder key — Ed25519 for major-1
-credentials, EC P-256 for `V3` credentials. Bind them: after `check_envelope`
-succeeds, assert the grant's bound holder thumbprint (`EnvelopeFacts.holder_thumbprint`) equals the
-thumbprint of the authenticated identity's own key. Then a captured envelope verifies ONLY for the
-identity whose key the grant was issued to — a replay under a different identity's api_key is
-rejected (different key ⇒ thumbprint mismatch ⇒ `:invalid` ⇒ the uniform reject). This restores
-parity with a body-signature scheme (which is bound to the reporter's key by construction).
+This module is the complete path, including the identity binding from §8. A verifier that
+copies only the `check_envelope/2` call, without the binding, is open to cross-identity
+replay. The `config` map carries the values your service configures and validates at boot.
 
 ```elixir
-# bind_holder_to_identity/2 returns :ok | {:error, _} (NOT a boolean — a `?`-suffix boolean
-# never matches :ok <- and rejects every request). The thumbprint comes from the protocol
-# package's documented BoundedAuthorityProtocol.V1.Jwk.encode_public/2 and thumbprint/2 (the
-# canonical base64url RFC 7638 thumbprint, decoded here to its raw 32 bytes) — do NOT roll your
-# own RFC 7638 thumbprint; the comparison is raw-32-byte to raw-32-byte.
-defp bind_holder_to_identity(bound_holder_thumbprint, identity) do
-  with {:ok, identity_raw_key} <- identity_ed25519_raw_key(identity),
-       {:ok, jwk} <- BoundedAuthorityProtocol.V1.Jwk.encode_public(identity_raw_key, %{}),
-       {:ok, thumbprint} <- BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{}) do
-    identity_thumbprint = Base.url_decode64!(thumbprint, padding: false)
-    if identity_thumbprint == bound_holder_thumbprint, do: :ok, else: {:error, :not_bound}
+defmodule MyApp.EnvelopeVerifier do
+  alias BoundedAuthorityProtocol.V1
+
+  @doc """
+  Verifies one request. `headers` is the request's headers as a map with lowercase names,
+  `raw_body` the exact body bytes, and `identity_public_key` the raw Ed25519 public key of
+  the identity your transport authenticated. Returns `{:ok, facts}` or `:invalid`.
+  """
+  def verify(raw_body, headers, identity_public_key, config) do
+    with {:ok, grant} <- Map.fetch(headers, "x-ba-grant"),
+         {:ok, proof} <- Map.fetch(headers, "x-ba-proof"),
+         {:ok, invocation_id} <- Map.fetch(headers, "x-ba-invocation-id"),
+         {:ok, nonce} <- Map.fetch(headers, "x-ba-nonce"),
+         {:ok, cast_arguments} <- V1.Json.decode(raw_body),
+         {:ok, facts} <-
+           V1.check_envelope(
+             %V1.Credentials{grant: grant, proof: proof},
+             %V1.ExpectedRequest{
+               trusted_issuer: %V1.TrustedIssuer{
+                 key_id: config.issuer_key_id,
+                 public_key: config.issuer_public_key
+               },
+               issuer: config.issuer,
+               audience: config.audience,
+               method: "POST",
+               target_uri: config.target_uri,
+               invocation_id: invocation_id,
+               operation: config.operation,
+               cast_arguments: cast_arguments,
+               evaluation_time: System.system_time(:second),
+               clock_skew: config.clock_skew,
+               proof_max_age: config.proof_max_age,
+               nonce: {:required, nonce},
+               bounds: V1.Bounds.maximum()
+             }
+           ),
+         # Required (§8): bind the verified envelope to the authenticated identity.
+         :ok <- bind_holder_to_identity(facts.holder_thumbprint, identity_public_key) do
+      {:ok, facts}
+    else
+      # One uniform rejection; never say which check failed (§5).
+      _any_failure -> :invalid
+    end
+  end
+
+  # Returns :ok or {:error, _}, not a boolean: a boolean never matches `:ok <-`.
+  defp bind_holder_to_identity(bound_holder_thumbprint, identity_public_key) do
+    with {:ok, jwk} <- V1.Jwk.encode_public(identity_public_key, %{}),
+         {:ok, thumbprint} <- V1.Jwk.thumbprint(jwk, %{}),
+         {:ok, identity_thumbprint} <- Base.url_decode64(thumbprint, padding: false) do
+      if identity_thumbprint == bound_holder_thumbprint, do: :ok, else: {:error, :not_bound}
+    end
   end
 end
 ```
 
-A conforming consumer binds the authenticated identity's Ed25519 key to the BA holder key and
-asserts that `facts.holder_thumbprint` equals the raw RFC 7638 thumbprint of that identity key.
-A consumer that does NOT bind the envelope to the authenticated identity carries the
-cross-identity-replay gap — do not enable BA without this binding.
+The holder obtains the same tagged form before calling `sign_report/3`, by decoding the raw
+body it is about to send with `V1.Json.decode/2`. The adapter takes `cast_arguments`
+already in that form; it does not convert a map.
 
-## 9. Dedupe nonces (a replay ledger is a consumer obligation)
+The test suite runs this module against a real envelope: it accepts the matching request,
+and returns `:invalid` for a different identity, a different request body, and a missing
+header. The proof binds the decoded body, so a change that decodes to the same value (extra
+whitespace between JSON tokens, for example) is the same request.
 
-`check_envelope` checks the proof's nonce EQUALS the expected nonce (`nonce_matches?/2` →
-`secure_equal/2`) — it is **stateless and does NOT dedupe**. So a byte-identical captured request
-(same identity, valid signature, binding passes) is accepted AGAIN until `proof_max_age` expires —
-same-identity replay within the proof window. The consumer MUST keep a replay ledger (a unique
-constraint on `(identity, nonce)`) and reject a seen nonce.
-Nonce uniqueness is NOT something the protocol package does for you; it is a consumer obligation,
-alongside the §8 identity binding.
+## 5. Fail closed, uniformly and without values
+
+Any failure is a rejection with the same response your other authentication failures use
+(401 or its equivalent). The response must not distinguish a bad grant from a bad proof, a
+wrong key, a malformed body or a decode failure. Telemetry, if you emit any, carries no
+grant, proof or signature bytes.
+
+`check_envelope/2` and `Json.decode/2` never raise on bad input; they return
+`{:error, :invalid}`. A single `with` is therefore enough, provided the configured values
+(the issuer public key and the rest) are validated at boot or decoded inside the `with`,
+so a malformed configuration also ends in `:invalid` instead of a crash.
+
+## 6. Running alongside an existing scheme
+
+During a migration, requests may arrive under an existing authentication scheme or with an
+envelope. Choose the path by the envelope's presence: both `X-BA-Grant` and `X-BA-Proof`
+present means the envelope path; anything else takes the existing path, unchanged. The
+remaining attack is availability, not bypass: stripping the envelope headers routes a
+request to the existing path, where it has no valid credential and is rejected; adding a
+stray envelope header routes a request to the envelope path, where it fails verification.
+Requiring both headers keeps that surface small.
+
+## 7. Record which scheme verified a request
+
+If you persist verified requests, record which scheme verified each one (for example a
+`signature_scheme` column holding `ba_protocol_v1`), set from the verified result in your
+code and never from a header or body field, so a client cannot label its own request.
+
+## 8. Bind the envelope to the authenticated identity (required)
+
+`check_envelope/2` proves that some holder holds a valid grant bound to this request. It
+does not prove that the holder is the identity your transport authenticated (an API key,
+a client certificate, a session). Grant and proof travel with every request, so a captured
+envelope can be replayed under a different authenticated identity. If your replay
+protection is keyed by that identity, the replay does not collide with the original, and
+the captured request is accepted once per identity.
+
+The fix is the binding in §4. The grant names a holder key by its thumbprint (`cnf.jkt`);
+each identity you authenticate has a holder key (Ed25519 for contract-major 1, P-256 for
+`V3` credentials). After `check_envelope/2` succeeds, check that `facts.holder_thumbprint`
+equals the RFC 7638 thumbprint of the authenticated identity's own key. A captured envelope
+then verifies only for the identity the grant was issued to. Compute the thumbprint with
+the protocol package's `V1.Jwk.encode_public/2` and `V1.Jwk.thumbprint/2` (for P-256 keys,
+`V3.EcJwk`), and compare raw 32-byte values; do not hand-roll RFC 7638.
+
+Do not accept envelopes without this binding.
+
+## 9. Dedupe nonces (a replay ledger)
+
+`check_envelope/2` checks that the proof's nonce equals the nonce you expect. It is
+stateless and does not remember nonces, so a byte-identical captured request is accepted
+again until `proof_max_age` expires. Keep a replay ledger, for example a unique constraint
+on `(identity, nonce)`, and reject a nonce you have seen. This is the verifier's job, as
+the §8 binding is.
 
 ## 10. The local-loopback profile (development listeners)
 
-For a verifier serving plain HTTP on the *literal loopback interface*, BAP 0.3.0
-defines a byte-distinct sibling profile (`bap-application-proof/local-loopback-http/1`,
-protected `typ: ba+loopback-proof`). The signer-side entry is the adapter's
-`sign_local_loopback_report/3`; the consumer-side surface is
-`BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1.check_envelope/2`
-— a SEPARATE function, not an option on the standard one. The two proof
-families reject each other's bytes, so a profile receiver never accepts a
-production `dpop+jwt` proof and vice versa.
+For a verifier serving plain HTTP on the literal loopback interface, the protocol defines a
+byte-distinct sibling profile (`bap-application-proof/local-loopback-http/1`, protected
+`typ: ba+loopback-proof`). The signer is the adapter's `sign_local_loopback_report/3`; the
+verifier is `BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1.check_envelope/2`,
+a separate function, not an option on the standard one. Each proof family rejects the
+other's bytes, so a loopback listener never accepts a standard `dpop+jwt` proof and the
+standard verifier never accepts a loopback proof.
 
-Everything in §§2–9 applies unchanged (raw-body retention, the request-field
-contract, one `with` that fails closed to a uniform 401, identity binding, the
-nonce ledger), with three profile-specific obligations:
+Sections 2 to 9 apply unchanged, with three additions:
 
-1. **The nonce is mandatory — and it is the listener's challenge, not the
-   signer's choice.** Mint a fresh single-use challenge per request, hand it
-   to the signer, and pass `nonce: {:required, challenge}` while consuming
-   the challenge ATOMICALLY at verification (`:ets.take`/a unique delete).
-   The profile verifier rejects `:not_required` outright. A client-chosen
-   nonce plus a dedupe ledger (the standard profile's §9 posture) still
-   leaves a first-use replay race on a no-TLS transport — a server-minted
-   single-use challenge closes it: the legitimate arrival consumes it before
-   any replay can.
-2. **Derive the target from the listener, never from the client — and refuse
-   to boot otherwise.** The `target_uri` your verifier expects must come from
-   the address YOUR listener bound (`http://127.0.0.1:PORT/PATH` or
-   `http://[::1]:PORT/PATH`) — a Host or X-Forwarded-* header is
-   client-controlled data on an unauthenticated transport, and a profile
-   receiver that starts on a routable interface is a configuration error
-   worth crashing for at boot, not a 401 storm.
-3. **Say what it is.** Loopback HTTP has no confidentiality and no server
-   authentication and is not process isolation. It is a development-listener
-   convenience, not an HTTPS substitute — keep profile selection explicit at
-   receiver construction (boot-time), never per-request.
+1. **The nonce is mandatory, and the listener chooses it.** Mint a fresh single-use
+   challenge per request, hand it to the signer, and verify with
+   `nonce: {:required, challenge}` while consuming the challenge atomically (for example
+   `:ets.take/2`). The profile verifier rejects `:not_required`. A server-minted single-use
+   challenge closes the first-use replay race that a client-chosen nonce leaves open on a
+   transport without TLS.
+2. **Derive the target from the listener, and refuse to boot otherwise.** The expected
+   `target_uri` comes from the address your listener bound (`http://127.0.0.1:PORT/PATH`
+   or `http://[::1]:PORT/PATH`), never from a `Host` or `X-Forwarded-*` header. A loopback
+   receiver that starts on a routable interface is a configuration error; fail at boot.
+3. **Say what it is.** Loopback HTTP has no confidentiality, no server authentication and
+   no process isolation. It is a development convenience, not a substitute for HTTPS.
+   Choose the profile when you construct the receiver, never per request.
 
-The runnable version is the edge-agent example's receiver (`profile:
-:local_loopback` mode) with `EdgeAgent.run_local_loopback/1`.
+The runnable version is the example receiver's `profile: :local_loopback` mode, driven by
+`EdgeAgent.run_local_loopback/1`.

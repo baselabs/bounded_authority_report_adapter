@@ -2,14 +2,16 @@
 
 ## Supported versions
 
-The latest published `0.x` line is supported. After 1.0, the supported-versions policy is
-the stability contract's ([upgrading.md](docs/upgrading.md) § The 1.0 stability contract).
+The latest published `0.x` release is supported. After 1.0, the supported-versions policy
+is the stability contract's ([the proposed stability
+contract](docs/upgrading.md#proposed-stability-contract)).
 Wire compatibility is governed by the protocol package's contract-major discipline — this
 library's releases track it.
 
 ## Security invariants (what a report is measured against)
 
-Restated from the charter's boundary invariants, for reporting:
+The properties a report is measured against (the long form is the
+[security model](docs/security.md)):
 
 - The library never solicits, processes, or retains private key material — custody lives
   entirely behind the caller's key-handle callbacks (the contract; a handle that embeds
@@ -20,8 +22,8 @@ Restated from the charter's boundary invariants, for reporting:
 - Errors are closed atoms and telemetry metadata is value-free: neither channel can carry
   key material, message bytes, or report content. A defect that leaks values into either
   channel is a security defect, not a cosmetic one.
-- Key identity (`key_id` + `public_key`) is resolved from ONE atomic handle snapshot on
-  anchors and transitions; caller-supplied key ids are ignored.
+- Key identity (`key_id` and `public_key`) comes from one handle call for grants, anchors,
+  key transitions and content assertions; caller-supplied key ids are ignored.
 - The library depends only on the public protocol package — never the authority runtime,
   never a transport, never an HTTP client/server (enforced by the dependency-direction
   wall).

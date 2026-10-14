@@ -5,10 +5,10 @@ defmodule EdgeAgent.DemoIssuer do
 
   ## What this is, and is not
 
-  The adapter is the HOLDER — it signs proofs, never grants. A real grant is
-  minted by the `bounded_authority` authority RUNTIME (the issuer runtime that
-  also owns issuer key custody + revocation) and arrives at the edge out-of-band
-  as an issuer-signed compact string. THIS module exists ONLY so `EdgeAgent.run/0`
+  The edge agent is the HOLDER: it signs proofs, never grants. A real grant is
+  minted by your authority service (the issuer, which also owns issuer key
+  custody and revocation) and arrives at the edge out of band as an
+  issuer-signed compact string. THIS module exists ONLY so `EdgeAgent.run/0`
   has a real grant to bind a proof to, minted from the configured demo issuer key.
   It must never ship as anything but a demo helper.
 

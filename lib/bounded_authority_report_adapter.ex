@@ -1,102 +1,83 @@
 defmodule BoundedAuthorityReportAdapter do
   @moduledoc """
-  Universal companion signer to `BoundedAuthorityProtocol` — the MAJOR-1
-  surface (the `BAP1-Ed25519-SHA256` suite).
+  The signer for the Bounded Authority Protocol, contract-major 1 (the
+  `BAP1-Ed25519-SHA256` suite, Ed25519 keys).
 
-  BAP produces the deterministic signing input for each protocol object (proof,
-  grant, boundary anchor, key transition) but refuses to sign — it is a pure
-  verifier + signing-input producer. THIS library is the signing glue: it takes a
-  key-handle + a BAP signing input, signs the input's `message` via the handle's
-  local key, and assembles the compact via BAP. The signing tail — resolve the
-  key, sign via the handle, verify the signature against the resolved key, assemble
-  — is shared across every object the library signs.
+  The protocol package (`BoundedAuthorityProtocol`) produces the exact bytes to sign for
+  each protocol object and verifies signed objects, but never signs. This module signs:
+  it takes a key handle and the object's fields, asks the protocol package for the signing
+  input, signs its `message` through the handle, verifies the signature against the
+  handle's public key, and assembles the compact form through the protocol package. Every
+  entry point shares that path.
 
-  The contract-major-3 sibling lives in `BoundedAuthorityReportAdapter.V3`
-  (the `BAP3-ES256-SHA256` suite: EC P-256 keys, RFC 7518 §3.4 raw `r || s`
-  signatures with low-S normalization, `ES256` headers) — same four
-  instantiations, same key-handle behaviour, selected by module name
-  (ADR-0021). This module's entry points accept Ed25519 key material only.
+  ## Entry points
 
-  ## What has landed
+  | Function | Signs | Handle callbacks | Verify with |
+  |---|---|---|---|
+  | `sign_report/3` | a holder proof over an issuer's grant | `sign/2`, `public_key/1` | `BoundedAuthorityProtocol.V1.check_envelope/2` |
+  | `sign_local_loopback_report/3` | a holder proof for a loopback listener | `sign/2`, `public_key/1` | `BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1.check_envelope/2` |
+  | `sign_grant/3` | a grant (issuer role only) | `sign/2`, `signing_identity/1` | `BoundedAuthorityProtocol.V1.verify_grant/3` |
+  | `sign_anchor/3` | a boundary anchor (chain checkpoint) | `sign/2`, `key_identity/1` | `BoundedAuthorityProtocol.V1.verify_historical_anchor/3` |
+  | `sign_key_transition/3` | a key transition (rotation) | `sign/2`, `key_identity/1` | `BoundedAuthorityProtocol.V1.verify_key_transition/4` |
+  | `sign_content_assertion/3` | a content assertion | `sign/2`, `key_identity/1` | `BoundedAuthorityProtocol.ContentAssertion.V1.verify_assertion/2` |
 
-    * **Proof signing** (`sign_report/3`, RA1) — binds an issuer-signed grant to an
-      application report by producing a holder proof, returning the `{grant, proof}`
-      envelope the verifier verifies via `check_envelope/2`.
-    * **Boundary-anchor signing** (`sign_anchor/3`, RA4) — signs a boundary anchor
-      (a durable chain checkpoint), returning the compact a verifier checks via
-      `verify_historical_anchor/3`.
-    * **Grant signing** (`sign_grant/3`, RA7) — the issuer-role instantiation: signs
-      a grant (the issuer's authority assertion), returning the compact a verifier
-      checks via `verify_grant/3`. The handle's `signing_identity/1` must resolve to
-      the `:issuer` role (the C1 gate — ADR-0006's grant-signing pre-commitment).
-    * **Key-transition signing** (`sign_key_transition/3`, RA8) — the 4th instantiation:
-      signs a key transition (the current retiring key's assertion of its successor),
-      returning the compact a verifier checks via `verify_key_transition/4`. Role-agnostic
-      (mirrors `sign_anchor/3`, NOT `sign_grant/3`): the current key's identity is resolved
-      atomically via `key_identity/1` — see ADR-0009.
-    * **Local-loopback proof signing** (`sign_local_loopback_report/3`) — the explicit
-      holder-side signer for the byte-distinct local-loopback HTTP application proof
-      (`bap-application-proof/local-loopback-http/1`, protected `typ: "ba+loopback-proof"`;
-      BAP 0.3.0 / BAP ADR-0027). Same report shape and key-handle callbacks as
-      `sign_report/3`, with TWO profile divergences: the nonce is REQUIRED, and the
-      target must be a canonical `http://127.0.0.1`/`http://[::1]` URI. Profile
-      selection is the FUNCTION NAME — never an option, never inferred from the
-      URI, headers, environment, or a failed producer call.
+  `BoundedAuthorityReportAdapter.V3` is the ES256 sibling (contract-major 3, P-256 keys)
+  of `sign_report/3`, `sign_grant/3`, `sign_anchor/3` and `sign_key_transition/3`. Both
+  modules use the same key-handle behavior. This module's entry points accept Ed25519 keys
+  only, and `V3`'s accept P-256 keys only.
 
-  `sign_content_assertion/3` adds BAP's standalone digest-bound content-assertion
-  profile through the same tail (ADR-0022).
+  The examples in each function's documentation continue the README's quick start: they
+  use its development key handle, `MyApp.DevKey`, with handle terms `{role, name}`, its
+  `alias BoundedAuthorityProtocol.V1`, and its `now`. The test suite runs every one.
 
-  ## The key-handle contract (charter §6 invariant 1) — suite-parameterized
+  ## The key-handle behavior
 
-  The private key NEVER enters this library. Callers supply a `{module(), term()}`
-  handle whose module implements the callbacks below. The library calls the handle's
-  callbacks; the private key bytes live in the caller's module/process. The
-  callbacks are shared by both suite surfaces (this module and `.V3`); what the
-  accepted KEY and SIGNATURE shapes are is selected by the entry point's major:
+  The private key never enters this library. A caller passes a `{module(), term()}`
+  handle whose module implements the callbacks below; the term is a key reference only
+  that module understands. Callbacks may reach a remote custodian (an HSM, a KMS, a key
+  server). A callback that raises, throws or exits is contained: the entry point returns
+  `{:error, :signing_failed}` for `sign/2` and `{:error, :invalid_key_handle}` for the
+  others.
 
-    * under THIS module (major 1, Ed25519): `public_key/1` and the snapshots
-      return the raw 32-byte Ed25519 public key; `sign/2` returns the 64-byte
-      Ed25519 signature.
-    * under `BoundedAuthorityReportAdapter.V3` (major 3, `ES256`):
-      `public_key/1` and the snapshots return the 65-byte uncompressed-SEC1
-      P-256 point (`0x04 || x || y`; validated on-curve); `sign/2` returns
-      the RFC 7518 §3.4 raw `r || s` form (exactly 64 bytes — a DER return
-      is rejected; low-S is normalized by the adapter, and returning low-S
-      is recommended).
+    * `sign/2` and `public_key/1` are required by every entry point.
+    * `thumbprint/1` is required by the behavior, but no entry point calls it. It
+      returns the RFC 7638 thumbprint the issuer puts in a grant's `cnf.jkt`, so callers
+      can check a handle against a grant.
+    * `key_identity/1` is optional. `sign_anchor/3`, `sign_key_transition/3` and
+      `sign_content_assertion/3` require it: they read the key id and the public key in
+      one call, so a handle over a rotating key store cannot return the id of one key
+      version and the public key of another.
+    * `signing_identity/1` is optional. `sign_grant/3` requires it: it reads the declared
+      role, the key id and the public key in one call, and signs only when the role is
+      `:issuer`.
 
-  * `sign/2`, `public_key/1` — required for every signing operation.
-  * `thumbprint/1` — required (exposed for caller-side self-checking). The
-    RFC 7638 preimage is the SUITE'S: the OKP form
-    `{"crv":"Ed25519","kty":"OKP","x":X}` for Ed25519 keys, the EC form
-    `{"crv":"P-256","kty":"EC","x":X,"y":Y}` for P-256 keys (the digest the
-    issuer mints `cnf.jkt` from — a wrong-preimage thumbprint fails every
-    envelope at verification).
-  * `key_identity/1` — **optional** (declared via `@optional_callbacks`); required
-    by `sign_anchor/3`, `sign_key_transition/3`, and `sign_content_assertion/3`, which resolve the key's registry
-    id (`kid`) AND its public key as ONE atomic snapshot (defense-in-depth: prevents a
-    stateful handle from splitting them across a rotation race). A proof-only handle
-    need not implement it.
-  * `signing_identity/1` — **optional**; required only by `sign_grant/3`, which
-    resolves the key's **role** (`:issuer` or `:holder`) AND its registry id AND
-    public key as ONE atomic snapshot. The role gate (C1) + the rotation-race
-    defense both ride this single call: a stateful handle cannot return `:issuer`
-    then rotate to a different key between role resolution and signing. An
-    issuer-role handle implements it; a proof/anchor-only handle need not.
+  Key and signature shapes depend on the surface. Under this module, public keys are raw
+  32-byte Ed25519 keys that pass the protocol's strict acceptance rule
+  (`BoundedAuthorityProtocol.Ed25519.acceptable_public_key?/1`), and `sign/2` returns a
+  64-byte Ed25519 signature. Under `BoundedAuthorityReportAdapter.V3`, public keys are
+  65-byte uncompressed SEC1 P-256 points (`0x04 || x || y`, checked to be on the curve),
+  and `sign/2` returns the 64-byte raw `r || s` form of RFC 7518 §3.4 (a DER signature is
+  refused; the adapter converts a high-S signature to low-S).
 
-  A test-only reference implementation (`BoundedAuthorityReportAdapter.Keys.RawKey`)
-  ships under `test/support/` for local development; production holders implement the
-  callbacks with proper key custody (HSM, etc.).
+  The repository has test-only reference handles under `test/support/`; they are not
+  shipped in the package. Production handles call your key custody.
 
-  ## What this library does NOT do
+  ## Errors
 
-    * Not a verifier — verification lives in every party via the protocol package
+  Every entry point returns `{:ok, map}` or `{:error, reason}`, where `reason` is a closed
+  atom or the tuple `{:producer_error, :invalid}`. Errors never carry key material,
+  message bytes or input values. Each function's documentation lists its set, and the
+  `*_sign_error` types name them. The errors guide explains each one.
+
+  ## What this library does not do
+
+    * It does not verify credentials. Verifiers use the protocol package
       (`check_envelope/2`, `verify_grant/3`, `verify_historical_anchor/3`,
-      `verify_key_transition/4`). Consumers verify; this library signs.
-    * Not the runtime — grant issuance, key custody/rotation, and revocation are
-      the stateful authority runtime's job. This library holds a key handle and
-      signs on invocation; it does not mint capabilities.
-    * Not a transport — transport layers stay protocol-free. This library is a
-      composable lib an edge agent (or any signing party) calls.
+      `verify_key_transition/4`, `verify_assertion/2`). The one signature this library
+      checks is its own, before returning it.
+    * It does not issue, track or revoke grants, and it does not hold or rotate keys. That
+      is the job of your authority service and your key custody.
+    * It does not transport or store anything. It returns compact strings.
   """
 
   alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopbackHttp
@@ -243,44 +224,71 @@ defmodule BoundedAuthorityReportAdapter do
           | {:producer_error, :invalid}
 
   @doc """
-  Binds an issuer-signed grant to an application report by producing a holder proof.
+  Signs a holder proof that binds an issuer-signed grant to one request.
 
-  Returns `{:ok, %{grant: grant_compact, proof: proof_compact}}` — the grant is
-  the pass-through of `report.grant_compact` (issuer-signed, untouched); the
-  proof is the holder's binding of that grant to the report, signed via the
-  holder key behind `key_handle`.
+  Returns `{:ok, %{grant: grant_compact, proof: proof_compact}}`. The grant is
+  `report.grant_compact`, passed through unchanged; this function never signs a grant.
+  The proof is signed through the holder's key handle and binds the grant (by hash), the
+  request method, target URI, invocation id, operation, arguments (by digest) and nonce.
+  A verifier checks the pair with `BoundedAuthorityProtocol.V1.check_envelope/2`.
 
-  ## The flow (design §2 Q5)
+  ## Parameters
 
-    1. Resolve the holder public key from `key_handle` (callback).
-    2. Build the `Proof` struct: holder key + the report's request fields +
-       `grant_compact` (BAP's `proof_signing_input` derives `ath` = grant hash
-       from it, and `ba_req` = request digest from `cast_arguments`).
-    3. Produce the deterministic proof signing input via BAP.
-    4. Sign + assemble via the shared signing tail (`sign_and_assemble/4`) — the
-       adapter signs ONLY the proof; the grant is never signed here.
-    5. Return `%{grant: report.grant_compact, proof: proof_compact}`.
+    * `report` — a map with:
+      * `:grant_compact` — the issuer-signed contract-major-1 grant, as a compact string.
+        A grant of another major is refused.
+      * `:operation` — the operation name the grant authorizes.
+      * `:method` — the HTTP method, for example `"POST"`.
+      * `:target_uri` — the canonical HTTPS URI of the request.
+      * `:invocation_id` — a canonical lowercase UUID, unique per request.
+      * `:cast_arguments` — the request body in the protocol's tagged form, from
+        `BoundedAuthorityProtocol.V1.Json.decode/2` of the raw body bytes. Not `nil`.
+      * `:nonce` — the request nonce as a string, or `nil` when the verifier does not
+        require one.
+    * `key_handle` — the holder's `{module, term}` handle; calls `public_key/1` and `sign/2`.
+    * `opts` — a map (anything else is treated as `%{}`):
+      * `:bounds` — resource limits passed unchanged to the protocol package's producer
+        and assembler; default `%{}`, the protocol's maximums.
+      * `:issued_at` — the proof's `iat` in Unix seconds; default
+        `System.system_time(:second)`. Set it when the verifier's evaluation time is far
+        from the wall clock (tests, offline flows).
+      * `:proof_id` — the proof's `jti`; default a fresh UUID v4.
 
-  ## Options
+  ## Errors
 
-    * `:bounds` — resource ceilings forwarded unchanged to BAP's producer and
-      bounds-aware compact assembler (default `%{}`, BAP's maxima).
-    * `:issued_at` — the proof's `iat` (default: `System.system_time(:second)`).
-      Pin this when the verifier's `evaluation_time` is far from wall-clock
-      (e.g. tests) so the proof's time window overlaps the grant's.
-    * `:proof_id` — the proof's `jti` (default: a generated UUID v4).
+    * `:invalid_report` — `report` is not a map, a required field is missing or not a
+      string, `cast_arguments` is `nil`, the nonce is neither `nil` nor a string, or
+      `grant_compact` is not a contract-major-1 grant.
+    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, or `public_key/1`
+      failed or returned something other than an acceptable 32-byte Ed25519 key.
+    * `:signing_failed` — `sign/2` failed, returned something other than
+      `{:ok, <<_::512>>}`, or returned a signature that does not verify against the
+      handle's public key.
+    * `{:producer_error, :invalid}` — the protocol package refused the proof, for example
+      a target URI that is not canonical HTTPS, an invocation id that is not a canonical
+      UUID, or a value over the bounds.
 
-  ## Errors (closed-atom set — no key material or report content in errors)
+  ## Example
 
-    * `:invalid_report` — a required report field is missing.
-    * `:invalid_key_handle` — the handle is malformed, or the handle's
-      `public_key/1` rejected / returned a non-32-byte key or a key BAP's strict Ed25519
-      rule refuses (small-order, non-canonical, or not on the curve).
-    * `:signing_failed` — the holder's `sign/2` callback rejected, returned a
-      non-64-byte signature, violated the `{:ok, _} | {:error, _}` contract, or
-      the signature did not verify against the resolved holder public key.
-    * `{:producer_error, :invalid}` — BAP's producer or assembler rejected the
-      proof (the input violated a bound or field constraint).
+  ```elixir
+  {:ok, cast_arguments} = V1.Json.decode(~s({"document":"minutes-2026-10-02.pdf"}))
+
+  report = %{
+    grant_compact: grant,
+    operation: "archive_document",
+    method: "POST",
+    target_uri: "https://records.example/archive",
+    invocation_id: "4b5c6d7e-8f90-4a1b-9c2d-3e4f5a6b7c8d",
+    cast_arguments: cast_arguments,
+    nonce: "nonce-archive-2"
+  }
+
+  {:ok, %{grant: ^grant, proof: proof}} =
+    BoundedAuthorityReportAdapter.sign_report(report, holder, %{issued_at: now})
+
+  BoundedAuthorityReportAdapter.sign_report(%{report | grant_compact: "not.a.grant"}, holder)
+  #=> {:error, :invalid_report}
+  ```
   """
   @spec sign_report(report(), key_handle(), opts()) ::
           {:ok, envelope()} | {:error, sign_error()}
@@ -311,65 +319,82 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   @doc """
-  Signs the byte-distinct local-loopback HTTP application proof — the explicit
-  holder-side entry point for BAP's `bap-application-proof/local-loopback-http/1`
-  profile (`typ: "ba+loopback-proof"`, BAP ADR-0027). Returns the same
-  `%{grant: grant, proof: proof_compact}` envelope shape as `sign_report/3`; the
-  verifier checks it via
+  Signs a holder proof for a development listener on the literal loopback interface.
+
+  This is the signer for the protocol's local-loopback HTTP profile
+  (`bap-application-proof/local-loopback-http/1`, protected `typ: "ba+loopback-proof"`).
+  It returns the same `{:ok, %{grant: grant, proof: proof_compact}}` shape as
+  `sign_report/3`, and a verifier checks it with
   `BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1.check_envelope/2`.
+  The two proof families reject each other's bytes: the standard `check_envelope/2`
+  rejects a loopback proof, and the loopback verifier rejects a standard proof.
 
-  This library signs; BAP verifies. Local-loopback HTTP is plain HTTP on the
-  literal loopback interface — it has **no TLS confidentiality or server
-  authentication and is not equivalent to HTTPS**. The verifier (the listener's
-  operator) owns trusted profile selection, nonce reservation and replay
-  control, listener-derived target state, policy, and effects — none of that
-  lives here.
+  Loopback HTTP is plain HTTP: it has no confidentiality and no server authentication,
+  and it is not a substitute for HTTPS. The verifier (the listener) owns the nonce,
+  replay protection and the expected target. Choosing this profile is choosing this
+  function: there is no profile option on `sign_report/3`, and nothing is inferred from
+  the URI, headers or environment.
 
-  ## The two profile divergences from `sign_report/3`
+  ## Parameters
 
-    * **The nonce is required.** `nonce` must be a non-empty binary; the proof
-      binds it and the verifier MUST reserve + check it (the profile's
-      replay defense on a transport with no TLS).
-    * **The target must be a canonical literal-loopback HTTP URI** — exactly
-      `http://127.0.0.1[:port]/path` or `http://[::1][:port]/path` (decimal
-      port, `:80` elided, lowercase scheme, normalized path). Admission is
-      BAP's, by delegation: the caller's `target_uri` is passed through
-      UNCHANGED to BAP's local-profile producer, which requires the URI to
-      equal its own normalization — so `localhost`, other `127/8` spellings,
-      integer/hex/octal IPv4 forms, mapped/expanded IPv6, userinfo, trailing
-      dots, percent-encoded hosts, uppercase schemes, explicit `:80`,
-      leading-zero ports, dot-segment paths, queries, fragments, HTTPS, and
-      every other non-canonical or non-loopback form fails closed here as
-      `{:producer_error, :invalid}`. This library adds NO URI logic and never
-      silently rewrites a caller-supplied target.
+  The same as `sign_report/3`, with two differences:
 
-  Profile selection is the function name — there is no profile option on
-  `sign_report/3`, and no inference from the URI, headers, environment, or a
-  failed producer call. The two proof families are byte-distinct and mutually
-  rejected in both directions: a `ba+loopback-proof` is rejected by the
-  standard `check_envelope/2`, and a standard `dpop+jwt` proof is rejected by
-  the profile's `check_envelope/2`.
+    * `:nonce` is required: a non-empty string, normally the listener's single-use
+      challenge.
+    * `:target_uri` must be a canonical literal-loopback HTTP URI:
+      `http://127.0.0.1[:port]/path` or `http://[::1][:port]/path`, with a decimal port,
+      no `:80`, a lowercase scheme and a normalized path. The URI is passed to the
+      protocol package unchanged, and any other form (`localhost`, other `127.0.0.0/8`
+      addresses, numeric or mapped forms, userinfo, queries, fragments, `https`) is
+      refused. Nothing is rewritten.
 
-  ## Options
+  Options are the same as `sign_report/3`'s.
 
-  Same as `sign_report/3`: `:bounds` (forwarded unchanged to BAP's producer
-  AND the profile assembler), `:issued_at`, `:proof_id`.
+  ## Errors
 
-  ## Errors (closed-atom set — no key material, nonce values, proof material, or report content)
+    * `:invalid_report` — as for `sign_report/3`, or the nonce is missing, empty or not a
+      string.
+    * `:invalid_key_handle` and `:signing_failed` — as for `sign_report/3`.
+    * `{:producer_error, :invalid}` — the protocol package refused the proof: a target
+      URI that is not a canonical literal-loopback HTTP URI, a nonce over the bounds or
+      not valid UTF-8, or another value over the bounds.
 
-    * `:invalid_report` — a required field is missing, or the `nonce` is
-      absent, empty, or not a binary.
-    * `:invalid_key_handle` — the handle is malformed, or the handle's
-      `public_key/1` rejected / returned a non-32-byte key or a key BAP's strict Ed25519
-      rule refuses (small-order, non-canonical, or not on the curve).
-    * `:signing_failed` — the holder's `sign/2` rejected, returned a
-      non-64-byte signature, violated the `{:ok, _} | {:error, _}` contract, or
-      the signature did not verify against the resolved holder public key.
-    * `{:producer_error, :invalid}` — BAP's local-profile producer or assembler
-      rejected the proof: a non-canonical or non-loopback `target_uri` (see
-      above), a nonce that violates BAP's bounds (oversized or not a valid
-      UTF-8 string — BARA checks presence and shape, BAP checks the profile's
-      semantics), or a bound violation.
+  ## Example
+
+  ```elixir
+  {:ok, %{grant: tool_grant}} =
+    BoundedAuthorityReportAdapter.sign_grant(
+      %{
+        issuer: "https://issuer.example",
+        grant_id: "urn:example:grant:local-tools-1",
+        audiences: ["https://tools.example"],
+        issued_at: now,
+        not_before: now,
+        expires_at: now + 3600,
+        holder_thumbprint: holder_thumbprint,
+        operations: [%V1.Operation{name: "run_local_tool", selectors: [:all]}]
+      },
+      issuer
+    )
+
+  report = %{
+    grant_compact: tool_grant,
+    operation: "run_local_tool",
+    method: "POST",
+    target_uri: "http://127.0.0.1:4000/tools/summarize",
+    invocation_id: "5c6d7e8f-9a0b-4c1d-8e2f-3a4b5c6d7e8f",
+    cast_arguments: {:object, [{"file", {:string, "notes.txt"}}]},
+    nonce: "listener-challenge-1"
+  }
+
+  {:ok, %{proof: _proof}} = BoundedAuthorityReportAdapter.sign_local_loopback_report(report, holder)
+
+  BoundedAuthorityReportAdapter.sign_local_loopback_report(
+    %{report | target_uri: "http://localhost:4000/tools/summarize"},
+    holder
+  )
+  #=> {:error, {:producer_error, :invalid}}
+  ```
   """
   @doc since: "0.5.0"
   @spec sign_local_loopback_report(local_loopback_report(), key_handle(), opts()) ::
@@ -403,57 +428,65 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   @doc """
-  Signs a boundary anchor — a durable chain checkpoint a verifier checks via
+  Signs a boundary anchor: a signed checkpoint of an append-only chain (an audit log, for
+  example), naming the chain, a sequence number and the hash of the chain so far.
+
+  Returns `{:ok, %{anchor: anchor_compact}}`. A verifier checks it with
   `BoundedAuthorityProtocol.V1.verify_historical_anchor/3`.
 
-  Returns `{:ok, %{anchor: anchor_compact}}`. The caller supplies the anchor's
-  *content* (`anchor_id`, `chain_id`, `sequence`, `chain_hash`); BOTH key
-  identifiers (`public_key`, `key_id`) are resolved from `key_handle` — never
-  trusted from the caller — so the signed header's `kid` + `key_fingerprint` are
-  consistent with the key `sign/2` actually used.
+  The signed header names the signing key by its id and fingerprint. Both come from the
+  handle's `key_identity/1`, read once together with the public key; a key id or public
+  key in the input is ignored. So an anchor cannot name one key while being signed by
+  another: if `sign/2` signs with a different key than the snapshot names, the signature
+  check fails and the result is `{:error, :signing_failed}`. Whether the key id names
+  that key in your registry is for the verifier to check, through the
+  `BoundedAuthorityProtocol.V1.HistoricalPublicKey` it trusts.
 
-  ## Why both key identifiers come from the handle
+  ## Parameters
 
-  BAP puts `key_id` in the anchor's SIGNED header (`typ: ba+chain-anchor`) and, at
-  verify, binds it to the verifier's `HistoricalPublicKey.key_id`. Letting the
-  caller supply `key_id` would let an anchor assert "kid K" while being signed by a
-  different key. Deriving `key_id` from the same handle as `public_key` makes that
-  inconsistency impossible by construction (the one thing NOT sign-enforced — that
-  `key_id` *names* the key in any external registry — is verify-enforced by BAP).
+    * `anchor_input` — a map with `:anchor_id` (string), `:chain_id` (string),
+      `:sequence` (a non-negative integer) and `:chain_hash` (the raw 32-byte chain hash;
+      all zeros only at sequence 0).
+    * `key_handle` — the chain key's handle; calls `key_identity/1` and `sign/2`.
+    * `opts` — a map (anything else is treated as `%{}`):
+      * `:anchored_at` — the anchor's timestamp in Unix seconds; default
+        `System.system_time(:second)`. It must fall inside the key's validity window at
+        verification.
+      * `:bounds` — resource limits passed unchanged to the protocol package; default
+        `%{}`.
 
-  ## Defense-in-depth — the atomic `key_identity/1` snapshot
+  ## Errors
 
-  `sign_anchor/3` resolves `key_id` AND `public_key` in a SINGLE `key_identity/1`
-  call, so a stateful handle cannot split them across a rotation race (the
-  separate-callback design a cross-vendor review probe once exploited). The
-  remaining surface — `sign/2` signing with a key different from the snapshot's
-  `public_key` — is caught by the `verify_signature` guard in the shared tail, so
-  a post-snapshot rotation fails loudly as `:signing_failed`, never a silent
-  false-success. The one thing still NOT sign-enforced — that `key_id` *names*
-  the key in any external registry — is verify-enforced by BAP
-  (`verify_historical_anchor/3` binds `key_id` + `public_key` + `key_fingerprint`
-  together via the verifier's `HistoricalPublicKey`).
+    * `:invalid_anchor` — `anchor_input` is not a map, or a field is missing or of the
+      wrong basic type.
+    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
+      `key_identity/1`, or returned an empty key id or a public key that is not an
+      acceptable 32-byte Ed25519 key.
+    * `:signing_failed` — as for `sign_report/3`.
+    * `{:producer_error, :invalid}` — the protocol package refused the anchor, for
+      example a `chain_hash` that is not 32 bytes or an all-zero hash at a nonzero
+      sequence.
 
-  ## Options
+  ## Example
 
-    * `:anchored_at` — the anchor's timestamp (default:
-      `System.system_time(:second)`). Pin this when the verifier's evaluation time
-      is far from wall-clock so it falls inside the key's validity window.
-    * `:bounds` — resource ceilings forwarded unchanged to BAP's producer and
-      bounds-aware compact assembler (default `%{}`).
+  ```elixir
+  chain_key = {MyApp.DevKey, {:holder, "audit-chain-key-1"}}
 
-  ## Errors (closed-atom set — no key material or anchor content in errors)
+  {:ok, %{anchor: _anchor}} =
+    BoundedAuthorityReportAdapter.sign_anchor(
+      %{
+        anchor_id: "urn:example:anchor:audit-log-42",
+        chain_id: "urn:example:chain:audit-log",
+        sequence: 42,
+        chain_hash: :crypto.hash(:sha256, "audit log entries 1 through 42")
+      },
+      chain_key,
+      %{anchored_at: now}
+    )
 
-    * `:invalid_anchor` — a required content field is missing or malformed.
-    * `:invalid_key_handle` — the handle is malformed, lacks `key_identity/1`, or its
-      `public_key/1` / `key_identity/1` rejected / returned an invalid value (including a
-      key BAP's strict Ed25519 rule refuses: small-order, non-canonical, or not on the
-      curve).
-    * `:signing_failed` — the `sign/2` callback rejected, returned a non-64-byte
-      signature, violated the `{:ok, _} | {:error, _}` contract, or the signature
-      did not verify against the resolved public key.
-    * `{:producer_error, :invalid}` — BAP's producer or assembler rejected the
-      anchor (the input violated a bound or field constraint).
+  BoundedAuthorityReportAdapter.sign_anchor(%{anchor_id: "urn:example:anchor:43"}, chain_key)
+  #=> {:error, :invalid_anchor}
+  ```
   """
   @spec sign_anchor(anchor_input(), key_handle(), anchor_opts()) ::
           {:ok, anchor_compact()} | {:error, anchor_sign_error()}
@@ -482,82 +515,111 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   @doc """
-  Signs a grant — the issuer's authority assertion. The issuer-role instantiation of
-  the universal companion-signer tail (ADR-0006; this slice is recorded in ADR-0007).
-  Returns `%{grant: grant_compact}`, verifiable via `BoundedAuthorityProtocol.V1.verify_grant/3`
-  and envelope-compatible with `check_envelope/2` (it flows through the envelope when
-  paired with a holder proof from `sign_report/3`).
+  Signs a grant: the issuer's statement that one holder key may perform the listed
+  operations, for the listed audiences, within a time window.
 
-  ## C1 gate (ADR-0006 pre-commitment) — what it does and does NOT guarantee
+  Returns `{:ok, %{grant: grant_compact}}`. A verifier checks it with
+  `BoundedAuthorityProtocol.V1.verify_grant/3`, or together with a holder proof from
+  `sign_report/3` through `BoundedAuthorityProtocol.V1.check_envelope/2`.
 
-  `sign_grant/3` resolves the handle's atomic signing identity `{:issuer | :holder,
-  key_id, public_key}` from ONE `signing_identity/1` call. If the resolved role is not
-  `:issuer` (or the callback is absent), it returns `{:error, :invalid_key_handle}`
-  BEFORE `sign/2` is called — so a handle that declares `:holder` (or implements no
-  `signing_identity/1`) cannot sign a grant through this API. That is the C1
-  pre-commitment realized structurally.
+  ## The issuer-role gate
 
-  This is NOT cryptographic key-role separation. A handle that consistently
-  mis-declares its role — whose `signing_identity/1` returns
-  `{:issuer, holder_key_id, holder_public_key}` while `sign/2` holds the matching
-  holder private key — signs a grant successfully, because every value is internally
-  consistent. The adapter resolves only the handle's `public_key` and signs against
-  it; it cannot prove key identity. Key-role separation (an issuer key and a holder
-  key are cryptographically distinct custodied entities) is the key-custody
-  boundary's job — the runtime / HSM / key server behind the handle (charter §4).
+  The handle's `signing_identity/1` returns `{role, key_id, public_key}` in one call. This
+  function signs only when the role is `:issuer`; a handle that declares `:holder`, or
+  has no `signing_identity/1`, gets `{:error, :invalid_key_handle}` before `sign/2` is
+  called. The grant's `kid` header is the `key_id` from that call; a `:key_id` in the
+  input is ignored.
 
-  ## Key-identifier sourcing (ADR-0006 decision 3)
+  The gate checks a declaration; it cannot prove which key the handle holds. A handle
+  that returns `:issuer` for a holder's key, and signs with that key, signs a grant.
+  Keeping issuer keys in issuer custody is the custody layer's job, and the verifier's
+  trusted issuer key is the real boundary.
 
-  The grant's signed-header `kid` (`key_id`) comes from the atomic `signing_identity/1`
-  snapshot, NEVER from caller input — a caller-supplied `:key_id` in the grant map is
-  ignored. `holder_thumbprint` IS caller-supplied (the grant's subject — the holder the
-  capability is issued to; the issuer knows it at minting).
+  ## The role-attestation gate (optional)
 
-  ## RA11: the BA-attested role gate (optional; ADR-0008, BAP 0.6.0)
+  With the `:role_attestation` option, the declared role must also be backed by a role
+  attestation (`bap-role-attestation/1`) signed by an attestor the caller trusts. The
+  function calls `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` with
+  the subject taken from the handle's `signing_identity/1` result, never from the option,
+  so a handle cannot present another key's attestation. The protocol package checks the
+  attestor's signature, the subject, that the attestor is not attesting its own key, that
+  the attestation's window lies inside the attestor key's validity window, and that
+  `now` falls in `[nbf, exp)`. This function then requires the attested role to be
+  `"issuer"`. All of it happens before `sign/2` is called. Without the option, only the
+  declaration gate applies.
 
-  Supplying `:role_attestation` STRENGTHENS the C1 gate from a handle self-declaration to a
-  BA-asserted, cryptographically-signed role binding. The caller provides the BA-signed
-  attestation compact (`bap-role-attestation/1`) and the trusted attestor context (the BA
-  trust-root, a `BoundedAuthorityProtocol.V1.HistoricalPublicKey`); the gate calls
-  `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` with the expected
-  subject binding taken from the handle's ATOMIC `signing_identity/1` snapshot — NEVER from
-  caller input — so a handle cannot present another key's attestation. BAP proves the BA
-  signature, the subject binding, structural self-attestation rejection, attestation-window
-  containment in the attestor key window, and the half-open `[nbf, exp)` now-window (under
-  the caller's `:bounds`); this gate adds the role requirement (the attested role must be
-  `"issuer"`). The gate fires BEFORE `sign/2` and before any BAP producer call. Absent the
-  option, the declaration-only C1 gate stands unchanged. This is a sign-time GATING verify,
-  not content verification (charter §3 as sharpened by ADR-0008).
+  ## Parameters
 
-  ## Options
+    * `grant_input` — a map with `:issuer` (string), `:grant_id` (string), `:audiences`
+      (a non-empty list of strings), `:issued_at`, `:not_before` and `:expires_at`
+      (integers, Unix seconds), `:holder_thumbprint` (the holder key's raw 32-byte
+      RFC 7638 thumbprint) and `:operations` (a non-empty list of
+      `BoundedAuthorityProtocol.V1.Operation` structs). The protocol package checks the
+      values: identifier grammar, a coherent time window, unique operation names.
+    * `key_handle` — the issuer's handle; calls `signing_identity/1` and `sign/2`.
+    * `opts` — a map (anything else is treated as `%{}`, except that a keyword list's
+      `:role_attestation` is still honored):
+      * `:bounds` — resource limits passed unchanged to the protocol package; default
+        `%{}`, the protocol's maximums.
+      * `:role_attestation` — `%{compact: binary(), attestor:
+        BoundedAuthorityProtocol.V1.HistoricalPublicKey.t(), now: integer()}`: the
+        attestation compact, the trusted attestor key with its validity window, and the
+        evaluation time in Unix seconds (default `System.system_time(:second)`). `:now`
+        is a trust input: it decides which instant the attestation must cover, so a
+        caller that chooses a past `:now` accepts an attestation that has since expired.
+        Other keys are ignored.
 
-    * `:bounds` — resource ceilings forwarded unchanged to BAP's producer and
-      bounds-aware compact assembler (default `%{}`).
-    * `:role_attestation` (optional) — `%{compact: binary(), attestor:
-      BoundedAuthorityProtocol.V1.HistoricalPublicKey.t(), now: integer()}` — the BA-signed
-      role attestation and trust-root consumed by the RA11 gate. `:now` defaults to the
-      sign-time clock (`System.system_time/1`, seconds); supply it explicitly for
-      deterministic evaluation — and treat it as the TRUST INPUT it is: it selects which
-      instant the attestation window must cover, exactly as the attestor trust-root does;
-      a caller-chosen `:now` inside a stale attestation's window accepts that attestation
-      by that choice. Extra keys (including decoy `subject_key_id` /
-      `subject_public_key`) are ignored — the subject binding is always the handle
-      snapshot's.
+  ## Errors
 
-  ## Errors (closed-atom set — no key material or grant content in errors)
+    * `:invalid_grant` — `grant_input` is not a map, or a field is missing or of the
+      wrong basic type (including an empty or improper `:audiences` list or an empty
+      `:operations` list).
+    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
+      `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
+      snapshot or a public key the strict Ed25519 rule refuses.
+    * `:invalid_role_attestation` — the option is malformed (including an explicit
+      `nil`), the protocol package rejected the attestation, or the attested role is not
+      `"issuer"`.
+    * `:signing_failed` — `sign/2` failed, returned something other than a 64-byte
+      signature, or returned a signature that does not verify against the snapshot's
+      public key.
+    * `{:producer_error, :invalid}` — the protocol package refused the grant, for example
+      an inverted time window or a `holder_thumbprint` that is not 32 bytes.
 
-    * `:invalid_grant` — a required grant field is missing or malformed.
-    * `:invalid_key_handle` — the handle is malformed, lacks `signing_identity/1`, the
-      resolved role is not `:issuer`, or the snapshot returned an invalid value (including a
-      key BAP's strict Ed25519 rule refuses: small-order, non-canonical, or not on the
-      curve).
-    * `:invalid_role_attestation` — the `:role_attestation` option is malformed, or BAP's
-      `verify_attestation/2` rejected it (BA signature, subject binding, self-attestation,
-      window containment, now-window) or the attested role is not `"issuer"`.
-    * `:signing_failed` — `sign/2` rejected, returned a non-64-byte signature, violated
-      the `{:ok, _} | {:error, _}` contract, or the signature did not verify against the
-      snapshot's `public_key`.
-    * `{:producer_error, :invalid}` — BAP's producer or assembler rejected the grant.
+  ## Example
+
+  ```elixir
+  grant_input = %{
+    issuer: "https://issuer.example",
+    grant_id: "urn:example:grant:archive-2",
+    audiences: ["https://records.example"],
+    issued_at: now,
+    not_before: now,
+    expires_at: now + 3600,
+    holder_thumbprint: holder_thumbprint,
+    operations: [%V1.Operation{name: "archive_document", selectors: [:all]}]
+  }
+
+  {:ok, %{grant: new_grant}} = BoundedAuthorityReportAdapter.sign_grant(grant_input, issuer)
+
+  {:ok, issuer_public_key} = MyApp.DevKey.public_key({:issuer, "issuer-key-1"})
+
+  {:ok, _grant_facts} =
+    V1.verify_grant(
+      new_grant,
+      %V1.TrustedIssuer{key_id: "issuer-key-1", public_key: issuer_public_key},
+      %V1.ExpectedGrant{
+        issuer: "https://issuer.example",
+        audience: "https://records.example",
+        evaluation_time: now,
+        clock_skew: 60,
+        bounds: V1.Bounds.maximum()
+      }
+    )
+
+  BoundedAuthorityReportAdapter.sign_grant(grant_input, holder)
+  #=> {:error, :invalid_key_handle}
+  ```
   """
   @spec sign_grant(grant_input(), key_handle(), grant_opts()) ::
           {:ok, grant_compact()} | {:error, grant_sign_error()}
@@ -664,48 +726,60 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   @doc """
-  Signs a key transition — the current (retiring) key's assertion of its successor.
-  The 4th instantiation of the universal companion-signer tail (ADR-0006; recorded in
-  ADR-0009), mirroring `sign_anchor/3`: role-agnostic, the current key's identity resolved
-  atomically via `key_identity/1`. Returns `%{key_transition: compact}`, verifiable via
+  Signs a key transition: the retiring key's signed statement naming its successor.
+
+  Returns `{:ok, %{key_transition: compact}}`. A verifier checks it with
   `BoundedAuthorityProtocol.V1.verify_key_transition/4`.
 
-  ## Role posture (why this mirrors sign_anchor/3, not sign_grant/3)
+  The current (retiring) key's id and public key come from the handle's `key_identity/1`,
+  read once; `:current_key_id` or `:current_public_key` in the input is ignored. The
+  successor's id and public key come from the input. Like `sign_anchor/3`, this function
+  checks no role: the signature by the current key is what makes the transition
+  authentic, and the verifier decides whether it trusts that key.
 
-  A key transition is a historical-key operation (an artifact of the key chain), verified
-  via `HistoricalPublicKey` — the same role-neutral input `verify_historical_anchor/3`
-  takes. The transition's authenticity is guaranteed by the signature against
-  `current_key.public_key`, not by a role binding; "the right key" is the current key
-  (charter §5). The adapter signs for whichever party holds it, per ADR-0006's universal
-  posture. The deployment reality (the retired key is an issuer key) is a custody property,
-  not something a signing-side role gate adds to — the verifier-side `HistoricalPublicKey`
-  check is the authority binding. See ADR-0009 §Decision.
+  ## Parameters
 
-  ## Key-identifier sourcing (ADR-0006 decision 3)
+    * `transition_input` — a map with `:transition_id` (string), `:chain_id` (string),
+      `:effective_at` (integer, Unix seconds), `:next_key_id` (string) and
+      `:next_public_key` (the successor's raw 32-byte Ed25519 public key).
+    * `key_handle` — the current key's handle; calls `key_identity/1` and `sign/2`.
+    * `opts` — a map (anything else is treated as `%{}`) with `:bounds`, passed unchanged
+      to the protocol package; default `%{}`.
 
-  `current_{key_id, public_key}` come from ONE atomic `key_identity/1` snapshot (the
-  signing key IS the retiring current key; same as `sign_anchor/3`'s kid+pub). A
-  caller-supplied `:current_key_id` / `:current_public_key` is ignored.
-  `next_{key_id, public_key}` are caller-supplied (the successor).
+  ## Errors
 
-  ## Options
+    * `:invalid_transition` — `transition_input` is not a map, a field is missing or of
+      the wrong basic type, or `:next_public_key` is not 32 bytes.
+    * `:invalid_key_handle` — as for `sign_anchor/3`.
+    * `:signing_failed` — as for `sign_report/3`.
+    * `{:producer_error, :invalid}` — the protocol package refused the transition, for
+      example a successor key equal to the current key.
 
-    * `:bounds` — resource ceilings forwarded unchanged to BAP's producer and
-      bounds-aware compact assembler (default `%{}`).
+  ## Example
 
-  ## Errors (closed-atom set — no key material or transition content in errors)
+  ```elixir
+  current_key = {MyApp.DevKey, {:holder, "audit-chain-key-1"}}
+  {:ok, next_public_key} = MyApp.DevKey.public_key({:holder, "audit-chain-key-2"})
 
-    * `:invalid_transition` — a required content field is missing, or `next_public_key` is
-      not a 32-byte Ed25519 key.
-    * `:invalid_key_handle` — the handle is malformed, lacks `key_identity/1`, or its
-      `key_identity/1` rejected / returned an invalid value (including a key BAP's strict
-      Ed25519 rule refuses: small-order, non-canonical, or not on the curve).
-    * `:signing_failed` — `sign/2` rejected, returned a non-64-byte signature, violated the
-      `{:ok, _} | {:error, _}` contract, or the signature did not verify against the
-      snapshot's `public_key`.
-    * `{:producer_error, :invalid}` — BAP's producer or assembler rejected the transition
-      (e.g. a self-transition where `next_public_key == current_public_key`, which BAP's
-      `distinct_fingerprints` check rejects).
+  transition = %{
+    transition_id: "urn:example:transition:audit-log-1",
+    chain_id: "urn:example:chain:audit-log",
+    effective_at: now,
+    next_key_id: "audit-chain-key-2",
+    next_public_key: next_public_key
+  }
+
+  {:ok, %{key_transition: _compact}} =
+    BoundedAuthorityReportAdapter.sign_key_transition(transition, current_key)
+
+  {:ok, current_public_key} = MyApp.DevKey.public_key({:holder, "audit-chain-key-1"})
+
+  BoundedAuthorityReportAdapter.sign_key_transition(
+    %{transition | next_public_key: current_public_key},
+    current_key
+  )
+  #=> {:error, {:producer_error, :invalid}}
+  ```
   """
   @spec sign_key_transition(transition_input(), key_handle(), transition_opts()) ::
           {:ok, transition_compact()} | {:error, transition_sign_error()}
@@ -736,26 +810,74 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   @doc """
-  Signs a standalone digest-bound content assertion with an atomic key identity.
+  Signs a content assertion: a standalone statement binding the SHA-256 digest of exact
+  content bytes to an issuer, an audience, a lineage subject, a semantic profile, a
+  validity window and a predecessor.
 
-  The caller supplies `jti`, `iss`, `aud`, `sub`, `profile`, `profile_digest`,
-  `content_digest`, `gen`, `prev`, `iat`, `nbf`, and `exp`. Digests are raw
-  32-byte values. The protected key identifier comes only from `key_identity/1`;
-  caller identity aliases and version fields are ignored. No grant, role
-  declaration, or role attestation is required for this non-authorizing object.
+  Returns `{:ok, %{content_assertion: compact}}`. A consumer checks it with
+  `BoundedAuthorityProtocol.ContentAssertion.V1.verify_assertion/2`, supplying the
+  trusted key, the expected context and the digest of the bytes it holds. The assertion
+  grants nothing; it says only that this key signed this digest under these terms.
 
-  BAP owns the typed producer, semantic validation, deterministic bytes and
-  compact assembly. The adapter checks input scalar shapes, signs the produced
-  message, and applies its shared wrong-key guard against the snapshot public key.
-  It does not interpret content, schemas, trust, successor history or authority.
-  `:bounds` is forwarded unchanged to both producer and assembler; omitted bounds
-  use `%{}`. Options must be a plain map; malformed options fail closed.
+  The protected key id comes from the handle's `key_identity/1`, read once with the
+  public key; an identity field in the input is ignored. This function does not read
+  the content, interpret the profile, check a predecessor or consult a role. The
+  protocol package checks the values (digest sizes, the first-in-lineage rule, the time
+  window) when it produces the signing input.
 
-  Returns `{:ok, %{content_assertion: compact}}`. Closed errors are
-  `:invalid_content_assertion` for malformed options or missing or incorrectly typed input fields,
-  `:invalid_key_handle` for key-identity failure (including a key BAP's strict Ed25519 rule
-  refuses), `:signing_failed` for signing or
-  wrong-key failure, and `{:producer_error, :invalid}` for BAP rejection.
+  ## Parameters
+
+    * `assertion_input` — a map with `:jti`, `:iss`, `:aud`, `:sub` and `:profile`
+      (strings), `:profile_digest` and `:content_digest` (raw 32-byte SHA-256 digests;
+      compute the content digest with
+      `BoundedAuthorityProtocol.ContentAssertion.V1.content_digest/2`), `:gen` (the
+      position in the lineage, 1 for the first), `:prev` (the previous assertion's
+      digest, or 32 zero bytes when `gen` is 1), and `:iat`, `:nbf` and `:exp`
+      (integers, Unix seconds).
+    * `key_handle` — the signer's handle; calls `key_identity/1` and `sign/2`.
+    * `opts` — a map with `:bounds`, passed unchanged to the protocol package; default
+      `%{}`. Unlike the other entry points, any other `opts` value is an error.
+
+  ## Errors
+
+    * `:invalid_content_assertion` — `opts` is not a map, or `assertion_input` is not a
+      map or has a field that is missing or of the wrong basic type.
+    * `:invalid_key_handle` — as for `sign_anchor/3`.
+    * `:signing_failed` — as for `sign_report/3`.
+    * `{:producer_error, :invalid}` — the protocol package refused the assertion, for
+      example a digest that is not 32 bytes, a nonzero `prev` at `gen: 1`, or an
+      inverted window.
+
+  ## Example
+
+  ```elixir
+  alias BoundedAuthorityProtocol.ContentAssertion
+
+  {:ok, content_digest} = ContentAssertion.V1.content_digest("2026 field survey, final", %{})
+
+  input = %{
+    jti: "urn:example:assertion:survey-1",
+    iss: "urn:example:research-group",
+    aud: "urn:example:journal",
+    sub: "urn:example:dataset:field-survey",
+    profile: "urn:example:profile:survey/1",
+    profile_digest: :crypto.hash(:sha256, "survey profile, version 1"),
+    content_digest: content_digest,
+    gen: 1,
+    prev: <<0::256>>,
+    iat: now,
+    nbf: now,
+    exp: now + 3600
+  }
+
+  signer = {MyApp.DevKey, {:holder, "research-key-1"}}
+
+  {:ok, %{content_assertion: _compact}} =
+    BoundedAuthorityReportAdapter.sign_content_assertion(input, signer)
+
+  BoundedAuthorityReportAdapter.sign_content_assertion(input, signer, bounds: %{})
+  #=> {:error, :invalid_content_assertion}
+  ```
   """
   @spec sign_content_assertion(content_assertion_input(), key_handle(), content_assertion_opts()) ::
           {:ok, content_assertion_compact()} | {:error, content_assertion_sign_error()}
@@ -1340,70 +1462,71 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   @doc """
-  Signs `message` for `handle`'s key and returns the raw 64-byte signature:
-  an Ed25519 signature under this module's (major-1) entry points, the
-  RFC 7518 §3.4 raw `r || s` form under the `.V3` entry points (DER is
-  rejected there — convert before returning; the adapter normalizes low-S).
+  Signs `message` with the handle's private key and returns the raw 64-byte signature.
 
-  The holder's callback performs the actual `:crypto.sign`; the adapter never
-  references the private key.
+  Under this module's entry points the signature is Ed25519. Under
+  `BoundedAuthorityReportAdapter.V3` it is ES256 in the raw `r || s` form of RFC 7518
+  §3.4: two 32-byte big-endian integers. A DER-encoded ECDSA signature (what
+  `:crypto.sign/4` returns) is refused, so convert it first; a high-S signature is
+  accepted and converted to low-S.
+
+  The adapter checks the returned signature against the handle's public key before it
+  uses it. Any return other than `{:ok, <<_::512>>}` is `{:error, :signing_failed}`.
   """
   @callback sign(message :: binary(), handle :: term()) ::
               {:ok, binary()} | {:error, term()}
 
   @doc """
-  Returns the handle's raw public key: the 32-byte raw Ed25519 public key
-  under this module's (major-1) entry points, or the 65-byte
-  uncompressed-SEC1 P-256 point (`0x04 || x || y`) under the `.V3` entry
-  points. The wire shape is the key-type discriminator (ADR-0021) — each
-  major's resolvers accept exactly their shape and reject the other.
+  Returns the handle's public key: a raw 32-byte Ed25519 key under this module's entry
+  points, or a 65-byte uncompressed SEC1 P-256 point (`0x04 || x || y`) under
+  `BoundedAuthorityReportAdapter.V3`. The key's shape selects the surface: each surface
+  accepts its own shape and refuses the other.
 
-  An Ed25519 key must also pass BAP's strict acceptance
-  (`BoundedAuthorityProtocol.Ed25519.acceptable_public_key?/1`): canonical, on the
-  curve, and not one of the eight small-order points. Any other 32-byte string is
-  refused as `:invalid_key_handle` before `sign/2` is called, by every entry point
-  that resolves a key (the same applies to `key_identity/1` and `signing_identity/1`).
+  An Ed25519 key must also pass the protocol's strict acceptance rule
+  (`BoundedAuthorityProtocol.Ed25519.acceptable_public_key?/1`): a canonical encoding of a
+  point on the curve that is not one of the eight small-order points. A P-256 key must be
+  on the curve. Any other key is refused with `{:error, :invalid_key_handle}` before
+  `sign/2` is called. The same rules apply to the keys `key_identity/1` and
+  `signing_identity/1` return.
   """
   @callback public_key(handle :: term()) :: {:ok, binary()} | {:error, term()}
 
   @doc """
-  Returns the RFC 7638 thumbprint (raw 32-byte SHA-256 digest) of the
-  handle's public key, over the SUITE'S preimage: the OKP members
-  (`{"crv":"Ed25519","kty":"OKP","x":X}`) for Ed25519 keys, the EC members
-  (`{"crv":"P-256","kty":"EC","x":X,"y":Y}`) for P-256 keys. Exposed for
-  caller-side self-checking (e.g. asserting the handle matches a grant's
-  `cnf.jkt`); the adapter does NOT enforce thumbprint equality — that is
-  the verifier's job (charter §3).
+  Returns the RFC 7638 thumbprint of the handle's public key, as the raw 32-byte SHA-256
+  digest: over the OKP members (`{"crv":"Ed25519","kty":"OKP","x":X}`) for an Ed25519
+  key, or the EC members (`{"crv":"P-256","kty":"EC","x":X,"y":Y}`) for a P-256 key. An
+  issuer puts this value in a grant's `cnf.jkt`.
+
+  No entry point calls this callback. It lets callers check a handle against a grant, and
+  `mix bounded_authority_report_adapter.doctor` checks it against `public_key/1`. Compute
+  it with the protocol package's `BoundedAuthorityProtocol.V1.Jwk.encode_public/2` and
+  `BoundedAuthorityProtocol.V1.Jwk.thumbprint/2` (or the `BoundedAuthorityProtocol.V3.EcJwk`
+  pair for P-256), and decode the base64url result.
   """
   @callback thumbprint(handle :: term()) :: {:ok, binary()} | {:error, term()}
 
   @doc """
-  Returns the key's identity — its registry `kid` AND its raw public key
-  (32-byte Ed25519 under the major-1 entry points; 65-byte P-256 SEC1 under
-  `.V3`) — as a single atomic `{key_id, public_key}` snapshot. Required by
-  `sign_anchor/3`, `sign_key_transition/3`, and `sign_content_assertion/3`, which resolve both in ONE call so a
-  stateful handle cannot split `kid` from `public_key` across a rotation race
-  (defense-in-depth at sign time; any `sign/2`-vs-snapshot mismatch is then caught by
-  the `verify_signature` guard). **Optional** callback — a proof-only handle (used
-  only with `sign_report/3`) need not implement it.
+  Returns the key's registry id and its public key, `{key_id, public_key}`, from one
+  read. The key id must be a non-empty string; the public key follows the rules of
+  `c:public_key/1`.
+
+  Optional. `sign_anchor/3`, `sign_key_transition/3` and `sign_content_assertion/3`
+  require it, and refuse a handle without it with `{:error, :invalid_key_handle}`.
+  Return both values from one read of your key store: a handle that reads them
+  separately can return the id of one key version and the public key of the next.
   """
   @callback key_identity(handle :: term()) ::
               {:ok, {key_id :: binary(), public_key :: binary()}} | {:error, term()}
 
   @doc """
-  Returns the key's **signing identity** for a role-gated operation — its **role**
-  (`:issuer` or `:holder`) AND its registry `kid` AND its raw public key
-  (32-byte Ed25519 under the major-1 entry points; 65-byte P-256 SEC1 under
-  `.V3`) — as a single atomic `{:role, key_id, public_key}` snapshot. Required only by
-  `sign_grant/3`, which both (a) gates on `role == :issuer` (the C1 pre-commitment —
-  a handle that declares `:holder`, or omits this callback, is rejected before
-  `sign/2`; see `sign_grant/3`'s `@doc` for the precise property — this is
-  declaration-rejection, not cryptographic key-role separation) and (b) uses the snapshot's
-  `key_id` + `public_key` — all from ONE call, so a stateful handle cannot return
-  `:issuer` then rotate to a different key between role resolution and signing (the
-  rotation-race defense; any `sign/2`-vs-snapshot mismatch is caught by the
-  `verify_signature` guard). **Optional** callback — a proof-only or anchor-only handle
-  need not implement it (and is then rejected by `sign_grant/3` as `:invalid_key_handle`).
+  Returns the key's declared role, registry id and public key,
+  `{role, key_id, public_key}`, from one read. The role is `:issuer` or `:holder`.
+
+  Optional. Only `sign_grant/3` requires it, and it signs only when the role is
+  `:issuer`; a handle without this callback, or one that declares `:holder`, gets
+  `{:error, :invalid_key_handle}` before `sign/2` is called. The adapter cannot check that
+  the declaration is true; see `sign_grant/3` for what the gate does and does not
+  guarantee.
   """
   @callback signing_identity(handle :: term()) ::
               {:ok, {:issuer | :holder, key_id :: binary(), public_key :: binary()}}

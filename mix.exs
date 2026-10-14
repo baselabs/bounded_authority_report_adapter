@@ -37,10 +37,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       docs: docs(),
       name: "Bounded Authority Report Adapter",
       description:
-        "Holder-side companion signer for the Bounded Authority Protocol — signs protocol " <>
-          "objects (holder proofs, boundary anchors, grants, key transitions) through a local " <>
-          "key handle over the protocol's deterministic signing inputs. The private key never " <>
-          "enters the library.",
+        "Signer for the Bounded Authority Protocol: signs holder proofs, grants, boundary " <>
+          "anchors, key transitions and content assertions (Ed25519 and ES256) through your " <>
+          "key handle, over the protocol's deterministic signing inputs. The private key " <>
+          "never enters the library.",
       source_url: @source_url,
       homepage_url: @source_url,
       aliases: aliases()

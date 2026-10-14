@@ -5,7 +5,7 @@
 ### Changed
 
 - The protocol dependency is now a range with a security floor, `~> 0.8.0`, replacing the
-  exact `== 0.8.0` (owner ruling, October 6, 2026; amendment to ADR-0023). Libraries declare
+  exact `== 0.8.0` (amendment to ADR-0023, October 6, 2026). Libraries declare
   ranges and only applications lock exact versions. The floor is BAP 0.8.0, which carries the
   strict Ed25519 rule this library calls, so BAP 0.7.x never resolves; the ceiling is the next
   protocol minor (exclusive). Both project locks stay at BAP 0.8.0 and no wire byte, API or
@@ -33,8 +33,38 @@
   through BAP's documented `V3.check_envelope/2` (ADR-0021 amendment), and the request-digest tag
   test calls `V1.request_digest/3`.
 
+### Documentation
+
+- The README quick start now runs as written: a development key handle, an issuer signing
+  a grant, a holder signing a proof, and a verifier checking the envelope. The getting-started
+  guide walks the same loop step by step; the consumer-integration guide's verifier is a
+  complete module; the telemetry guide's handler, the HSM, KMS and Plug recipes and the
+  content-assertion example run as written. Excerpts that cannot run on their own are
+  labeled as fragments.
+- Every public signing function's documentation lists its parameters, options, return
+  value and closed error set, with an example; `BoundedAuthorityReportAdapter.V3`'s
+  documentation adds a development P-256 key handle showing the DER-to-raw conversion.
+  The `Telemetry` functions have doctests.
+- Corrected: a malformed `invocation_id` is refused at signing time as
+  `{:producer_error, :invalid}` (the getting-started guide said the verifier would reject
+  it); `docs/errors.md` now lists the wrong-major `:invalid_report` case, the full set of
+  error types, and the `V3` differences, including `V3.sign_grant/3` refusing the
+  `:role_attestation` option; the stability contract, telemetry and usage-rules pages
+  cover `sign_content_assertion/3` and the `V3` entry points; usage rule 11 describes the
+  protocol range instead of an exact pin; `CONTRIBUTING.md` runs `MIX_ENV=test mix ci`.
+- The package description names every object the library signs.
+- Example operation names, URIs and values span several domains, and the guides no longer
+  use internal planning identifiers.
+
 ### Added
 
+- `test/doc_samples_test.exs` runs every Elixir code block in the README and the guides, in
+  order, and every example in the API documentation, and checks each `#=> value` line. A
+  block that is marked as a fragment must parse; a fragment-only page may not carry an
+  unmarked block. It also runs the consumer-integration verifier against a real envelope
+  (accepted) and against a different identity, a different body and a missing header
+  (rejected), and checks that the README and getting-started define the same development
+  key handle.
 - `test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` runs the Livebook's cells
   against the repository source and compares each returned value with the output pinned under
   the cell; the evaluated-cell count must equal the pinned-output count. It also fails when a

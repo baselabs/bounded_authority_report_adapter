@@ -4,7 +4,7 @@ defmodule EdgeAgent do
   application that calls `BoundedAuthorityReportAdapter.sign_report/3` and ships
   the envelope over HTTP.
 
-  `run/0` is the one-shot loop the ROADMAP RA9 acceptance names: read a grant +
+  `run/0` is the one-shot loop: read a grant and a
   holder key (config-driven), sign a proof over the configured report, POST the
   raw report body + the `{grant, proof}` envelope to the receiver URL. Run it with
   `mix run -e EdgeAgent.run` once the receiver (`EdgeAgent.Receiver.start`) is

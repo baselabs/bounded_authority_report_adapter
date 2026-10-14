@@ -44,8 +44,8 @@ Migration notes:
   `:content_assertion` object and maps that error to `:invalid_input`.
 - **Code that builds `%BoundedAuthorityProtocol.V1.Bounds{}` literally** must add the new
   `content_bytes` key (a BAP 0.7.0 change); override maps are unaffected.
-- **Pin policy:** BARA now follows published BAP releases directly (ADR-0023); the
-  authority runtime adopts BAP and BARA on its own schedule.
+- **Pin policy:** this package now follows published protocol releases directly
+  (ADR-0023); consumers adopt protocol and adapter releases on their own schedules.
 
 ## 0.8.1 — the documentation-truth patch
 
@@ -54,19 +54,19 @@ the `~> 0.7.0` install pin; 0.8.1 republishes with the pin reading `~> 0.8.0`. N
 code, API, or dependency change — nothing for a consumer to do beyond preferring
 0.8.1's docs.
 
-## 0.8.0 — the BA-attested role gate (RA11) and the BAP 0.6.0 pin
+## 0.8.0 — the role-attestation gate and the BAP 0.6.0 pin
 
-0.8.0 adds the optional `:role_attestation` input to `sign_grant/3` (ADR-0008, accepted;
-RA11): a BA-signed `bap-role-attestation/1` compact plus the caller-trusted attestor
-context gate grant signing on the BA-attested role being `"issuer"` and the attested
-subject matching the handle's atomic signing identity — before `sign/2` is ever called.
+0.8.0 adds the optional `:role_attestation` input to `sign_grant/3` (ADR-0008): an
+authority-signed `bap-role-attestation/1` compact plus the caller-trusted attestor key
+gate grant signing on the attested role being `"issuer"` and the attested subject
+matching the handle's atomic signing identity, before `sign/2` is ever called.
 The exact protocol pin moves to `0.6.0` (the role-attestation release; additive, no
 verdict changes on existing input).
 
 Migration notes:
 
 - **Nothing changes for callers that do not supply `:role_attestation`.** The
-  declaration-only C1 gate and every existing verdict are unchanged; `mix deps.update`
+  declaration-only issuer-role gate and every existing verdict are unchanged; `mix deps.update`
   under the new pin is the whole migration for existing consumers.
 - **The gate binds to the handle snapshot, never caller input**: decoy
   `subject_key_id` / `subject_public_key` keys in the option are ignored, a keyword-list
@@ -91,11 +91,9 @@ Migration notes:
 - **One deliberate v1 tightening:** `sign_report/3` and
   `sign_local_loopback_report/3` now reject a `grant_compact` that is not a
   v1 grant — a v2 or v3 grant, or a malformed compact — with
-  `{:error, :invalid_report}` at the producer, instead of emitting an
-  envelope that fails downstream at check_envelope/2 (the protocol package's
-verifier). Callers that
-  (deliberately) fed foreign-major grants will see the earlier, cleaner
-  error.
+  `{:error, :invalid_report}` before signing, instead of emitting an
+  envelope that `BoundedAuthorityProtocol.V1.check_envelope/2` later rejects.
+  Callers that fed grants of another major see the earlier, clearer error.
 - **v3 handles** return the 65-byte uncompressed-SEC1 public key and the
   64-byte raw `r || s` signature (DER is rejected as `:signing_failed`;
   convert at the handle). See `docs/recipes.md`'s P-256 sibling and the
@@ -103,7 +101,7 @@ verifier). Callers that
 
 ## 0.6.3
 
-The protocol pin moves to `bounded_authority_protocol == 0.4.1` — the 2026-09-17 protocol
+The protocol pin moves to `bounded_authority_protocol == 0.4.1` — the September 17, 2026 protocol
 release is wire-identical to 0.4.0 (docs and tooling only), so no signing or verification
 behavior changes; consumers gain nothing functional and lose nothing by staying on 0.6.2 with
 protocol 0.4.0 until they choose to move. Also in 0.6.3: the spitfire 0.4.2 transitive and the
@@ -141,14 +139,14 @@ both mix projects; dev-only dependency bumps: `dialyxir` 1.4.8, `ex_doc` 0.40.4
 ## 0.6.0
 
 The protocol dependency now selects `bounded_authority_protocol == 0.4.0` exactly
-(from `== 0.3.0`; released 2026-09-14). BAP 0.4.0 is additive — the v2 contract-major
+(from `== 0.3.0`; released September 14, 2026). BAP 0.4.0 is additive — the v2 contract-major
 lands beside the byte-frozen v1 profile — so this is a package-resolution break for
 consumers retaining BAP 0.3.x, with zero adapter behavior change. (The protocol's
-0.4.1 — a wire-identical tooling/docs patch — arrived with BARA 0.6.3 below.) The four signing APIs, return shapes,
+0.4.1, a wire-identical tooling and docs patch, arrived with adapter 0.6.3 above.) The four signing APIs, return shapes,
 key-handle contract, telemetry, and produced V1 wire forms are unchanged.
 
 Run `mix deps.get` and confirm your lock contains one BAP 0.4.0 entry. Do not
-override BARA back to BAP 0.3.x or retain parallel BAP lines.
+override this package back to BAP 0.3.x or retain parallel BAP lines.
 
 ## 0.5.0
 
@@ -169,29 +167,29 @@ plain HTTP (no TLS, not equivalent to HTTPS); the verifying host owns nonce
 reservation, replay control, and listener-derived target state.
 
 Run `mix deps.get` and confirm your lock contains one BAP 0.3.0 entry. Do not
-override BARA back to BAP 0.2.x or retain parallel BAP lines.
+override this package back to BAP 0.2.x or retain parallel BAP lines.
 
 ## 0.4.0
 
 The protocol dependency now selects `bounded_authority_protocol == 0.2.0`
-exactly, matching the authority suite's recertified protocol identity. This is a
+exactly. This is a
 pre-1.0 minor release because consumers retaining BAP 0.1.x cannot solve the new
-exact dependency line. BARA's four signing APIs, return shapes, key-handle
+exact dependency line. The adapter's four signing APIs, return shapes, key-handle
 contract, telemetry, and produced V1 wire forms are unchanged.
 
 Run `mix deps.get` and confirm your lock contains one BAP 0.2.0 entry. Do not
-override BARA back to BAP 0.1.x or retain parallel BAP lines.
+override this package back to BAP 0.1.x or retain parallel BAP lines.
 
 ## 0.3.0
 
 Pre-1.0 feature release carrying everything the proposed
-[stability contract](#the-proposed-10-stability-contract) enumerates: the value-free
+[stability contract](#proposed-stability-contract) enumerates: the value-free
 telemetry surface, the gate battery (coverage floor, dialyzer, doc warnings,
 dependency audits), the package boundary check, the three-cell CI matrix, the
 full guide set, the Igniter installer, the doctor preflight, and the
-supply-chain workflow. The contract itself is NOT yet operative — 1.0 is
-deferred until the release sees real consumer use (owner direction, 2026-08-26);
-until then the pre-1.0 SemVer §4 policy applies.
+supply-chain workflow. The contract itself is not yet in force: 1.0 waits until
+the release line sees real consumer use, and until then the pre-1.0 SemVer §4 policy
+applies.
 
 ## 0.2.1
 
@@ -200,29 +198,33 @@ until then the pre-1.0 SemVer §4 policy applies.
 
 ## 0.2.0
 
-- The protocol dependency moved from a git pin to the public Hex package
-  (`~> 0.1.1` at the time). Lockfiles that referenced the private git remote should
+- The protocol dependency moved from a git dependency to the public Hex package
+  (`~> 0.1.1` at the time). Lockfiles that referenced the git remote should
   `mix deps.get` fresh.
 
-## The (proposed) 1.0 stability contract
+## Proposed stability contract
 
-PROPOSED, not yet operative — 1.0 is deferred until this release line sees real
-consumer use and the surface settles (owner direction, 2026-08-26). When 1.0 is
-cut, the following becomes the PUBLIC SURFACE — breaking changes to it then
-require a major version (SemVer §4's pre-1.0 carve-out ends):
+Proposed, not yet in force: 1.0 waits until this release line sees real consumer use
+and the surface settles. When 1.0 is cut, the following becomes the public surface, and
+breaking changes to it then require a major version (SemVer §4's pre-1.0 carve-out
+ends):
 
-- The five signing functions and their return shapes:
+- The six major-1 signing functions and their return shapes:
   `sign_report/3` → `{:ok, %{grant: binary, proof: binary}}`,
   `sign_local_loopback_report/3` → `{:ok, %{grant: binary, proof: binary}}`,
   `sign_anchor/3` → `{:ok, %{anchor: binary}}`,
   `sign_grant/3` → `{:ok, %{grant: binary}}`,
   `sign_key_transition/3` → `{:ok, %{key_transition: binary}}`,
-  and their `@spec` input maps (`report()`, `local_loopback_report()`,
-  `anchor_input()`, `grant_input()`, `transition_input()` + the opts maps).
-- The four closed error sets — `sign_error/0`, `anchor_sign_error/0`, `grant_sign_error/0`,
-  `transition_sign_error/0` — including the fixed `{:producer_error, :invalid}` tuple
-  shape (the local-loopback entry point shares `sign_error/0`).
-- The key-handle behaviour: `sign/2`, `public_key/1`, `thumbprint/1`, `key_identity/1`,
+  `sign_content_assertion/3` → `{:ok, %{content_assertion: binary}}`,
+  the four `BoundedAuthorityReportAdapter.V3` functions with the same return shapes as
+  their major-1 namesakes, and their `@spec` input maps (`report()`,
+  `local_loopback_report()`, `anchor_input()`, `grant_input()`, `transition_input()`,
+  `content_assertion_input()` and the options maps).
+- The closed error sets: `sign_error/0`, `anchor_sign_error/0`, `grant_sign_error/0`,
+  `transition_sign_error/0` and `content_assertion_sign_error/0`, and `V3`'s matching
+  types, including the fixed `{:producer_error, :invalid}` tuple shape (the
+  local-loopback entry point shares `sign_error/0`).
+- The key-handle behavior: `sign/2`, `public_key/1`, `thumbprint/1`, `key_identity/1`,
   `signing_identity/1` and their `{:ok, _} | {:error, _}` contracts.
 - The telemetry surface: `BoundedAuthorityReportAdapter.Telemetry`'s public functions
   (`Telemetry.sign_span/2`, `Telemetry.emit_start/1`, `Telemetry.emit_stop/3`, `Telemetry.objects/0`, `Telemetry.classes/0` — the `BoundedAuthorityReportAdapter.Telemetry` module), the two event

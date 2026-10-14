@@ -1,13 +1,12 @@
 defmodule BoundedAuthorityReportAdapter.Telemetry do
   @moduledoc """
-  The closed, value-free telemetry surface for the signing entry points (ten
-  across the two suite surfaces; six object KINDS — the axis names the object
-  kind, never the entry point or the major).
+  The closed, value-free telemetry surface of the signing entry points: ten entry points
+  across the two suite surfaces, six object kinds. The object names the kind of object
+  signed, never the entry point or the suite.
 
-  The library emits events but does NOT attach a handler — a fresh application
-  sees nothing until it attaches one (`:telemetry.attach/4` or a
-  `Telemetry.Metrics` reporter; `docs/telemetry.md` carries the runnable
-  example). What is emitted is deliberately tiny:
+  The library emits events but does not attach a handler; an application sees nothing
+  until it attaches one (`:telemetry.attach_many/4` or a `Telemetry.Metrics` reporter; the
+  telemetry guide has a runnable handler). Two events are emitted:
 
     * `[:bounded_authority_report_adapter, :sign, :start]` —
       measurements `%{count: 1}`, metadata `%{object: object}`.
@@ -40,11 +39,21 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   @objects [:report, :anchor, :grant, :key_transition, :local_loopback_report, :content_assertion]
   @classes [:ok, :invalid_input, :invalid_key_handle, :signing_failed, :producer_error]
 
-  @doc "The closed object axis (one atom per signing object kind)."
+  @doc """
+  The closed object axis: one atom per signing object kind.
+
+      iex> BoundedAuthorityReportAdapter.Telemetry.objects()
+      [:report, :anchor, :grant, :key_transition, :local_loopback_report, :content_assertion]
+  """
   @spec objects() :: [atom()]
   def objects, do: @objects
 
-  @doc "The closed result-class axis (the classified outcome of a signing span)."
+  @doc """
+  The closed result-class axis: the classified outcome of a signing call.
+
+      iex> BoundedAuthorityReportAdapter.Telemetry.classes()
+      [:ok, :invalid_input, :invalid_key_handle, :signing_failed, :producer_error]
+  """
   @spec classes() :: [atom()]
   def classes, do: @classes
 
@@ -54,7 +63,11 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   `fun` returned — unchanged. `object` must be one of `objects/0`.
 
   Telemetry failures are swallowed inside the emitters; a raise inside `fun`
-  propagates (the emission is guarded, the crypto is not).
+  propagates (the emission is guarded, the crypto is not). An `object` outside
+  `objects/0` raises `FunctionClauseError`.
+
+      iex> BoundedAuthorityReportAdapter.Telemetry.sign_span(:grant, fn -> {:error, :invalid_grant} end)
+      {:error, :invalid_grant}
   """
   @spec sign_span(atom(), (-> term())) :: term()
   def sign_span(object, fun) when object in @objects and is_function(fun, 0) do
@@ -71,6 +84,11 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   Emits `[:bounded_authority_report_adapter, :sign, :start]` with
   `%{count: 1}` / `%{object: object}`. Refuses an unknown object with
   `{:error, :telemetry_invalid}` instead of emitting garbage.
+
+      iex> BoundedAuthorityReportAdapter.Telemetry.emit_start(:report)
+      :ok
+      iex> BoundedAuthorityReportAdapter.Telemetry.emit_start(:unknown_object)
+      {:error, :telemetry_invalid}
   """
   @spec emit_start(atom()) :: :ok | {:error, :telemetry_invalid}
   def emit_start(object) do
@@ -95,6 +113,11 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   with `{:error, :telemetry_invalid}` instead of emitting garbage — this
   validation is the mechanical value-free guarantee: a metadata key outside
   the closed shape is not expressible through this emitter.
+
+      iex> BoundedAuthorityReportAdapter.Telemetry.emit_stop(:anchor, 1_200, :ok)
+      :ok
+      iex> BoundedAuthorityReportAdapter.Telemetry.emit_stop(:anchor, -1, :ok)
+      {:error, :telemetry_invalid}
   """
   @spec emit_stop(atom(), integer(), atom()) :: :ok | {:error, :telemetry_invalid}
   def emit_stop(object, duration, result_class) do

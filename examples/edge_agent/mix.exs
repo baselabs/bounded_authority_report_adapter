@@ -3,18 +3,18 @@ defmodule EdgeAgent.MixProject do
 
   @version "0.1.0"
 
-  # A minimal runnable edge-agent reference app (ROADMAP RA9) — the proof the
+  # A minimal runnable edge-agent reference app — the proof the
   # adapter works in a real deployment. TWO roles live here for a self-contained
   # loop (like the Livebook): the EDGE AGENT (calls `sign_report/3`, POSTs the
   # envelope via Req) and the RECEIVER (a Plug/Bandit consumer that verifies via
   # `check_envelope/2`, depending ONLY on BAP — never on the adapter). A demo
   # grant minter + an in-memory key-handle make the loop runnable with zero
   # external services; both are labeled DEMO-ONLY (a real deployment's issuer is
-  # the BA runtime; real key custody is HSM/KMS).
+  # an authority service; real key custody is HSM/KMS).
   #
   # This is its OWN mix project: the adapter dep is `path: "../.."`, and the
   # transport deps (req/bandit/plug) live HERE — they never touch the library's
-  # `mix.exs`, so the RA3 dependency-direction wall (which scans the library's
+  # `mix.exs`, so the dependency-direction wall (which scans the library's
   # `mix.exs`/`lib`/`test/support`) stays green.
   def project do
     [
