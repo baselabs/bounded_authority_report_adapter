@@ -1,240 +1,143 @@
 # AGENTS.md — working in this repo as an AI coding agent
 
-Operational instructions for any agent editing this
-repository. This is the *how to work here* doc; `docs/charter.md` is the authority
-model, `docs/strategy.md` is the dependency/release posture, `docs/ROADMAP.md` is
-the build arc. Read this FIRST, then the charter/strategy for the *why*.
+How to work here. Read by area: `docs/charter.md` (authority model), `docs/strategy.md`
+(dependency and release posture), `docs/ROADMAP.md` (build arc), `docs/adr/` (decisions),
+`docs/consumer-integration.md` (consumer contract). Dated lessons, the former track calibration
+and the full earlier text of this file: [`docs/reference/agent-history.md`](docs/reference/agent-history.md).
 
 ## What this is
 
-`bounded_authority_report_adapter` (BARA) — BAP's universal companion-signer
-glue (ADR-0006; holder-side by default, issuer-side for grants). It takes a
-`{module(), term()}` key-handle + a BAP
-signing input, signs via the handle's local key, assembles the compact via the
-public `bounded_authority_protocol` (BAP) package. It signs proofs, grants,
-boundary anchors, and key transitions; it does NOT verify, does NOT transport,
-does NOT persist, and is NOT the runtime. The package is public on Hex and this source repository is public. The separate `bounded_authority` runtime is a
-private commercial application: it is not a public Hex package, is not currently
-published to private Hex because no paid private-package subscription exists, and is
-never a dependency of this library. Any future private Hex release requires an active
-subscription and fresh approval for that exact release and destination.
+`bounded_authority_report_adapter` (BARA) is BAP's universal companion-signer glue (ADR-0006;
+holder-side by default, issuer-side for grants). It takes a `{module(), term()}` key-handle and a
+BAP signing input, signs via the handle's local key, and assembles the compact via the public
+`bounded_authority_protocol` (BAP) package. It signs proofs, grants, boundary anchors and key
+transitions; it does NOT verify, transport, persist, or act as the runtime. The package and this
+source repository are public. The separate `bounded_authority` runtime is a private commercial
+application: not a public Hex package, not published to private Hex (no paid private-package
+subscription exists), and never a dependency of this library. Any future private Hex release
+requires an active subscription and fresh approval for that exact release and destination.
 
-## Read BAP first-hand — never trust a summary (handoff, doc, or your own memory)
+## Read BAP first-hand
 
-The contract surfaces live in the **resolved BAP dependency** locked from Hex.
-Before building anything that calls BAP, **read that source first-hand** — the
-version in `mix.lock` plus the resolved checkout are the compiled truth, not this
-repo's docs, a prior session's handoff, or the Livebook's account. The handoff
-that pointed at this work named the exact files:
-`deps/bounded_authority_protocol/lib/bounded_authority_protocol/v1/runtime.ex`
-(`check_envelope/2`, `verify_grant/3`), the struct files (`expected_request.ex`,
-`trusted_issuer.ex`, `envelope_facts.ex`, `credentials.ex`), `jwk.ex`
-(`encode_public/2` + `thumbprint/2`; its `public_key_thumbprint_raw/2` is `@doc false`).
-Build verifier/consumer calls from the struct defs + the function `@spec`s, not from
-prose, and call only documented protocol functions:
-`test/bounded_authority_report_adapter/protocol_private_api_test.exs` fails on any call
-to a `@doc false` function or `@moduledoc false` module of the protocol package, read
-from its compiled docs chunks.
-
-**Verify before you cite — and check BAP/BA MAIN, not just BARA's locked
-release.** ADR numbers, ROADMAP rows, and "the standard says X" claims are all
-UNVERIFIED until you check the actual file. Two layers matter and they drift:
-
-- **BARA's locked Hex release** (`mix.exs` declares the compatible range;
-  `mix.lock` records the exact resolved version) — what BARA *compiles against*.
-  Read `deps/bounded_authority_protocol/...` for the V1 struct/function defs
-  BARA calls.
-- **BAP main + BA main** — what those projects have *decided/shipped*. A BAP ADR
-  may be accepted on main and absent from BARA's locked release.
-
-Lesson (paid for at RA8, during the former git-pin era): a prior handoff cited
-"BAP ADR-0014/0015"; I checked only BARA's resolved dependency, declared the
-citation phantom, and redirected RA10 to ADR-0005. Wrong layer — **ADR-0014
-(`cross-language-verifier-sdks`) and ADR-0015 ARE accepted on BAP main.** The
-handoff author was citing main; I "corrected" them by checking only the consumed
-release. `ls deps/.../docs/adr/` tells you what the locked release has; for what
-BAP has decided, check the sibling checkout:
-
-```
-../bounded_authority_protocol/   # BAP main — ADRs, ROADMAP, the conformance corpus, the spec
-../bounded_authority/            # BA main  — the runtime, key custody, issuance, the doc-map
-```
-
-Both are sibling repos under `BaseLabs/`. Before claiming "X is blocked on BAP/BA" or citing a
-BAP ADR, check the relevant sibling's main branch first-hand (`git log`, `ls docs/adr/`,
-`grep`), not just BARA's locked release.
+- The contract is the **resolved BAP dependency** locked from Hex: the version in `mix.lock` and
+  `deps/bounded_authority_protocol/` are the compiled truth, not this repo's docs, a handoff or
+  the Livebook. Build calls from the struct definitions and function `@spec`s (for example
+  `v1/runtime.ex` `check_envelope/2` and `verify_grant/3`, `jwk.ex` `encode_public/2` and
+  `thumbprint/2`).
+- Call only documented protocol functions:
+  `test/bounded_authority_report_adapter/protocol_private_api_test.exs` fails on any call to a
+  `@doc false` function or `@moduledoc false` module of the protocol package.
+- Two layers drift: BARA's locked release (what it compiles against) and BAP main (what BAP has
+  decided). A BAP ADR may be accepted on main and absent from the locked release. Before citing a
+  BAP ADR or claiming something is blocked on BAP or BA, check the sibling checkout's main branch
+  (`../bounded_authority_protocol/`, `../bounded_authority/`) with `git log`, `ls docs/adr/` or
+  `grep`.
 
 ## The dependency-direction wall (RA3 — non-negotiable)
 
-The LIBRARY depends ONLY on `bounded_authority_protocol` — never on the
-`:bounded_authority` runtime, never on a transport lib (`:replicant`/`:capstan`),
-never on an HTTP client/server. Enforced by
-`test/bounded_authority_report_adapter/dependency_direction_test.exs`, which scans
-**`lib/`, `test/support/`, `mix.exs`, `mix.lock`** for forbidden deps + runtime-
-internal namespace refs.
+The LIBRARY depends ONLY on `bounded_authority_protocol`: never on the `:bounded_authority`
+runtime, a transport library (`:replicant`/`:capstan`), or an HTTP client or server.
+`test/bounded_authority_report_adapter/dependency_direction_test.exs` scans `lib/`,
+`test/support/`, `mix.exs` and `mix.lock` for forbidden deps and runtime-internal namespace refs.
+It does NOT cover `examples/`: the example app (`examples/edge_agent/`) is a separate Mix project
+that may declare transport deps (req/bandit/plug) in its own `mix.exs`; adding them to the
+library's `mix.exs` trips the wall.
 
-That scan does **NOT cover `examples/`** — so the example app
-(`examples/edge_agent/`) is a SEPARATE mix project that may declare transport deps
-(req/bandit/plug) in its OWN `mix.exs`. Adding transport deps THERE is fine;
-adding them to the library's `mix.exs` trips the wall red.
+## Protocol version discipline
 
-## Protocol version discipline + the drift probe
+- BAP comes from **Hex**. `mix.exs` declares a range with a security floor (owner ruling
+  October 6, 2026, ADR-0023 amendment: libraries declare ranges, only applications lock exact
+  versions); `mix.lock` records the exact version; the wall test pins both
+  (`@protocol_requirement`, `@protocol_floor`, `@protocol_ceiling`, `@protocol_locked_version`).
+  The values live in those files, never in prose (ADR-0023 decision 2).
+- A bare `mix deps.update bounded_authority_protocol` reconciles lock and deps quietly; the
+  wall's `@protocol_locked_version` reds the gate until the move is reviewed.
+- Raising the floor or ceiling moves the `mix.exs` requirement, the wall's range attributes and
+  BOTH locks in one commit; adopting a newer release inside the range moves
+  `@protocol_locked_version` and BOTH locks. Either way enumerate the span and classify its
+  `lib/` delta per ADR-0023. The example app's lock is held to parity by its own test. BARA
+  follows published BAP releases directly; no consumer's pin gates a bump.
+- `scripts/check-bap-drift.sh` compares the lock, hex.pm and BAP main (read-only). Run it before
+  citing sibling state or planning a version move. A probe, not a gate; not part of `mix ci`.
 
-BAP is consumed from **Hex**. `mix.exs` declares a RANGE with a security floor
-(owner ruling October 6, 2026, ADR-0023 amendment: libraries declare ranges, only
-applications lock exact versions), `mix.lock` records the exact
-resolved version, and the wall test pins both (`@protocol_requirement`, `@protocol_floor`,
-`@protocol_ceiling`, `@protocol_locked_version`). The values live in those files and are
-not restated here (ADR-0023 decision 2: a prose pin rots on the next bump). A bare
-`mix deps.update bounded_authority_protocol` reconciles lock + deps in one quiet step
-(Mix's own consistency check only catches a lock/dep MISMATCH, not a reconciled drift), so
-the wall's `@protocol_locked_version` reds the gate until the move is reviewed. The example
-app's lock is pinned to parity with the library's by its own test. Raising the floor or the
-ceiling moves the mix.exs requirement + the wall's range attributes + BOTH locks in one
-commit; adopting a newer release inside the range moves `@protocol_locked_version` + BOTH
-locks. Either way the span is enumerated and its `lib/` delta classified per ADR-0023. BARA
-follows published BAP releases directly; no consumer's pin gates a bump.
+## The build: two Mix projects
 
-**`scripts/check-bap-drift.sh`** — the one-command ecosystem check: what we
-lock vs what hex.pm publishes vs BAP main (read-only: `ls-remote`
-+ file reads, no fetches). Run it before citing sibling state or planning any
-version move. A probe, not a gate — not part of `mix ci`.
+1. **The library** (repo root): `bounded_authority_protocol` plus dev/test-only `credo` and
+   `ex_doc`. `test/support/` compiles only under `:test`; the reference key-handle and fixtures
+   never ship (design C5, ADR-0014).
+2. **The example app** (`examples/edge_agent/`, ROADMAP RA9): its own `mix.exs`, `mix.lock` and
+   `deps/`; the adapter is a `path: "../.."` dep. Runnable end-to-end
+   (`EdgeAgent.run` → `EdgeAgent.Receiver`).
 
-## The build: TWO mix projects, each with its own CI
+CI (`.github/workflows/ci.yml`) runs two jobs, `gate` (library) and `example` (example app),
+one Linux lane per supported OTP major 27–29 (ADR-0019). CI never adds macOS or Windows lanes;
+Windows developers use WSL2 (clone inside the WSL filesystem, not under `/mnt/c`), and no
+native-Windows path is maintained (owner direction, October 4, 2026).
 
-1. **The library** (repo root) — `mix.exs` with `bounded_authority_protocol` +
-   dev/test-only `credo`/`ex_doc`. `lib/bounded_authority_report_adapter.ex` is the
-   one signing module. `test/support/` compiles only under `:test` (the reference
-   key-handle + fixtures do NOT ship — design C5, ADR-0014).
-2. **The example app** (`examples/edge_agent/`, ROADMAP RA9) — its own `mix.exs`,
-   its own `mix.lock`, its own `deps/`. The adapter is a `path: "../.."` dep; it
-   pulls req/bandit/plug. Runnable end-to-end (`EdgeAgent.run` → `EdgeAgent.Receiver`).
+The Livebook (`examples/report_envelope_roundtrip.livemd`) is run by
+`test/bounded_authority_report_adapter/livebook_walkthrough_test.exs`: every fenced `elixir`
+cell except the `Mix.install/1` setup cell is evaluated and compared with the output pinned
+under it, so editing a cell means re-pinning its output. It also reds when a `lib/` module
+exports a `sign_*/3` the notebook never calls, or when the notebook's source version, protocol
+requirement or release state drifts from `mix.exs` and the CHANGELOG (update it in the same
+commit as a version or range move).
 
-CI (`.github/workflows/ci.yml`) runs **two jobs**: `gate` (the library: deps · currency ·
-format · compile · credo · test · gate battery) and `example` (the example app: deps ·
-currency · advisory audit, then the same four build steps, run from
-`examples/edge_agent/`). Both must stay green on the full matrix: one Linux lane per
-supported OTP major 27-29 (ADR-0019; 25/26 are excluded: BAP's codecs decode through
-`:json`, OTP 27+ stdlib). CI never adds macOS or Windows lanes: portability across
-macOS and Linux is a property of the developer setup, not a CI leg; Windows developers
-use WSL2 (clone inside the WSL filesystem, not under `/mnt/c`), the Linux path, and no
-native-Windows developer path is maintained (owner direction, October 4, 2026). The Livebook
-(`examples/report_envelope_roundtrip.livemd`) IS run by the library's test suite:
-`test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` evaluates every cell
-except the `Mix.install/1` setup cell against the repo source and compares each returned
-value with the output pinned under the cell, so editing a cell means re-pinning its output.
-Every fenced `elixir` block counts as a cell (attributes or not), and the evaluated-cell
-count must equal the pinned-output count. It also reds when a `lib/` module exports a
-`sign_*/3` the notebook's code never calls (comments do not count), or when the notebook's
-statement of the source version, protocol requirement and release state drifts from
-`mix.exs` and the CHANGELOG (update the notebook in the same commit as a version or range
-move, and when the range is released).
+**`mix ci`** reproduces the workflow step-for-step for both jobs (the example job through
+`scripts/ci_example.exs`). Its first step, `scripts/ci_env_guard.exs`, refuses any boot other
+than `MIX_ENV=test`. It exits non-zero if any step failed, but it does not stop at the first
+failure: some steps end the run at once while others (`mix test`, `mix hex.audit`) record a
+non-zero status and let later steps run, so read the whole output. Not reproduced locally:
+checkout and setup-beam.
 
-**Local CI parity: `mix ci`** (root mix.exs alias) reproduces the workflow
-step-for-step — both jobs (the example job through `scripts/ci_example.exs`, its steps
-in the workflow's order: deps · currency · audit · the four build steps). The FIRST
-alias step is an env guard (`scripts/ci_env_guard.exs`) that refuses any boot other
-than `MIX_ENV=test` (a bare local `:dev` boot would skip `test/support` at compile —
-the RA7 trap) and prints the per-shell invocation; every later step is a bare task
-name — NO POSIX `env(1)` re-exec, so the alias is cross-platform
-(feedback_cross_platform_capability_is_required). It exits non-zero if any step failed,
-but it does not stop at the first failure: some failing steps end the run at once
-(format, compile, Credo, Dialyzer, docs, the package scripts, the example runner),
-while others record a non-zero exit status and let the later steps run (`mix test` does
-this; so does `mix hex.audit`), so read the whole output. Making every step stop early would
-need per-step wrappers, not a flag. It is the zero-spend stand-in while Actions can't run
-(Actions live again as of 2026-08-26 — the full matrix + supply-chain runs green) and doubles as the one-command
-pre-push check; workflow steps NOT reproduced locally: checkout/setup-beam (asdf
-here).
+## Focused checks
 
-## Per-file floor on EVERY touched file (the RA7 lesson)
+- Library: `mix format`, `MIX_ENV=test mix compile --warnings-as-errors` (bare `mix compile`
+  runs `:dev`, skips `test/support/` and misses its warnings), `mix credo --strict`, and
+  `mix test` on the changed tests. Run them from the project that owns the file.
+- Example app: no `elixirc_paths` override, so test-file warnings surface only at `mix test`.
 
-Before calling anything done, run **on every file you touched**:
+## Example-app conventions
 
-```
-mix format
-MIX_ENV=test mix compile --warnings-as-errors   # NOT bare `mix compile`
-mix credo --strict
-mix test
-```
+- HTTP client **Req**; HTTP server **Bandit + Plug** (a bare `@behaviour Plug` receiver). Chosen
+  on merit for RA9, not mandated by any rule.
+- Bandit listener options (`:ip`, `:port`, `:scheme`) go at the **top level** of the child spec,
+  never nested under `:options` (raises `Unsupported key(s) in top level config: [:options]` at
+  server start; compile does not catch it). Pin Bandit `~> 1.0`.
+- A consumer must retain the request body's RAW bytes. The example receiver has no competing
+  parser, so it reads the body via `Plug.Conn.read_body/1` (three clauses; thread the returned
+  `conn`; `{:error, _}` carries no conn). A pipeline with `Plug.Parsers` must use the
+  `body_reader:` approach (`docs/consumer-integration.md` §2).
+- `BoundedAuthorityProtocol.V1.Json` is decode-only. Both sides call
+  `V1.Json.decode(raw_body_bytes)` for the tagged `cast_arguments`; never reach for an `encode`.
 
-The `MIX_ENV=test` matters for the LIBRARY: bare `mix compile` runs in `:dev`,
-which skips `test/support/` and misses warnings there (a real RA7 closeout miss).
-Run BOTH from the repo that owns the file (library floor at the root, example-app
-floor inside `examples/edge_agent/`).
+## Workflow (owner ruling, October 28, 2026)
 
-**Example-app nuance:** the example app has no `elixirc_paths` override, so
-`mix compile` compiles only `lib/` — **test-file warnings surface only at `mix
-test` time**, not at `mix compile`. So watch the `mix test` output for warnings;
-the compile step alone does not cover test files there.
+Process is sized to the risk of the specific change, never the repository. Each check, gate,
+record or review names the failure it prevents.
 
-## Transport posture (chosen, not mandated by a rule that doesn't exist)
+- **Heavy** when the diff touches the signing and key-handle code
+  (`lib/bounded_authority_report_adapter.ex`, `lib/bounded_authority_report_adapter/`), the
+  conformance tests and `test/support/` signing fixtures, or the BAP dependency pin (the
+  `mix.exs` requirement, either lock's protocol entry, the wall's pin attributes). A consumer
+  change that introduces new verification or crypto is heavy too. Write the failing test first,
+  get one independent review and do one fix round, and run the declared local gate once before
+  pushing. Heavy pushes need the owner's approval.
+- **Light** for everything else: focused checks on the changed behavior, then push; hosted CI
+  is the gate. No outcome record, gauge or review; the commit message is the record. A light
+  change the owner asked for lands without a separate push approval.
+- Publishing, deploying and pushes to mirrors always need the owner's approval for that action.
+- A test that fails on every run is a defect: fix it, or quarantine it with a reason, in the
+  change that finds it.
+- Update the CHANGELOG when behavior, a dependency or a contract changes; other docs only when
+  a contract changes.
 
-There is **no repo-root or user-level rule** mandating a specific HTTP client or
-server. The choices below were made on technical merit for RA9 and are the
-current convention:
-
-- **HTTP client: Req** (modern Elixir standard, Finch-backed). Used by the edge
-  agent to POST the envelope + raw report body.
-- **HTTP server: Bandit + Plug** (pure-Elixir Plug adapter). The receiver is a
-  bare `@behaviour Plug` served by Bandit.
-
-**Bandit option-shape gotcha:** listener options (`:ip`, `:port`, `:scheme`) go at
-the **top level** of the Bandit child spec, NOT nested under `:options:` — and have
-since Bandit 0.7.6 (which removed the nested key; under the example's `~> 1.0` pin no
-version accepts it). The nested
-`options: [ip: ..., port: ...]` shape raises
-`Unsupported key(s) in top level config: [:options]` at server start — it passes
-`mix compile` (no spec) and fails at `mix test` / runtime. Pin Bandit `~> 1.0` and
-use top-level options.
-
-## Raw-body retention: `Plug.Conn.read_body/1` vs `body_reader`
-
-A consumer must retain the request body's RAW bytes (parsing loses both the bytes
-and BAP's tagged structure). `docs/consumer-integration.md` §2 discusses
-`Plug.Parsers`' `body_reader:` — that's for a pipeline that ALSO parses other
-routes. The example receiver has NO competing parser, so it reads the raw body
-directly via `Plug.Conn.read_body/1` (3-clause: `{:ok,_,conn}` / `{:more,_,conn}` /
-`{:error,_}`). Thread the returned `conn` — `{:error, _}` is a 2-tuple with no conn.
-A receiver with `Plug.Parsers` in the pipeline must switch to the `body_reader:`
-approach instead.
-
-## BAP's `Json` is decode-only
-
-`BoundedAuthorityProtocol.V1.Json` has `decode/2` but **no `encode`**. The
-edge↔verifier contract is symmetric on the RAW bytes: both sides call
-`V1.Json.decode(raw_body_bytes)` to get the tagged `cast_arguments` — byte-agreement
-by construction. Do not reach for an `encode`; the body is bytes that already exist
-(report source), and the agent decodes them the same way the receiver does.
-
-## Commit discipline
-
-- Surgical pathspecs: `git commit -o <files>` (or explicit paths). **Never
-  `git add -A`** — the retired local-harness tree (process state, gitignored) and `.zcode/` would ride.
-- the retired local-harness tree was gitignored except its manifests (all removed from the repository and history 2026-09-14)
-  (tracked-when-present). The commit MESSAGE is the audit trail for this work
-  (the retired local-harness tree artifacts don't ship).
-- Single tree on `master`, no feature branches unless the user says otherwise.
-- Never `git stash`.
-
-## Track calibration
-
-- **T2** for the crypto signing surfaces (`lib/bounded_authority_report_adapter.ex`,
-  any `sign_*/3`, the key-handle contract, conformance) — manifest-declared
-  critical; the full design-adversarial + plan + 4-lens + cross-vendor loop.
-- **T1** for additive work that calls existing tested surfaces without new crypto
-  (the example app, docs, tests over existing behavior) — intent-first, one
-  diff-review, closeout-lite.
-- A slice that introduces NEW verify/crypto in a consumer escalates to T2 even if
-  it's "just a consumer" — the receiver in the example app stayed T1 because it
-  calls BAP's *existing* `check_envelope`, introducing none.
+Repository specifics: the declared local gate is `mix ci`. Stage exact paths, never
+`git add -A` (the ignored local-harness tree and `.zcode/` would ride). Single tree on `master`.
 
 ## Environment
 
-Elixir 1.20.2 / OTP 29 (`.tool-versions`, asdf — the dev lane). The supported set is
-Elixir minors 1.18/1.19/1.20 on Erlang/OTP majors 27–29 (25/26 are excluded: BAP's
-codecs decode through `:json`, OTP 27+ stdlib), enforced at config load by
-`config/config.exs` (both mix projects) and carried one-lane-per-major by the CI matrix
-(ADR-0019; the mix range, the set, `.tool-versions`, and the lanes move in ONE commit).
-Run `mix` from inside the repo dir (the asdf shim quirk). BAP is consumed from its public
-Hex release.
+Elixir 1.20.2 / OTP 29 (`.tool-versions`, asdf). The supported set is Elixir 1.18/1.19/1.20 on
+Erlang/OTP 27–29 (25/26 excluded: BAP's codecs decode through `:json`, OTP 27+ stdlib),
+enforced at config load by `config/config.exs` in both projects and carried one lane per major
+by CI (ADR-0019; the Mix range, the set, `.tool-versions` and the lanes move in ONE commit). Run
+`mix` from inside the repo directory (asdf shim quirk).
