@@ -127,6 +127,9 @@ A minor release: options that were silently ignored now apply or are refused.
   a trailing hole; dev/test-only through the `sbom` tool under the existing `~> 0.20.0`
   override, not shipped; the example app's lock carries no hex_core). `mix hex.audit` and
   `mix deps.audit` both clean.
+- Latest-first currency bump: `igniter` 0.8.4 → 0.8.5, with its `sourceror` 1.13.0 and
+  `spitfire` 0.4.3 transitives, in the library lock (the optional install-task edge; not
+  shipped). The currency meter found the drift before the release gate did.
 
 ### Documentation
 
