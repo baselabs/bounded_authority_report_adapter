@@ -124,6 +124,11 @@ release.
   on hosted CI (git 2.55) it can race the test's `File.rm_rf!` cleanup and fail with
   `:eexist`. A new test requires every script or test that runs such a git command to set
   both values. Test only; no API, wire, or signing change.
+- Dev-dependency advisory sweep: `hex_core` 0.20.0 → 0.20.1 in the library lock
+  (EEF-CVE-2026-96596, MEDIUM — `erl_tar:extract/2` loops forever on a GNU sparse member with
+  a trailing hole; dev/test-only through the `sbom` tool under the existing `~> 0.20.0`
+  override, not shipped; the example app's lock carries no hex_core). `mix hex.audit` and
+  `mix deps.audit` both clean.
 
 ### Documentation
 
