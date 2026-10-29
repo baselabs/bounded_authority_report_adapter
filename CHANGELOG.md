@@ -130,6 +130,11 @@ A minor release: options that were silently ignored now apply or are refused.
 - Latest-first currency bump: `igniter` 0.8.4 → 0.8.5, with its `sourceror` 1.13.0 and
   `spitfire` 0.4.3 transitives, in the library lock (the optional install-task edge; not
   shipped). The currency meter found the drift before the release gate did.
+- The example app's lock moves `bandit` 1.12.5 → 1.14.1 (EEF-CVE-2026-108529, -110314,
+  -110499, -111101, -111103, -113436, -114213 and -115269 — HTTP/2 and WebSocket
+  request-amplification and limit-bypass fixes, several HIGH), with `thousand_island`
+  1.6.0 and `plug_crypto` 2.2.1 (EEF-CVE-2026-105963). Example-only, within the `~> 1.0`
+  pin; not shipped with the library.
 
 ### Documentation
 
