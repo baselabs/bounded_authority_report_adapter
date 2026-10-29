@@ -245,6 +245,8 @@ SHA-256 of the published tarball, read back from the registry API:
 
 | Version | Registry checksum |
 |---|---|
+| 0.11.0 | `ab088564a58a2e5a4bfa6db3e69b79005fdb338178b69336df27474855475926` |
+| 0.10.0 | `a2a4637630e492f0eca152b4c0dc0919166a17980aff96832da389d0b1890c5d` |
 | 0.9.1 | `b2c7222ee60c4fcbc688e9f76933832b73e7a9169d5ea6e973e3ad79c7e66b85` |
 | 0.9.0 | `fdaedbf9e58c615aebc253145d8e43c09a64fd9596792a65a79d1e6261589496` |
 | 0.8.2 | `7f4dc9c37cbd9fe33a98aa0da70581976f41e6ce129fa487534f94887f4ba3e5` |
