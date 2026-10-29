@@ -9,7 +9,7 @@ the test suite runs them the same way.
 
 <!-- doc-sample: fragment -->
 ```elixir
-{:bounded_authority_report_adapter, "~> 0.10.0"}
+{:bounded_authority_report_adapter, "~> 0.11.0"}
 ```
 
 Add that line to `deps/0` in `mix.exs` and run `mix deps.get`. The package supports Elixir

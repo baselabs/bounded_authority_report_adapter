@@ -9,9 +9,9 @@ public `bounded_authority_protocol` package, and then shows each check failing c
 database, no container and no other running service. Every key is generated in the notebook when
 it runs. Run the cells in order; the value under each cell is the result it returns.
 
-It runs against this repository's source: version 0.10.0 in `mix.exs`, which declares
-`bounded_authority_protocol` `~> 0.8.0`. That range is unreleased; the published 0.10.0 release
-pins `== 0.8.0` (see the CHANGELOG). The repository's test suite runs these same cells against
+It runs against this repository's source: version 0.11.0 in `mix.exs`, which declares
+`bounded_authority_protocol` `~> 0.8.0`. The published 0.11.0 release declares the same
+requirement. The CHANGELOG records the move from the exact 0.10.0 pin. The repository's test suite runs these same cells against
 the repository source and compares each result with the value pinned under its cell, so a cell
 that stops running, or starts returning something else, fails the build.
 
@@ -93,7 +93,7 @@ to_string(Application.spec(:bounded_authority_report_adapter, :vsn))
 <!-- livebook:{"output":true} -->
 
 ```
-"0.10.0"
+"0.11.0"
 ```
 
 ## Key handles: the adapter signs without ever holding a private key

@@ -3,7 +3,7 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
-## Unreleased (0.11.0) — options are checked; the protocol dependency is a range
+## 0.11.0 — options are checked; the protocol dependency is a range
 
 ### Breaking changes
 

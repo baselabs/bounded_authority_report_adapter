@@ -1,10 +1,8 @@
 # Changelog
 
-## [Unreleased] — 0.11.0
+## [0.11.0] — 2026-10-29
 
-To be released as 0.11.0, a minor release because it narrows behavior: options that were
-silently ignored now apply or are refused. The version in `mix.exs` stays 0.10.0 until the
-release.
+A minor release: options that were silently ignored now apply or are refused.
 
 ### Breaking changes
 

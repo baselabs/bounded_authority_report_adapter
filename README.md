@@ -26,7 +26,7 @@ Add the package to `deps/0` in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:bounded_authority_report_adapter, "~> 0.10.0"}
+    {:bounded_authority_report_adapter, "~> 0.11.0"}
   ]
 end
 ```

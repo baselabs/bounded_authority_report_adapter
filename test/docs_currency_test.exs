@@ -172,27 +172,26 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     end
   end
 
-  test "the unreleased CHANGELOG and upgrading notes describe 0.11.0 and its breaking changes" do
-    [_preamble, unreleased | _released] = String.split(File.read!("CHANGELOG.md"), ~r/^## /m)
-    unreleased = String.replace(unreleased, ~r/\s+/, " ")
+  test "the 0.11.0 CHANGELOG and upgrading notes cover its breaking changes" do
+    [_preamble, zero_11 | _older] = String.split(File.read!("CHANGELOG.md"), ~r/^## /m)
+    zero_11 = String.replace(zero_11, ~r/\s+/, " ")
 
-    assert unreleased =~ ~r/\A\[Unreleased\] — 0\.11\.0\b/
-    assert unreleased =~ "### Breaking changes"
+    assert zero_11 =~ ~r/\A\[0\.11\.0\] — 2026-/
+    assert zero_11 =~ "### Breaking changes"
 
     for change <- ["`nil`", "unknown option key", "keyword list"] do
-      assert unreleased =~ change, "the breaking-changes block must cover #{change}"
+      assert zero_11 =~ change, "the breaking-changes block must cover #{change}"
     end
 
-    refute unreleased =~ "keeps the defaults",
+    refute zero_11 =~ "keeps the defaults",
            "the CHANGELOG still says a non-map options value keeps the defaults"
 
     [_before, upgrading] =
-      String.split(File.read!("docs/upgrading.md"), "## Unreleased", parts: 2)
+      String.split(File.read!("docs/upgrading.md"), "## 0.11.0", parts: 2)
 
     [upgrading, _older] = String.split(upgrading, "\n## ", parts: 2)
     upgrading = String.replace(upgrading, ~r/\s+/, " ")
 
-    assert upgrading =~ "0.11.0"
     assert upgrading =~ "Breaking changes"
     refute upgrading =~ "No API, wire or error change"
   end

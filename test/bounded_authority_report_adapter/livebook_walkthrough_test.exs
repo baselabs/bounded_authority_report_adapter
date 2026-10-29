@@ -222,11 +222,17 @@ defmodule BoundedAuthorityReportAdapter.LivebookWalkthroughTest do
     requirement
   end
 
-  # The CHANGELOG's Unreleased section, and the version and section of the latest release.
+  # The CHANGELOG's Unreleased section ("" between a release cut and the next cycle's
+  # section), and the version and section of the latest release.
   defp changelog_sections do
     [_preamble | sections] = String.split(File.read!(@changelog_path), ~r/^## /m)
-    assert [unreleased | released] = sections
-    assert String.starts_with?(unreleased, "[Unreleased]")
+
+    {unreleased, released} =
+      case sections do
+        ["[Unreleased]" <> _ = unreleased | released] -> {unreleased, released}
+        released -> {"", released}
+      end
+
     assert [latest | _older] = released
     assert [_match, latest_version] = Regex.run(~r/\A\[(\d+\.\d+\.\d+)\]/, latest)
     {unreleased, latest_version, latest}
