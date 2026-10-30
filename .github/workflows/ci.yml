@@ -2,8 +2,7 @@ name: CI
 
 on:
   push:
-    # kci/** is kimosabe-land's CI-before-master landing branch.
-    branches: [master, "kci/**"]
+    branches: [master]
     paths-ignore: ['**/*.md', 'docs/**', 'LICENSE*', '.github/ISSUE_TEMPLATE/**']
   pull_request:
 

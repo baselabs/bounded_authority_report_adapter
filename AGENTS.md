@@ -110,29 +110,20 @@ checkout and setup-beam.
 - `BoundedAuthorityProtocol.V1.Json` is decode-only. Both sides call
   `V1.Json.decode(raw_body_bytes)` for the tagged `cast_arguments`; never reach for an `encode`.
 
-## Workflow (owner ruling, October 28, 2026)
+## Workflow
 
-Process is sized to the risk of the specific change, never the repository. Each check, gate,
-record or review names the failure it prevents.
+Make the change, run the tests that cover it, commit with named paths, and push to `master`. CI
+runs once on `master`; if it goes red, fix forward.
 
-- **Heavy** when the diff touches the signing and key-handle code
-  (`lib/bounded_authority_report_adapter.ex`, `lib/bounded_authority_report_adapter/`), the
-  conformance tests and `test/support/` signing fixtures, or the BAP dependency pin (the
-  `mix.exs` requirement, either lock's protocol entry, the wall's pin attributes). A consumer
-  change that introduces new verification or crypto is heavy too. Write the failing test first,
-  get one independent review and do one fix round, and run the declared local gate once before
-  pushing. Heavy pushes need the owner's approval.
-- **Light** for everything else: focused checks on the changed behavior, then push; hosted CI
-  is the gate. No outcome record, gauge or review; the commit message is the record. A light
-  change the owner asked for lands without a separate push approval.
-- Publishing, deploying and pushes to mirrors always need the owner's approval for that action.
+- CI runs the `gate` and `example` jobs; `mix ci` reproduces both. Run the focused checks that
+  cover your change.
+- Publishing, deploying and pushes to mirrors need the owner's approval for that action.
 - A test that fails on every run is a defect: fix it, or quarantine it with a reason, in the
   change that finds it.
 - Update the CHANGELOG when behavior, a dependency or a contract changes; other docs only when
   a contract changes.
-
-Repository specifics: the declared local gate is `mix ci`. Stage exact paths, never
-`git add -A` (the ignored local-harness tree and `.zcode/` would ride). Single tree on `master`.
+- Stage exact paths, never `git add -A` (the ignored local-harness tree and `.zcode/` would
+  ride). Single tree on `master`.
 
 ## Environment
 
