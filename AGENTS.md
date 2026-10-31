@@ -1,9 +1,11 @@
 # AGENTS.md — working in this repo as an AI coding agent
 
 How to work here. Read by area: `docs/charter.md` (authority model), `docs/strategy.md`
-(dependency and release posture), `docs/ROADMAP.md` (build arc), `docs/adr/` (decisions),
+(dependency and release posture), `docs/ROADMAP.md` (build arc), gitignored `.kimosabe/adr/` (local-only decisions),
 `docs/consumer-integration.md` (consumer contract). Dated lessons, the former track calibration
 and the full earlier text of this file: [`docs/reference/agent-history.md`](docs/reference/agent-history.md).
+
+ADRs must not be tracked, packaged, published, or linked from consumer documentation.
 
 ## What this is
 

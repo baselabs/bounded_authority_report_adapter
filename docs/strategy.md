@@ -113,10 +113,10 @@ are the explicit identities that gate an adapter bump.
 
 ## 8. Following protocol releases
 
-`sign_content_assertion/3` (0.9.0, [ADR-0022](adr/0022-content-assertion-signing.md))
+`sign_content_assertion/3` (0.9.0, ADR-0022)
 shows the release order this library follows: BAP publishes a release with its own
 normative contract, certified corpus, and independent SDK agreement; this adapter moves
 its protocol requirement and lock to that published release and qualifies the adoption
-with its own suite ([ADR-0023](adr/0023-pin-follows-bap-releases.md)). No consumer's pin
+with its own suite (ADR-0023). No consumer's pin
 or schedule is a precondition; consumers adopt protocol and adapter releases on their own
 schedules.
