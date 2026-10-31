@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.12.0] — 2026-10-31
+
+### Changed
+
+- The public protocol dependency moves from `~> 0.8.0` to `~> 0.9.1`, excluding ADRs and
+  adopting the producer-canonicality refusals introduced in 0.9.0. Signing APIs and wire
+  formats are unchanged; consumers constraining the protocol to 0.8.x must update that constraint.
+- Architecture decision records remain local and ignored. Public packages and documentation
+  exclude their files and links.
+- The signer Livebook installs from public Hex and ships in both the package and HexDocs, with
+  a rendered role diagram and a direct documentation entry.
+- The content-assertion tests supervise their real-key handle process, avoiding a teardown race.
+
 ## [0.11.0] — 2026-10-29
 
 A minor release: options that were silently ignored now apply or are refused.
@@ -355,7 +368,7 @@ every existing verdict are unchanged. V3's
   wrong-width-signature closed-error-shape fix (error shape only, verdicts unchanged);
   `priv/conformance/attestation-profiles/role-attestation/v1/` — the certified 40-case
   profile corpus (executed through the dependency by `RoleAttestationCorpusTest`);
-  `spec/` + `docs/` — the profile spec, BAP [ADR 0036](https://github.com/baselabs/bounded_authority_protocol/blob/main/docs/adr/0036-role-attestation-profile.md), and the REQ-RA1 requirement map.
+  `spec/` + `docs/` — the profile specification and the REQ-RA1 requirement map.
   The adapter adopts this release ahead of the authority runtime, superseding the previous alignment policy.
 
 ## [0.7.0] — 2026-09-22
@@ -365,7 +378,7 @@ every existing verdict are unchanged. V3's
 - `BoundedAuthorityReportAdapter.V3`: the contract-major-3 sibling of the
   major-1 surface — `sign_report/3`, `sign_grant/3`, `sign_anchor/3`, and
   `sign_key_transition/3` over BAP's `BAP3-ES256-SHA256` suite (BAP 0.5.1,
-  BAP [ADR 0035](https://github.com/baselabs/bounded_authority_protocol/blob/main/docs/adr/0035-es256-contract-major-activation.md): EC P-256 keys, RFC 7518 §3.4 raw `r || s` signatures,
+  the ES256 contract-major-3 specification: EC P-256 keys, RFC 7518 §3.4 raw `r || s` signatures,
   `ES256` headers, `BAP3-*` separators). Major selection is the module name.
 - The key-type discriminator: each major's resolvers accept exactly their
   suite's key shape — 32-byte Ed25519 on the major-1 entry points, the
@@ -520,7 +533,7 @@ breaking changes (SemVer §4).
 
 - Add `sign_local_loopback_report/3` — the holder-side signer for BAP's
   byte-distinct `bap-application-proof/local-loopback-http/1` profile
-  (`typ: "ba+loopback-proof"`, BAP 0.3.0 / BAP [ADR-0027](https://github.com/baselabs/bounded_authority_protocol/blob/main/docs/adr/0027-byte-distinct-application-proof-profiles.md)). Same report shape,
+  (`typ: "ba+loopback-proof"`, the local-loopback profile introduced in BAP 0.3.0). Same report shape,
   key-handle callbacks, `%{grant, proof}` envelope, and closed error set as
   `sign_report/3`; two profile divergences: the nonce is required (non-empty
   binary), and only canonical literal-loopback HTTP targets

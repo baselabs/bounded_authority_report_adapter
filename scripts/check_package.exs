@@ -50,6 +50,8 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
                     "lib/bounded_authority_report_adapter/v3.ex",
                     "lib/mix/tasks/bounded_authority_report_adapter.doctor.ex",
                     "lib/mix/tasks/bounded_authority_report_adapter.install.ex",
+                    "examples/report_envelope_roundtrip.livemd",
+                    "examples/files/signing-flow.svg",
                     "mix.exs"
                   ])
 

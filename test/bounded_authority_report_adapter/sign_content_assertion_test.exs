@@ -38,20 +38,22 @@ defmodule BoundedAuthorityReportAdapter.SignContentAssertionTest do
   setup do
     {public, private} = :crypto.generate_key(:eddsa, :ed25519)
 
-    {:ok, pid} =
-      Agent.start_link(fn ->
-        %{
-          kid: "assertion-attestor",
-          public: public,
-          private: private,
-          rotate_to: nil,
-          snapshots: 0,
-          signs: 0,
-          message: nil
-        }
-      end)
+    pid =
+      start_supervised!(
+        {Agent,
+         fn ->
+           %{
+             kid: "assertion-attestor",
+             public: public,
+             private: private,
+             rotate_to: nil,
+             snapshots: 0,
+             signs: 0,
+             message: nil
+           }
+         end}
+      )
 
-    on_exit(fn -> if Process.alive?(pid), do: Agent.stop(pid) end)
     {:ok, content_digest} = Content.content_digest("exact external bytes", %{})
 
     input = %{

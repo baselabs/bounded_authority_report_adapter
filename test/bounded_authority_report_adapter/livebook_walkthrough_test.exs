@@ -62,8 +62,9 @@ defmodule BoundedAuthorityReportAdapter.LivebookWalkthroughTest do
     assert [setup] = context.setup_cells,
            "the notebook must have exactly one Mix.install setup cell"
 
-    assert setup.code =~ "{:bounded_authority_report_adapter, path:",
-           "the setup cell must install the adapter from this repository by path"
+    assert setup.code =~
+             ~s({:bounded_authority_report_adapter, "~> #{Mix.Project.config()[:version]}"}),
+           "the setup cell must install the current public Hex release"
 
     output_blocks = count_occurrences(context.source, @output_marker)
     assert output_blocks > 0

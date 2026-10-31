@@ -119,7 +119,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     [extras_block, _] = String.split(extras_block, "]\n", parts: 2)
 
     extras =
-      Regex.scan(~r/"([\w\/.-]+\.md)"/, extras_block)
+      Regex.scan(~r/"([\w\/.-]+\.(?:md|livemd))"/, extras_block)
       |> Enum.map(fn [_, path] -> path end)
       |> MapSet.new()
 
@@ -130,7 +130,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     [index_section, _] = String.split(index_section, "\n## ", parts: 2)
 
     index_links =
-      Regex.scan(~r/\]\(([\w\/.-]+\.md)\)/, index_section)
+      Regex.scan(~r/\]\(([\w\/.-]+\.(?:md|livemd))\)/, index_section)
       |> Enum.map(fn [_, path] -> path end)
       |> MapSet.new()
 
@@ -139,7 +139,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     # SOMEWHERE in the README (boilerplate extras like SECURITY.md legitimately
     # live under their own sections, not the index).
     readme_links =
-      Regex.scan(~r/\]\(([\w\/.-]+\.md)\)/, readme)
+      Regex.scan(~r/\]\(([\w\/.-]+\.(?:md|livemd))\)/, readme)
       |> Enum.map(fn [_, path] -> path end)
       |> MapSet.new()
 
@@ -173,7 +173,8 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
   end
 
   test "the 0.11.0 CHANGELOG and upgrading notes cover its breaking changes" do
-    [_preamble, zero_11 | _older] = String.split(File.read!("CHANGELOG.md"), ~r/^## /m)
+    [_before, zero_11] = String.split(File.read!("CHANGELOG.md"), "## [0.11.0]", parts: 2)
+    [zero_11 | _older] = String.split("[0.11.0]" <> zero_11, ~r/^## /m)
     zero_11 = String.replace(zero_11, ~r/\s+/, " ")
 
     assert zero_11 =~ ~r/\A\[0\.11\.0\] — 2026-/

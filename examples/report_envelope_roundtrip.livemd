@@ -1,6 +1,12 @@
-<!-- livebook:{"persist_outputs":true} -->
+<!-- livebook:{"persist_outputs":true,"file_entries":[{"name":"signing-flow.svg","type":"attachment"}]} -->
 
 # Bounded Authority Report Adapter: every signer in one notebook
+
+```elixir
+Mix.install([
+  {:bounded_authority_report_adapter, "~> 0.12.0"}
+])
+```
 
 ## What this notebook shows
 
@@ -9,9 +15,9 @@ public `bounded_authority_protocol` package, and then shows each check failing c
 database, no container and no other running service. Every key is generated in the notebook when
 it runs. Run the cells in order; the value under each cell is the result it returns.
 
-It runs against this repository's source: version 0.11.0 in `mix.exs`, which declares
-`bounded_authority_protocol` `~> 0.8.0`. The published 0.11.0 release declares the same
-requirement. The CHANGELOG records the move from the exact 0.10.0 pin. The repository's test suite runs these same cells against
+It installs the public Hex release: version 0.12.0 in `mix.exs`, which declares
+`bounded_authority_protocol` `~> 0.9.1`. The published 0.12.0 release declares the same
+requirement. The CHANGELOG records the dependency update. The repository's test suite runs these same cells against
 the repository source and compares each result with the value pinned under its cell, so a cell
 that stops running, or starts returning something else, fails the build.
 
@@ -20,7 +26,9 @@ that stops running, or starts returning something else, fails the build.
 An API key answers "who sent this?" It does not answer "were they allowed to do this?" If an API
 key leaks, whoever has it can send anything until it is rotated.
 
-The Bounded Authority Protocol answers the second question. A request carries a **grant**, signed
+The Bounded Authority Protocol proves the signed scope and possession of the holder key.
+A host still decides whether to authorize execution, using its trusted keys, replay and
+revocation state, and policy. A request carries a **grant**, signed
 ahead of time by an issuer, that names one holder key and the operations that key may perform. The
 holder adds a **proof**: a signature made with its own key, at the moment of the request, over that
 grant and that exact request. A leaked grant is useless without the holder's key, and a proof made
@@ -28,21 +36,7 @@ for one request does not verify for another.
 
 ## Three roles, kept separate on purpose
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Issuer as Issuer<br/>(the authority runtime)
-    participant Holder as Holder<br/>(the edge, using THIS adapter)
-    participant Verifier as Verifier<br/>(any party)
-    Note over Issuer: holds the issuer key
-    Note over Holder: holds the holder key
-    Note over Verifier: holds only PUBLIC keys
-    Issuer->>Holder: a signed grant (ahead of time)
-    Holder->>Holder: sign_report(report, holder_handle)<br/>signs a PROOF over grant + request
-    Holder->>Verifier: the request + {grant, proof}
-    Verifier->>Verifier: check_envelope(credentials, expected)<br/>against published public keys
-    Verifier-->>Holder: accept or reject, offline
-```
+![Issuer signs a grant; the holder signs its request; the verifier returns cryptographic facts or refusal.](files/signing-flow.svg)
 
 * **The verifier never holds a signing key**, so a compromised verifier cannot forge anything.
 * **The issuer never sees each request.** The holder proves possession offline, with no call home.
@@ -71,13 +65,8 @@ signs a grant.
 
 ## Setup
 
-The adapter comes from this repository; the protocol package resolves from Hex.
-
-```elixir
-Mix.install([
-  {:bounded_authority_report_adapter, path: Path.expand("..", __DIR__)}
-])
-```
+The setup cell above installs the public package and its protocol dependency from Hex.
+The remaining cells run unchanged in the repository test suite.
 
 ```elixir
 alias BoundedAuthorityProtocol.V1
@@ -93,7 +82,7 @@ to_string(Application.spec(:bounded_authority_report_adapter, :vsn))
 <!-- livebook:{"output":true} -->
 
 ```
-"0.11.0"
+"0.12.0"
 ```
 
 ## Key handles: the adapter signs without ever holding a private key

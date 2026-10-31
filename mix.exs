@@ -1,7 +1,7 @@
 defmodule BoundedAuthorityReportAdapter.MixProject do
   use Mix.Project
 
-  @version "0.11.0"
+  @version "0.12.0"
   @source_url "https://github.com/baselabs/bounded_authority_report_adapter"
 
   def project do
@@ -119,12 +119,13 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       {:telemetry, "~> 1.3"},
       # A RANGE with a security floor, not an exact pin (October 6, 2026;
       # ADR-0023 amendment): a library declares the range it is compatible with and only an
-      # application locks an exact version. 0.8.0 is the floor: it carries the strict Ed25519
+      # application locks an exact version. 0.9.1 is the floor: it excludes architecture decision records and retains
+      # the producer-canonicality checks added in 0.9.0 and the strict Ed25519
       # verification rule this adapter's key refusal and self-check call
       # (BoundedAuthorityProtocol.Ed25519), so 0.7.x must never resolve. The ceiling is the
       # next protocol minor, a deliberate, reviewed move. The dependency wall pins the
       # requirement shape and the locked version.
-      {:bounded_authority_protocol, "~> 0.8.0"},
+      {:bounded_authority_protocol, "~> 0.9.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # The install task (lib/mix/tasks) uses Igniter when present; the file
       # compiles to a Mix.raise fallback without it.
@@ -163,6 +164,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "NOTICE",
         "SECURITY.md",
         "usage-rules.md",
+        "examples/report_envelope_roundtrip.livemd",
+        "examples/files/signing-flow.svg",
         "docs/consumer-integration.md",
         "docs/errors.md",
         "docs/getting-started.md",
@@ -184,8 +187,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       main: "readme",
       source_ref: "v#{@version}",
       source_url: @source_url,
+      assets: %{"examples/files" => "files"},
       extras: [
-        "README.md",
+        {"README.md", title: "Overview"},
+        {"examples/report_envelope_roundtrip.livemd", title: "Signer Livebook"},
         "usage-rules.md",
         "CHANGELOG.md",
         "CODE_OF_CONDUCT.md",

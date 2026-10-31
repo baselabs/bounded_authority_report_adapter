@@ -3,6 +3,17 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 0.12.0 — ADR-free public distribution
+
+Use `{:bounded_authority_report_adapter, "~> 0.12.0"}`. The protocol requirement is now
+`~> 0.9.1`; update any application constraint that still selects 0.8.x, then run
+`mix deps.update bounded_authority_report_adapter bounded_authority_protocol`.
+
+Protocol 0.9.0 added canonical-signature refusals to its producers. The adapter already
+normalizes ES256 signatures and validates signing results, so its signing API and wire formats
+are unchanged. The Livebook and its diagram now ship in the Hex archive and HexDocs.
+Architecture decision records are local, ignored files and are excluded from this release.
+
 ## 0.11.0 — options are checked; the protocol dependency is a range
 
 ### Breaking changes

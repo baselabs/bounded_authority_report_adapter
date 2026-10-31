@@ -26,7 +26,7 @@ Add the package to `deps/0` in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:bounded_authority_report_adapter, "~> 0.11.0"}
+    {:bounded_authority_report_adapter, "~> 0.12.0"}
   ]
 end
 ```
@@ -264,6 +264,7 @@ content appears. A sustained `:signing_failed` rate means custody is misconfigur
 
 ## Documentation
 
+- [Signer Livebook](examples/report_envelope_roundtrip.livemd): run every signer with public Hex packages.
 - [Getting started](docs/getting-started.md): first sign, then a production key handle.
 - [Usage rules](usage-rules.md): the integration contract as a checklist.
 - [Errors](docs/errors.md): every error reason and what to check.

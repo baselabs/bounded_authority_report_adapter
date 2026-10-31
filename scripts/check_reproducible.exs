@@ -98,6 +98,12 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
   defp copy_source_tree!(source, dest) do
     File.mkdir_p!(dest)
 
+    for entry <- ["examples/report_envelope_roundtrip.livemd", "examples/files"] do
+      target = Path.join(dest, entry)
+      File.mkdir_p!(Path.dirname(target))
+      File.cp_r!(Path.join(source, entry), target)
+    end
+
     source
     |> File.ls!()
     |> Enum.reject(&(&1 in @copy_excludes))
