@@ -142,7 +142,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # only hex_core.default_config/0, hex_api_package.get/2 and
       # hex_api_release.get/3, unchanged in 0.20.0. Drop this override once an sbom
       # release accepts hex_core 0.20.
-      {:hex_core, "~> 0.20.0", only: [:dev, :test], runtime: false, override: true}
+      {:hex_core, "~> 0.21.1", only: [:dev, :test], runtime: false, override: true}
     ]
   end
 
