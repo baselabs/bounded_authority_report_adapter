@@ -27,7 +27,7 @@ jobs:
     # attest job below is the only one that can mint attestations, and it
     # runs no project code.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           # workflow_dispatch re-attestation targets a specific tag/ref;
