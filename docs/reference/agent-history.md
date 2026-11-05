@@ -119,9 +119,9 @@ version move. A probe, not a gate — not part of `mix ci`.
    its own `mix.lock`, its own `deps/`. The adapter is a `path: "../.."` dep; it
    pulls req/bandit/plug. Runnable end-to-end (`EdgeAgent.run` → `EdgeAgent.Receiver`).
 
-CI (`.github/workflows/ci.yml`) runs **two jobs**: `gate` (the library: deps · currency ·
+CI (`.github/workflows/ci.yml`) runs **two jobs**: `gate` (the library: deps ·
 format · compile · credo · test · gate battery) and `example` (the example app: deps ·
-currency · advisory audit, then the same four build steps, run from
+advisory audit, then the same four build steps, run from
 `examples/edge_agent/`). Both must stay green on the full matrix: one Linux lane per
 supported OTP major 27-29 (ADR-0019; 25/26 are excluded: BAP's codecs decode through
 `:json`, OTP 27+ stdlib). CI never adds macOS or Windows lanes: portability across
@@ -141,7 +141,7 @@ move, and when the range is released).
 
 **Local CI parity: `mix ci`** (root mix.exs alias) reproduces the workflow
 step-for-step — both jobs (the example job through `scripts/ci_example.exs`, its steps
-in the workflow's order: deps · currency · audit · the four build steps). The FIRST
+in the workflow's order: deps · audit · the four build steps). The FIRST
 alias step is an env guard (`scripts/ci_env_guard.exs`) that refuses any boot other
 than `MIX_ENV=test` (a bare local `:dev` boot would skip `test/support` at compile —
 the RA7 trap) and prints the per-shell invocation; every later step is a bare task

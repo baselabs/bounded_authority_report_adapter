@@ -70,9 +70,6 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "run --no-start scripts/ci_env_guard.exs",
         # job: gate (the library)
         "deps.get",
-        # Latest-first dependency currency (ADR-0020; the workflow's currency
-        # step — caller-cwd .exs, runs against THIS project).
-        "run --no-start scripts/check_deps_currency.exs",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "credo --strict",

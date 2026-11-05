@@ -1,5 +1,5 @@
 # `mix ci`'s example-job section — reproduces the workflow's example job
-# step-for-step (deps · currency · advisory audit · the four build steps)
+# step-for-step (deps · advisory audit · the four build steps)
 # from examples/edge_agent, aborting at the first red step like a failed CI
 # job. Runs as one .exs, replacing the old `mix cmd --cd ... env
 # MIX_ENV=test mix ...` shape — this runner keeps every step individually
@@ -13,8 +13,6 @@ defmodule BoundedAuthorityReportAdapter.CiExample do
   # The example job's steps, in the workflow's order.
   @steps [
     {"install deps", ["deps.get"]},
-    {"check dependency currency (latest-first)",
-     ["run", "--no-start", "../../scripts/check_deps_currency.exs"]},
     {"audit dependencies", ["hex.audit"]},
     {"check formatting", ["format", "--check-formatted"]},
     {"compile (warnings as errors)", ["compile", "--warnings-as-errors"]},

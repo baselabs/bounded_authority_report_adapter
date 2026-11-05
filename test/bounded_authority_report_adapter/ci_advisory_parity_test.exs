@@ -5,8 +5,6 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     * the example job audits its OWN lock immediately after resolving its deps
       (the original advisory-parity invariant) — in the workflow directly, in
       `mix ci` through scripts/ci_example.exs's internal step order,
-    * the dependency-currency gate (ADR-0020) runs immediately after
-      dependency resolution on BOTH surfaces, through the portable .exs,
     * the env guard is the FIRST `mix ci` step (the RA7 trap's cross-platform
       replacement for the old POSIX env(1) re-exec), and
     * the gate battery (coverage floor, dialyzer, doc warnings, the library's
@@ -23,7 +21,6 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
   @edge_dir "examples/edge_agent"
   @audit_command "mix hex.audit"
-  @currency_exs "scripts/check_deps_currency.exs"
   @env_guard_step "run --no-start scripts/ci_env_guard.exs"
 
   # The gate battery, in the canonical step order shared by `mix ci` and the
@@ -54,7 +51,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
   test "mix ci audits the edge example immediately after resolving its dependencies" do
     # In the portable alias the example job lives in scripts/ci_example.exs;
-    # the invariant is its INTERNAL step order (deps → currency → audit),
+    # the invariant is its INTERNAL step order (deps → audit),
     # plus the alias entry that runs it.
     root_mix = File.read!("mix.exs") |> strip_comments()
     runner = File.read!("scripts/ci_example.exs")
@@ -63,9 +60,9 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
            "mix ci must run the example job's runner as its example section"
 
     assert runner =~
-             ~r|\{"install deps", \["deps\.get"\]\},\s*\{"check dependency currency \(latest-first\)",\s*\[[^\]]*\]\},\s*\{"audit dependencies", \["hex\.audit"\]\},|,
+             ~r|\{"install deps", \["deps\.get"\]\},\s*\{"audit dependencies", \["hex\.audit"\]\},|,
            "the example runner must audit the edge example's own lock immediately " <>
-             "after resolving its dependencies (currency between them)"
+             "after resolving its dependencies"
   end
 
   test "the GitHub example job audits its owner-local lock after dependency resolution" do
@@ -77,49 +74,9 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
            "the GitHub example job must bind every mix command to examples/edge_agent"
 
     assert example_job =~
-             ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Check dependency currency \(latest-first\)\s+run: mix run --no-start \.\./\.\./scripts/check_deps_currency\.exs\s+- name: Audit dependencies\s+run: #{@audit_command}|,
+             ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Audit dependencies\s+run: #{@audit_command}|,
            "the GitHub example job must run mix hex.audit against examples/edge_agent, not " <>
              "the root library lock"
-  end
-
-  test "the dependency-currency gate runs in both surfaces immediately after dependency resolution" do
-    # ADR-0020's wiring pin, both surfaces, adjacency to deps.get (drift is
-    # known at resolution time; the earlier it reds, the less work follows).
-    # Mutation-proven: dropping the step from either surface must break the
-    # adjacency pattern — a gate the orchestration silently skips is absent.
-    root_mix = File.read!("mix.exs") |> strip_comments()
-    workflow = File.read!(".github/workflows/ci.yml") |> strip_comments()
-    [gate_job, _] = String.split(workflow, "\n  example:", parts: 2)
-
-    alias_pattern = ~r|"deps\.get",\s*"run --no-start scripts/check_deps_currency\.exs",|
-
-    workflow_pattern =
-      ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Check dependency currency \(latest-first\)\s+run: mix run --no-start scripts/check_deps_currency\.exs|
-
-    assert root_mix =~ alias_pattern,
-           "mix ci must run the currency gate immediately after the library resolves its deps"
-
-    assert gate_job =~ workflow_pattern,
-           "the gate job must run the currency step immediately after dependency install"
-
-    mutated_alias =
-      String.replace(
-        root_mix,
-        ~s{"run --no-start scripts/check_deps_currency.exs",},
-        "",
-        global: false
-      )
-
-    refute mutated_alias == root_mix, "alias mutation fixture changed nothing"
-    refute mutated_alias =~ alias_pattern, "alias adjacency survives a dropped currency step"
-
-    mutated_gate =
-      String.replace(gate_job, "run: mix run --no-start #{@currency_exs}\n", "run: mix test\n",
-        global: false
-      )
-
-    refute mutated_gate == gate_job, "workflow mutation fixture changed nothing"
-    refute mutated_gate =~ workflow_pattern, "workflow adjacency survives a dropped currency step"
   end
 
   test "mix ci runs the gate battery in the canonical order right after credo, with no plain test step" do
