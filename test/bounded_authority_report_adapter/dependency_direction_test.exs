@@ -16,8 +16,8 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   `bounded_authority_protocol` AND no `bounded_authority` runtime / no `replicant` / no
   `capstan`"):
 
-    * **Positive** — `mix.exs` declares + pins the protocol package; `mix.lock` resolves it
-      at the pin. A dep-less `mix.exs` passes every negative regex trivially ("no forbidden
+    * **Positive** — `mix.exs` declares the protocol package at a floored range; `mix.lock`
+      resolves it inside that range. A dep-less `mix.exs` passes every negative regex trivially ("no forbidden
       dep" is vacuously true when there are no deps at all), so the positive clause has its
       own falsifier (design §1.2, design-adversarial C2).
     * **Negative** — no forbidden dep tuple / lock entry, and no runtime-internal namespace
@@ -48,6 +48,8 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # it across two modules and matches consumer's posture.
   use ExUnit.Case, async: false
 
+  alias Mix.Dep.Lock
+
   # The ALLOWED public protocol package the adapter MUST declare (the trust root for the
   # wire profile). Consumed from its Hex release: the adapter requires the published
   # `bounded_authority_protocol` package at @protocol_requirement, and the resolved lock
@@ -65,12 +67,6 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   @protocol_requirement "~> 0.9.1"
   @protocol_floor "0.9.1"
   @protocol_ceiling "0.10.0"
-
-  # The LOCKED version — the guard against silent lock drift. The requirement above is a
-  # range, so the lock is the exact version this repository compiles and tests against. A lock
-  # move (a bare `mix deps.update`, or a deliberate adoption of a newer release inside the
-  # range) is a reviewed change: the same commit raises this attribute and BOTH project locks.
-  @protocol_locked_version "0.9.1"
 
   # The requirement is acceptable only when it is a floored range: it admits the security
   # floor, admits every later release below the ceiling (so it is not an exact pin), and
@@ -96,12 +92,13 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     Version.match?(locked_version, Version.parse_requirement!(requirement))
   end
 
-  defp protocol_lock_line(version) do
-    "\"#{@protocol_app}\": {:hex, :#{@protocol_app}, \"#{version}\","
-  end
+  # The version mix.lock resolved. Any release inside @protocol_requirement is acceptable;
+  # Dependabot proposes lock moves and CI decides.
+  defp locked_protocol_version do
+    {:hex, :bounded_authority_protocol, version, _checksum, [:mix], [], "hexpm", _outer} =
+      Lock.read("mix.lock")[:bounded_authority_protocol]
 
-  defp protocol_locked_at?(mix_lock, version) do
-    String.contains?(mix_lock, protocol_lock_line(version))
+    version
   end
 
   # Forbidden dep-app atoms — form-precise regex so prose does not false-positive (design
@@ -192,7 +189,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
   # ----------------------------------------------------------------- positive clause
 
-  describe "the protocol package is declared and pinned" do
+  describe "the protocol package is declared inside its range" do
     test "mix.exs declares :#{@protocol_app}" do
       mix_exs = File.read!("mix.exs")
 
@@ -221,17 +218,9 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
              "mix.lock must NOT resolve :#{@protocol_app} from a git ref"
     end
 
-    test "mix.lock resolves the protocol package at @protocol_locked_version (no silent drift)" do
-      mix_lock = File.read!("mix.lock")
-
-      # The predicate TERMINATES at the comma after the version: an unterminated
-      # prefix would match "0.2.0" inside "0.2.0-rc.1" — reopening the exact
-      # silent-drift hole this clause closes.
-      assert protocol_locked_at?(mix_lock, @protocol_locked_version),
-             "mix.lock must resolve :#{@protocol_app} at exactly #{@protocol_locked_version} — " <>
-               "a silent `mix deps.update` lock drift crossed an unreviewed protocol span. " <>
-               "A version bump is deliberate: raise the mix.exs requirement + both wall " <>
-               "attributes + the lock in the SAME commit"
+    test "mix.lock resolves the protocol from Hex and the build compiles it" do
+      assert Application.spec(:bounded_authority_protocol, :vsn) |> to_string() ==
+               locked_protocol_version()
     end
 
     test "@protocol_requirement is a floored range that admits the locked version" do
@@ -241,16 +230,16 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
                "older or at the ceiling (a library declares a range; only an application " <>
                "locks an exact version)"
 
-      assert requirement_admits_locked_version?(@protocol_requirement, @protocol_locked_version),
+      assert requirement_admits_locked_version?(@protocol_requirement, locked_protocol_version()),
              "the requirement #{@protocol_requirement} does not admit the locked version " <>
-               "#{@protocol_locked_version}"
+               "#{locked_protocol_version()}"
 
-      assert Version.compare(@protocol_locked_version, @protocol_floor) != :lt,
-             "the locked version #{@protocol_locked_version} is below the security floor " <>
+      assert Version.compare(locked_protocol_version(), @protocol_floor) != :lt,
+             "the locked version #{locked_protocol_version()} is below the security floor " <>
                "#{@protocol_floor}"
 
-      assert Version.compare(@protocol_locked_version, @protocol_ceiling) == :lt,
-             "the locked version #{@protocol_locked_version} is at or above the ceiling " <>
+      assert Version.compare(locked_protocol_version(), @protocol_ceiling) == :lt,
+             "the locked version #{locked_protocol_version()} is at or above the ceiling " <>
                "#{@protocol_ceiling}"
     end
 
@@ -267,7 +256,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
              "mix.exs declares :#{@protocol_app} at #{inspect(declared)}, which is not a " <>
                "floored range (>= #{@protocol_floor}, < #{@protocol_ceiling}, not an exact pin)"
 
-      assert requirement_admits_locked_version?(declared, @protocol_locked_version)
+      assert requirement_admits_locked_version?(declared, locked_protocol_version())
     end
 
     test "the floored-range predicate reds on a requirement below the release floor" do
@@ -513,38 +502,6 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
       refute String.contains?(depless, ":#{@protocol_app}"),
              "the dep-removal fixture did not strip the protocol dep — the positive-clause " <>
                "mutation proof is not exercising the red path (the fixture itself is broken)"
-    end
-
-    test "the lock-version clause reds on a drifted lock (plain bump + prefix extension)" do
-      # Two mutations, one per real hole. A plain drift (0.2.1 — a stale or manually
-      # altered lock; a bare `mix deps.update` reconciles the lock inside the range, which this clause catches) exercises
-      # the obvious red. The PREFIX EXTENSION (0.2.0-rc.1) exercises the one an
-      # unterminated predicate would still match: mutating to 0.2.1
-      # alone passes even while the prefix hole is open, so the proof would mask the very
-      # defect the terminator in the clause above exists to prevent. Fixture discipline
-      # follows the
-      # C2 shape above: in-memory String.replace, refute the production predicate on the
-      # mutated copy.
-      locked_line = protocol_lock_line(@protocol_locked_version)
-
-      real_lock = File.read!("mix.lock")
-
-      assert protocol_locked_at?(real_lock, @protocol_locked_version),
-             "fixture setup: the real lock does not carry the locked-version line — the " <>
-               "green clause above is red and must be fixed before this proof means anything"
-
-      for drifted <- ["0.2.1", "0.2.0-rc.1"] do
-        drifted_line = "\"#{@protocol_app}\": {:hex, :#{@protocol_app}, \"#{drifted}\","
-        mutated_lock = String.replace(real_lock, locked_line, drifted_line)
-
-        refute mutated_lock == real_lock,
-               "the drift fixture for #{drifted} did not change the lock — the mutation " <>
-                 "proof is not exercising the red path (the fixture itself is broken)"
-
-        refute protocol_locked_at?(mutated_lock, @protocol_locked_version),
-               "a lock drifted to #{drifted} still satisfies the locked-version clause — " <>
-                 "the wall would stay green across an unreviewed protocol span"
-      end
     end
 
     test "the protocol namespace is ALLOWED (BoundedAuthorityProtocol. never trips the wall)" do

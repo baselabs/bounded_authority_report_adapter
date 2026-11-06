@@ -48,17 +48,13 @@ library's `mix.exs` trips the wall.
 ## Protocol version discipline
 
 - BAP comes from **Hex**. `mix.exs` declares a range with a security floor (owner ruling
-  October 6, 2026, ADR-0023 amendment: libraries declare ranges, only applications lock exact
-  versions); `mix.lock` records the exact version; the wall test pins both
-  (`@protocol_requirement`, `@protocol_floor`, `@protocol_ceiling`, `@protocol_locked_version`).
-  The values live in those files, never in prose (ADR-0023 decision 2).
-- A bare `mix deps.update bounded_authority_protocol` reconciles lock and deps quietly; the
-  wall's `@protocol_locked_version` reds the gate until the move is reviewed.
-- Raising the floor or ceiling moves the `mix.exs` requirement, the wall's range attributes and
-  BOTH locks in one commit; adopting a newer release inside the range moves
-  `@protocol_locked_version` and BOTH locks. Either way enumerate the span and classify its
-  `lib/` delta per ADR-0023. The example app's lock is held to parity by its own test. BARA
-  follows published BAP releases directly; no consumer's pin gates a bump.
+  October 6, 2026: libraries declare ranges, only applications lock exact versions);
+  `mix.lock` records whatever release inside that range resolved. The wall test checks the
+  range (`@protocol_requirement`, `@protocol_floor`, `@protocol_ceiling`) and that the lock is
+  inside it; the example app's test holds its lock to parity with the library's.
+- No test names a locked version: Dependabot opens a PR for each new protocol release and CI
+  decides (owner decision November 5, 2026). Raising the floor or crossing the ceiling is still
+  a deliberate change to the requirement and the range attributes in one commit.
 - `scripts/check-bap-drift.sh` compares the lock, hex.pm and BAP main (read-only). Run it before
   citing sibling state or planning a version move. A probe, not a gate; not part of `mix ci`.
 
