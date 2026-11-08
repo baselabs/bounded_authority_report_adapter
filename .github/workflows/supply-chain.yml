@@ -27,14 +27,14 @@ jobs:
     # attest job below is the only one that can mint attestations, and it
     # runs no project code.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           # workflow_dispatch re-attestation targets a specific tag/ref;
           # tag pushes attest the pushed ref itself.
           ref: ${{ inputs.ref || github.ref }}
 
-      - uses: erlef/setup-beam@v1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
           elixir-version: "1.20.2"
           otp-version: "29.0.3"
@@ -70,7 +70,7 @@ jobs:
           MIX_ENV: test
 
       - name: Upload release evidence for attestation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-evidence-${{ github.sha }}
           path: |
@@ -94,18 +94,18 @@ jobs:
       artifact-metadata: write
     steps:
       - name: Download release evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-evidence-${{ github.sha }}
           path: artifacts
 
       - name: Attest build provenance
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: artifacts/bounded_authority_report_adapter-*.tar
 
       - name: Attest release SBOM
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: artifacts/bounded_authority_report_adapter-*.tar
           sbom-path: artifacts/release.cdx.json
