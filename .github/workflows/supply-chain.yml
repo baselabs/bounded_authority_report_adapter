@@ -21,20 +21,20 @@ concurrency:
 jobs:
   build:
     name: Build release package evidence
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.BASELABS_RUNNER == 'baselabs-gcp' && github.run_attempt != '1' && 'baselabs-gcp-od' || vars.BASELABS_RUNNER || 'ubuntu-24.04' }}
     # Deliberately NO id-token/attestations here: this job compiles and runs
     # ~40 third-party packages' code — it must not hold OIDC identity. The
     # attest job below is the only one that can mint attestations, and it
     # runs no project code.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           # workflow_dispatch re-attestation targets a specific tag/ref;
           # tag pushes attest the pushed ref itself.
           ref: ${{ inputs.ref || github.ref }}
 
-      - uses: erlef/setup-beam@v1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           elixir-version: "1.20.2"
           otp-version: "29.0.3"
@@ -70,7 +70,7 @@ jobs:
           MIX_ENV: test
 
       - name: Upload release evidence for attestation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-evidence-${{ github.sha }}
           path: |
@@ -83,7 +83,7 @@ jobs:
   attest:
     name: Attest provenance and SBOM
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.BASELABS_RUNNER == 'baselabs-gcp' && github.run_attempt != '1' && 'baselabs-gcp-od' || vars.BASELABS_RUNNER || 'ubuntu-24.04' }}
     # The ONLY job with signing permissions (SLSA's build/attest split): the
     # artifact-metadata permission is on actions/attest@v4's documented
     # required set alongside id-token + attestations.
@@ -94,18 +94,18 @@ jobs:
       artifact-metadata: write
     steps:
       - name: Download release evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-evidence-${{ github.sha }}
           path: artifacts
 
       - name: Attest build provenance
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: artifacts/bounded_authority_report_adapter-*.tar
 
       - name: Attest release SBOM
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: artifacts/bounded_authority_report_adapter-*.tar
           sbom-path: artifacts/release.cdx.json

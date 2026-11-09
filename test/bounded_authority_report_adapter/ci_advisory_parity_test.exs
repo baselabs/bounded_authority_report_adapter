@@ -23,6 +23,12 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   @audit_command "mix hex.audit"
   @env_guard_step "run --no-start scripts/ci_env_guard.exs"
 
+  # The BaseLabs runner expression, verbatim.
+  @runner_expression "${{ vars.BASELABS_RUNNER == 'baselabs-gcp' && github.run_attempt != '1' " <>
+                       "&& 'baselabs-gcp-od' || vars.BASELABS_RUNNER || 'ubuntu-24.04' }}"
+
+  @pinned_action ~r/\A[\w.-]+\/[\w.\/-]+@[0-9a-f]{40}\z/
+
   # The gate battery, in the canonical step order shared by `mix ci` and the
   # workflow's gate job. The workflow spells each command `mix <command>`;
   # the alias carries it as a bare task name (no env(1) re-exec — the
@@ -146,40 +152,39 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   test "both jobs run the full compatibility matrix on Linux (every supported OTP major)" do
     # A dropped matrix cell narrows CI coverage silently (a lane that never
     # runs looks green by absence) — pin the exact cells per job and that
-    # setup-beam actually consumes the matrix variables. CI is Linux only
-    # (owner rule, 2026-09-26): developer portability across macOS and Linux
-    # is a developer-setup property, never a CI lane; Windows developers use
-    # WSL2, the Linux path (owner direction, October 4, 2026).
+    # setup-beam actually consumes the matrix variables. CI is Linux only:
+    # developer portability across macOS and Linux is a developer-setup property,
+    # never a CI lane; Windows developers use WSL2, the Linux path.
     workflow = File.read!(".github/workflows/ci.yml")
 
     for runner <- ["windows-", "macos-"] do
       refute String.contains?(workflow, runner),
              "ci.yml must not run a #{runner}* lane (CI is Linux only)"
 
-      planted = String.replace(workflow, "ubuntu-latest", runner <> "latest", global: false)
+      planted = String.replace(workflow, "ubuntu-24.04", runner <> "latest", global: false)
       assert String.contains?(planted, runner), "the #{runner} guard fixture changed nothing"
     end
 
     [gate_job, example_job] = String.split(workflow, "\n  example:", parts: 2)
 
     lanes = [
-      {"ubuntu-latest", "1.18.4", "27.3.4.14"},
-      {"ubuntu-latest", "1.19.5", "28.5.0.3"},
-      {"ubuntu-latest", "1.20.2", "29.0.3"}
+      {"1.18.4", "27.3.4.14"},
+      {"1.19.5", "28.5.0.3"},
+      {"1.20.2", "29.0.3"}
     ]
 
     for {job_name, job} <- [{"gate", gate_job}, {"example", example_job}] do
       assert job =~ ~r/strategy:\s+fail-fast:\s*false\s+matrix:\s+include:/m,
              "the #{job_name} job must declare the fail-fast: false matrix"
 
-      assert job =~ ~r/runs-on: \$\{\{ matrix\.os \}\}/,
-             "the #{job_name} job must run on the matrix OS, not a pinned runner"
+      assert String.contains?(job, "runs-on: #{@runner_expression}\n"),
+             "the #{job_name} job must run on the BaseLabs runner expression"
 
-      for {os, elixir, otp} <- lanes do
-        cell = "- os: #{os}\n            elixir: \"#{elixir}\"\n            otp: \"#{otp}\"\n"
+      for {elixir, otp} <- lanes do
+        cell = "- elixir: \"#{elixir}\"\n            otp: \"#{otp}\"\n"
 
         assert job =~ cell,
-               "the #{job_name} job must include the #{os} #{elixir}/#{otp} matrix cell"
+               "the #{job_name} job must include the #{elixir}/#{otp} matrix cell"
 
         # Non-vacuity: the cell string removed in-memory must break the match
         # (a loosened assertion that passes over a dropped lane reds here).
@@ -193,6 +198,45 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
              "the #{job_name} job's setup-beam must consume the matrix variables, not a pin"
     end
   end
+
+  test "every job in every workflow runs on the runner expression or a pinned Linux image" do
+    for path <- workflows(),
+        [_, runner] <- Regex.scan(~r/^\s+runs-on: (.+)$/m, File.read!(path)) do
+      assert runner in [@runner_expression, "ubuntu-24.04"],
+             "#{path} runs a job on #{runner}; use the BaseLabs runner expression " <>
+               "(a floating image such as ubuntu-latest changes under the job)"
+    end
+
+    refute "ubuntu-latest" in [@runner_expression, "ubuntu-24.04"]
+  end
+
+  test "every action in every workflow is pinned to a full commit SHA" do
+    uses =
+      for path <- workflows(),
+          [_, ref] <- Regex.scan(~r/^\s+(?:- )?uses: (\S+)/m, File.read!(path)),
+          do: {path, ref}
+
+    assert length(uses) >= 10, "the uses: scan found #{length(uses)} actions; it is broken"
+
+    for {path, ref} <- uses do
+      assert ref =~ @pinned_action,
+             "#{path} uses #{ref}; pin it to a 40-hex commit SHA with the tag in a comment"
+    end
+
+    # Non-vacuity: a tag reference fails the same pattern.
+    refute "actions/attest@v4" =~ @pinned_action
+    refute "actions/checkout@v4.4.0" =~ @pinned_action
+  end
+
+  test "pushes that change only Markdown or docs still run CI" do
+    # The doc-sample, docs-currency, Livebook and vocabulary tests read the guides.
+    workflow = File.read!(".github/workflows/ci.yml")
+
+    refute workflow =~ "paths-ignore",
+           "ci.yml skips some paths, but the tests read the Markdown guides and docs/"
+  end
+
+  defp workflows, do: Path.wildcard(".github/workflows/*.yml")
 
   # Full-line comments (the alias's step annotations, the workflow's battery
   # comment) must not weaken step-adjacency matching — strip them so the

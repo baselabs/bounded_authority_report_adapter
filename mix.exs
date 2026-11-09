@@ -179,12 +179,21 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
     ]
   end
 
+  @doc false
+  def documented_module?(module, _metadata) do
+    source = module.module_info(:compile)[:source] |> to_string()
+    String.starts_with?(source, Path.join(__DIR__, "lib") <> "/")
+  end
+
   defp docs do
     [
       main: "readme",
       source_ref: "v#{@version}",
       source_url: @source_url,
       assets: %{"examples/files" => "files"},
+      # CI builds the docs under MIX_ENV=test, which also compiles test/support/; only the
+      # modules compiled from lib/ are documented.
+      filter_modules: &documented_module?/2,
       extras: [
         {"README.md", title: "Overview"},
         {"examples/report_envelope_roundtrip.livemd", title: "Signer Livebook"},

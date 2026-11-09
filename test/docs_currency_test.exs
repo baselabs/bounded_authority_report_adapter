@@ -223,6 +223,28 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     end
   end
 
+  test "the docs build documents the lib/ modules and none of test/support/" do
+    # CI runs `mix docs` under MIX_ENV=test, which compiles test/support/ too.
+    filter = Mix.Project.config()[:docs][:filter_modules]
+
+    for module <- [
+          BoundedAuthorityReportAdapter,
+          BoundedAuthorityReportAdapter.V3,
+          BoundedAuthorityReportAdapter.Telemetry,
+          Mix.Tasks.BoundedAuthorityReportAdapter.Doctor
+        ] do
+      assert filter.(module, %{}), "#{inspect(module)} must be documented"
+    end
+
+    for module <- [
+          BoundedAuthorityReportAdapter.TestKeys,
+          BoundedAuthorityReportAdapter.Keys.RawKey,
+          BoundedAuthorityReportAdapter.TestHandles
+        ] do
+      refute filter.(module, %{}), "#{inspect(module)} is test support and must not be documented"
+    end
+  end
+
   ## helpers
 
   # The atoms of one @type error set, from the lib source (the source of
