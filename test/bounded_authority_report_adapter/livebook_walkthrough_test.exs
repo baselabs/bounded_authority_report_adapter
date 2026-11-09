@@ -139,17 +139,17 @@ defmodule BoundedAuthorityReportAdapter.LivebookWalkthroughTest do
     notebook = normalize_space(context.source)
     version = Mix.Project.config()[:version]
     requirement = protocol_requirement()
-    {unreleased, latest_version, latest_section} = changelog_sections()
+    {unreleased, latest_version, released_sections} = changelog_sections()
 
     expected_statements =
       if String.contains?(unreleased, "`#{requirement}`") do
-        [_match, released_pin] = Regex.run(~r/pin moves `[^`]+` → `([^`]+)`/, latest_section)
+        released_requirement = released_requirement(released_sections)
 
         [
           "version #{version} in `mix.exs`, which declares " <>
             "`bounded_authority_protocol` `#{requirement}`.",
-          "That range is unreleased; the published #{latest_version} release pins " <>
-            "`#{released_pin}`"
+          "That range is unreleased; the published #{latest_version} release declares " <>
+            "`#{released_requirement}`"
         ]
       else
         [
@@ -223,8 +223,47 @@ defmodule BoundedAuthorityReportAdapter.LivebookWalkthroughTest do
     requirement
   end
 
+  test "the released protocol requirement is read from either CHANGELOG phrasing" do
+    # Two phrasings are in use: "moves from `x` to `y`" (0.12.0) and "pin moves `x` → `y`"
+    # (earlier releases). The newest released section that moves the requirement wins.
+    assert released_requirement([
+             "[0.13.0]\n\n- A fix with no requirement move.\n",
+             "[0.12.0]\n\n- The public protocol dependency moves from `~> 0.8.0` to\n  `~> 0.9.1`.\n",
+             "[0.8.0]\n\n- The exact protocol pin moves `== 0.7.0` → `== 0.8.0`.\n"
+           ]) == "~> 0.9.1"
+
+    assert released_requirement([
+             "[0.8.0]\n\n- The exact protocol pin moves `== 0.7.0` → `== 0.8.0`.\n"
+           ]) ==
+             "== 0.8.0"
+
+    # The real CHANGELOG parses: some released section names the requirement it moved to.
+    {_unreleased, _latest_version, released_sections} = changelog_sections()
+
+    assert {:ok, _requirement} =
+             Version.parse_requirement(released_requirement(released_sections))
+  end
+
+  # The protocol requirement the newest release that moved it declares, from its CHANGELOG
+  # section: "moves from `x` to `y`" or "moves `x` → `y`".
+  defp released_requirement(released_sections) do
+    Enum.find_value(released_sections, fn section ->
+      case Regex.run(
+             ~r/moves (?:from )?`[^`]+` (?:→|->|to) `([^`]+)`/,
+             normalize_space(section)
+           ) do
+        [_match, requirement] -> requirement
+        nil -> nil
+      end
+    end) ||
+      flunk(
+        "no released CHANGELOG section says which protocol requirement it moved to " <>
+          "(\"moves from `x` to `y`\" or \"moves `x` → `y`\")"
+      )
+  end
+
   # The CHANGELOG's Unreleased section ("" between a release cut and the next cycle's
-  # section), and the version and section of the latest release.
+  # section), the latest release's version, and the released sections, newest first.
   defp changelog_sections do
     [_preamble | sections] = String.split(File.read!(@changelog_path), ~r/^## /m)
 
@@ -236,7 +275,7 @@ defmodule BoundedAuthorityReportAdapter.LivebookWalkthroughTest do
 
     assert [latest | _older] = released
     assert [_match, latest_version] = Regex.run(~r/\A\[(\d+\.\d+\.\d+)\]/, latest)
-    {unreleased, latest_version, latest}
+    {unreleased, latest_version, released}
   end
 
   defp normalize_space(text), do: String.replace(text, ~r/\s+/, " ")

@@ -8,7 +8,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
     [
       app: :bounded_authority_report_adapter,
       version: @version,
-      # Supported Elixir line (ADR-0019): the range admits the supported
+      # Supported Elixir line: the range admits the supported
       # minors (1.18/1.19/1.20) and Mix refuses anything outside it at
       # compile. The supported OTP-major set ({27..29}) is enforced by
       # config/config.exs — 25/26 are excluded: the protocol package's
@@ -28,8 +28,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         plt_core_path: "_build/plts",
         plt_local_path: "_build/plts",
         # :mix so the install task's Mix.Task behaviour callbacks resolve in the
-        # PLT (the conditional-def pattern dialyzes clean with it — the
-        # ash_onetime posture).
+        # PLT (the conditional-def pattern dialyzes clean with it).
         plt_add_apps: [:mix]
       ],
       deps: deps(),
@@ -99,36 +98,37 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
 
   # test/support/ holds the reference key-handle impl (Keys.RawKey) + test-only
   # keypair fixtures — compiled ONLY in :test so the {pub, priv} reference impl
-  # does not ship in the artifact (ADR-0014: a key-in-process-memory
-  # impl in lib/ would pave a road to the failure strategy §4 says the separate
-  # repo exists to prevent).
+  # does not ship in the artifact: a key-in-process-memory handle in lib/ would
+  # invite exactly the key custody this library exists to keep out of process.
   defp elixirc_paths(:test), do: ["lib/", "test/support/"]
   defp elixirc_paths(_env), do: ["lib/"]
 
   # The adapter depends ONLY on the public bounded_authority_protocol package on
-  # the edge path — no private runtime dependency (the dependency-direction wall,
-  # ADR 0003). BAP is consumed from its Hex release.
+  # the edge path — no private runtime dependency (the dependency-direction wall).
+  # The protocol is consumed from its Hex release.
   defp deps do
     [
       # Runtime: the telemetry event surface (:telemetry.execute). Zero transitive
       # deps; the emitter is shape-validated and value-free
       # (lib/bounded_authority_report_adapter/telemetry.ex).
       {:telemetry, "~> 1.3"},
-      # A RANGE with a security floor, not an exact pin (October 6, 2026;
-      # ADR-0023 amendment): a library declares the range it is compatible with and only an
-      # application locks an exact version. 0.9.1 is the floor: it excludes architecture decision records and retains
-      # the producer-canonicality checks added in 0.9.0 and the strict Ed25519
-      # verification rule this adapter's key refusal and self-check call
-      # (BoundedAuthorityProtocol.Ed25519), so 0.7.x must never resolve. The ceiling is the
-      # next protocol minor, a deliberate, reviewed move. The dependency wall pins the
-      # requirement shape and the locked version.
+      # A RANGE with a security floor, not an exact pin: a library declares the range it is
+      # compatible with and only an application locks an exact version.
+      #   * The floor is the oldest protocol release this adapter supports. Every supported
+      #     release carries the strict Ed25519 rule (BoundedAuthorityProtocol.Ed25519) that the
+      #     key refusal and self-check call and the producer-canonicality checks (0.9.1 and
+      #     later), so 0.7.x never resolves.
+      #   * The ceiling (exclusive) is the protocol's next compatibility boundary: the next
+      #     minor while the protocol is 0.x, the next major from 1.0 on, where protocol minors
+      #     are additive or soundness repairs. Crossing it is a deliberate, reviewed change.
+      # The dependency wall test derives its probes from the floor and the ceiling, so a range
+      # move edits only this requirement, the wall's three range attributes and the locks.
       {:bounded_authority_protocol, "~> 0.9.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # The install task (lib/mix/tasks) uses Igniter when present; the file
       # compiles to a Mix.raise fallback without it.
       # No `only:` — the optional edge must order igniter BEFORE this package
-      # in consumer builds, or lib/mix/tasks compiles its no-igniter fallback
-      # (the ash_onetime posture, read first-hand).
+      # in consumer builds, or lib/mix/tasks compiles its no-igniter fallback.
       {:igniter, "~> 0.8", optional: true},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},

@@ -49,11 +49,16 @@ Surgical pathspecs — `git commit -o <files>` or explicit paths, never `git add
 ## Protocol dependency bumps
 
 `mix.exs` declares `bounded_authority_protocol` as a range with a security floor; `mix.lock`
-holds the exact version this repository builds against. Moving the lock, even inside the range, is a deliberate, reviewed change: the
-wall test pins the locked version, and a bare `mix deps.update` reds the gate by design.
-Moving the floor or the ceiling also edits the requirement and the wall's range attributes.
-Every move updates BOTH locks in ONE commit, with the span enumerated and its `lib/` delta
-classified as compatible, corrective, or breaking.
+records the release inside that range this repository builds against. Any release inside the
+range is acceptable: Dependabot proposes each new protocol release and CI decides, and the
+example app's lock follows the library's (its parity test fails otherwise).
+
+Moving the floor or crossing the ceiling is a deliberate change. One commit edits the
+requirement in `mix.exs`, the dependency wall's three range attributes
+(`@protocol_requirement`, `@protocol_floor`, `@protocol_ceiling`; every other probe in the
+wall derives from them), both locks, and the Livebook's version sentence, and the CHANGELOG
+says the requirement "moves from `x` to `y`", with the `lib/` delta classified as compatible,
+corrective, or breaking.
 
 ## Docs
 

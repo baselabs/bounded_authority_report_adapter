@@ -55,14 +55,14 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # `bounded_authority_protocol` package at @protocol_requirement, and the resolved lock
   # carries the Hex tuple (not a git ref) — the wall asserts BOTH below.
   #
-  # The requirement is a RANGE with a security floor (owner ruling, October 6, 2026; ADR-0023
-  # amendment): a library declares the range it is compatible with, and only an application
-  # locks an exact version. The floor is BAP 0.9.1, the ADR-free release that retains the strict
-  # Ed25519 verification and producer-canonicality checks this adapter uses; the ceiling
-  # (exclusive) is the next protocol minor, which is a deliberate, reviewed move. Raising the
-  # floor or the ceiling moves @protocol_requirement, @protocol_floor / @protocol_ceiling and
-  # mix.exs in the same commit; when that happens is governed by
-  # the public dependency upgrade notes.
+  # The requirement is a RANGE with a security floor: a library declares the range it is
+  # compatible with, and only an application locks an exact version. The floor is the oldest
+  # protocol release this adapter supports (every supported release carries the strict Ed25519
+  # rule and the producer-canonicality checks this adapter calls); the ceiling (exclusive) is
+  # the protocol's next compatibility boundary: the next minor while the protocol is 0.x, the
+  # next major from 1.0 on. Every probe below is derived from @protocol_floor and
+  # @protocol_ceiling, so a range move edits these three attributes, mix.exs and the locks in
+  # one commit, and nothing else in this file.
   @protocol_app "bounded_authority_protocol"
   @protocol_requirement "~> 0.9.1"
   @protocol_floor "0.9.1"
@@ -71,20 +71,42 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # The requirement is acceptable only when it is a floored range: it admits the security
   # floor, admits every later release below the ceiling (so it is not an exact pin), and
   # admits nothing at or above the ceiling or below the floor (so it neither reopens 0.7.x,
-  # which lacks the strict Ed25519 rule, nor floats across a protocol minor).
+  # which lacks the strict Ed25519 rule, nor floats across the ceiling).
   defp requirement_is_floored_range?(requirement) do
     case Version.parse_requirement(requirement) do
       {:ok, parsed} ->
         Version.match?(@protocol_floor, parsed) and
-          Version.match?("0.9.2", parsed) and
-          Version.match?("0.9.99", parsed) and
+          Version.match?(next_patch(@protocol_floor), parsed) and
+          Version.match?(just_below(@protocol_ceiling), parsed) and
           not Version.match?(@protocol_ceiling, parsed) and
-          not Version.match?("0.9.0", parsed) and
+          not Version.match?(just_below(@protocol_floor), parsed) and
           not Version.match?("0.7.9", parsed) and
           not Version.match?("0.7.0", parsed)
 
       :error ->
         false
+    end
+  end
+
+  # The probe versions, derived from the range attributes.
+  defp next_patch(version, step \\ 1) do
+    parsed = Version.parse!(version)
+    to_string(%{parsed | patch: parsed.patch + step})
+  end
+
+  defp next_major(version), do: "#{Version.parse!(version).major + 1}.0.0"
+
+  # The highest probe version strictly below `version` (0.10.0 -> 0.9.999, 1.0.0 -> 0.999.999).
+  defp just_below(version) do
+    case Version.parse!(version) do
+      %Version{patch: patch} = parsed when patch > 0 ->
+        to_string(%{parsed | patch: patch - 1})
+
+      %Version{minor: minor} = parsed when minor > 0 ->
+        to_string(%{parsed | minor: minor - 1, patch: 999})
+
+      %Version{major: major} = parsed when major > 0 ->
+        to_string(%{parsed | major: major - 1, minor: 999, patch: 999})
     end
   end
 
@@ -261,8 +283,19 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
     test "the floored-range predicate reds on a requirement below the release floor" do
       # 0.7.x lacks the strict Ed25519 rule this adapter calls: `~> 0.7` and `>= 0.7.0` admit
-      # it (and `~> 0.7` also floats to 0.10.0 and beyond); `~> 0.7.0` is the 0.7 line itself.
-      for requirement <- ["~> 0.7", "~> 0.7.0", ">= 0.7.0", ">= 0.7.0 and < 0.10.0", "~> 0.9.0"] do
+      # it; `~> 0.7.0` is the 0.7 line itself; `~> 0.9.0` admits 0.9.0, which lacks the
+      # producer-canonicality checks. The last two admit the release just below the floor.
+      below = just_below(@protocol_floor)
+
+      for requirement <- [
+            "~> 0.7",
+            "~> 0.7.0",
+            ">= 0.7.0",
+            ">= 0.7.0 and < #{@protocol_ceiling}",
+            "~> 0.9.0",
+            ">= #{below} and < #{@protocol_ceiling}",
+            "== #{below}"
+          ] do
         refute requirement_is_floored_range?(requirement),
                "the requirement #{requirement} admits a protocol release below the " <>
                  "#{@protocol_floor} security floor and the wall would stay green"
@@ -272,7 +305,11 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     test "the floored-range predicate reds on an exact pin" do
       # An exact pin is the retired policy: a library that pins one version blocks every
       # consumer that holds the same package at a later compatible release.
-      for requirement <- ["== 0.9.1", "== 0.9.2", "0.9.1"] do
+      for requirement <- [
+            "== #{@protocol_floor}",
+            "== #{next_patch(@protocol_floor)}",
+            @protocol_floor
+          ] do
         refute requirement_is_floored_range?(requirement),
                "the exact requirement #{requirement} satisfies the wall; the ruling is a " <>
                  "range, not an exact pin"
@@ -280,15 +317,24 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     end
 
     test "the floored-range predicate reds on a range that floats across the ceiling" do
-      for requirement <- ["~> 0.9", ">= 0.9.1", ">= 0.9.1 and < 1.0.0"] do
+      for requirement <- [
+            ">= #{@protocol_floor}",
+            ">= #{@protocol_floor} and <= #{@protocol_ceiling}",
+            ">= #{@protocol_floor} and < #{next_major(@protocol_ceiling)}"
+          ] do
         refute requirement_is_floored_range?(requirement),
                "the requirement #{requirement} admits #{@protocol_ceiling} or later; crossing " <>
                  "a protocol minor is a deliberate, reviewed move"
       end
     end
 
-    test "the floored-range predicate reds on a floor above 0.9.1 and on an unparsable string" do
-      for requirement <- ["~> 0.9.2", "~> 0.9.3", "not a requirement", ""] do
+    test "the floored-range predicate reds on a floor above the floor and on an unparsable string" do
+      for requirement <- [
+            "~> #{next_patch(@protocol_floor)}",
+            "~> #{next_patch(@protocol_floor, 2)}",
+            "not a requirement",
+            ""
+          ] do
         refute requirement_is_floored_range?(requirement),
                "the requirement #{inspect(requirement)} must not satisfy the wall"
       end
@@ -296,8 +342,12 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
     test "the lock-membership predicate reds when the lock leaves the range" do
       refute requirement_admits_locked_version?(@protocol_requirement, "0.7.0")
-      refute requirement_admits_locked_version?(@protocol_requirement, "0.10.0")
-      assert requirement_admits_locked_version?(@protocol_requirement, "0.9.4")
+      refute requirement_admits_locked_version?(@protocol_requirement, @protocol_ceiling)
+
+      assert requirement_admits_locked_version?(
+               @protocol_requirement,
+               next_patch(@protocol_floor, 3)
+             )
     end
   end
 
