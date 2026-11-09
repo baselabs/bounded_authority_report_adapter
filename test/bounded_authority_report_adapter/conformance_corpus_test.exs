@@ -1,142 +1,100 @@
 defmodule BoundedAuthorityReportAdapter.ConformanceCorpusTest do
   @moduledoc """
-  The three-corpus leg (B2 / ADR-0021; supersedes ADR-0013 decision 1's
-  one-vector scope by explicit owner direction — see ADR-0013's dated
-  amendment).
+  Executes the protocol package's complete certified conformance corpora for contract-majors
+  1, 2 and 3 through its documented verifier CLI, `BoundedAuthorityProtocol.Conformance.Cli.run/1`,
+  over the corpus directories the package ships in `deps/`.
 
-  Executes BAP's COMPLETE certified conformance corpora — v1, v2, and v3 —
-  through the pinned dependency's own certified loader and runner:
+    * **Index identity** — each corpus's `index.json` SHA-256 equals the value pinned here,
+      re-derived from the bytes on disk, not read from the package's own certification map,
+      so a patched dependency cannot vouch for itself. The report's
+      `index_sha256_base64url` must equal the same pin.
+    * **Every case agrees** — `Cli.run/1` exits 0 only when every index file is present, no
+      file is unlisted, every SHA-256 and count matches, the corpus is the certified one,
+      and every case's verdict and producer bytes equal the expectation.
+    * **Census** — the report's `total` and `agreed` equal the census pinned here
+      (283 / 268 / 292) and `disagreed` is 0, so a run that executed fewer cases cannot pass.
+    * **Not vacuous** — a copy of a corpus with one appended byte in a hash-verified sidecar
+      exits 1.
 
-    * **Index identity** — each corpus's `index.json` SHA-256 equals the
-      pinned value, INDEPENDENTLY re-derived here (not read from the
-      package's own pin map, so a patched dependency cannot lie about its
-      own certification). The pins are the registry-read-back values from
-      the BAP 0.5.1 release program.
-    * **Full integrity** — `Corpus.load/1` verifies per-file SHA-256,
-      exact file-set equality both directions, per-file and total case
-      counts, corpus-wide case-id uniqueness, applicability totality, and
-      tamper binding. A tamper leg proves the load reds on a flipped byte
-      (the harness is not vacuously green).
-    * **Every case agrees** — `Runner.run/1` dispatches each case against
-      the corpus's contract-major facade (the v3 leg includes the
-      byte-exact signing-input reproduction and the suite matrices) and
-      compares against the case-declared expectation.
-    * **Census** — the declared and executed case counts equal the
-      certified census (283 / 268 / 292).
-
-  The v1 and v2 legs are dep tamper-evidence — BAP's certified corpus
-  executed through BAP's own functions; a patched or mutated dependency
-  reds here. The v3 leg is that PLUS this library's adopted suite: the
-  same surfaces `BoundedAuthorityReportAdapter.V3` drives
-  (`proof_signing_input/2`, `assemble_compact/3`, `check_envelope/2`) are
-  the ones the v3 corpus certifies.
+  The v1 and v2 legs are dependency tamper evidence. The v3 leg also certifies the surfaces
+  `BoundedAuthorityReportAdapter.V3` drives (`proof_signing_input/2`, `assemble_compact/3`,
+  `check_envelope/2`).
   """
 
   use ExUnit.Case, async: true
 
-  alias BoundedAuthorityProtocol.Conformance.{Corpus, Runner}
+  alias BoundedAuthorityProtocol.Conformance.Cli
 
   @corpus_root Path.join(["deps", "bounded_authority_protocol", "priv", "conformance"])
 
-  # The certified corpus index identities (ADR 0014 D4 semantics), pinned
-  # independently of the package: base64url SHA-256 of the exact index.json
-  # bytes. Rotation reds here by design until deliberately extended.
-  @pinned_index_sha256 %{
-    "v1" => "TLUHKrQP_UsRFlnm1KsgIJICOAUF8fhCS5bSLlM8uRs",
-    "v2" => "beYom39HsOCnjqRhDnhEoPHVJH2OrOAuyc-YQTCPE9A",
-    "v3" => "pcgHXnU0NFw7tmEdC0ApKQS8-jrwcC4HrgFPpmkmQzw"
-  }
-
-  @pinned_total_cases %{"v1" => 283, "v2" => 268, "v3" => 292}
+  # Each certified corpus: its directory under priv/conformance, the base64url SHA-256 of its
+  # exact index.json bytes, and its case census. A corpus rotation reds here until the pin
+  # and census move deliberately.
+  #
+  # RELEASE COMMIT (protocol 1.0): add the selector-float-zero corpus, which the protocol
+  # ships from 1.0.0 on, as
+  #   {"selector-float-zero", "l_16mc2_OswKePW6HGVW4jpj4K1m9TPjH9afgtxfMAM", 161}
+  # (directory, index pin, census), in the same commit that moves the requirement to `~> 1.0`.
+  @corpora [
+    {"v1/corpus", "TLUHKrQP_UsRFlnm1KsgIJICOAUF8fhCS5bSLlM8uRs", 283},
+    {"v2/corpus", "beYom39HsOCnjqRhDnhEoPHVJH2OrOAuyc-YQTCPE9A", 268},
+    {"v3/corpus", "pcgHXnU0NFw7tmEdC0ApKQS8-jrwcC4HrgFPpmkmQzw", 292}
+  ]
 
   @tag :conformance
   test "each corpus index.json hashes to its independently pinned identity" do
-    for {major, pin} <- @pinned_index_sha256 do
-      index_bytes = File.read!(Path.join([@corpus_root, major, "corpus", "index.json"]))
+    for {dir, pin, _census} <- @corpora do
+      index_bytes = File.read!(Path.join([@corpus_root, dir, "index.json"]))
 
-      actual = Base.url_encode64(:crypto.hash(:sha256, index_bytes), padding: false)
-
-      assert actual == pin,
-             "the #{major} corpus index drifted from its certified pin — a corpus " <>
-               "rotation must be a deliberate change (bump the pin)"
+      assert index_identity(index_bytes) == pin,
+             "the #{dir} corpus index drifted from its certified pin; a corpus rotation " <>
+               "must be a deliberate change (move the pin)"
     end
   end
 
   @tag :conformance
-  test "each corpus loads through the package loader with full integrity verification" do
-    for {major, census} <- @pinned_total_cases do
-      assert {:ok, corpus} = Corpus.load(corpus_map(major))
-      assert corpus.index["total_cases"] == census, major
+  @tag :tmp_dir
+  test "the CLI agrees on every certified case and its report carries the census",
+       %{tmp_dir: tmp_dir} do
+    for {dir, pin, census} <- @corpora do
+      report_path = Path.join(tmp_dir, String.replace(dir, "/", "-") <> ".json")
+
+      assert Cli.run(["--corpus", Path.join(@corpus_root, dir), "--report", report_path]) == 0,
+             "the protocol CLI did not agree on the #{dir} corpus"
+
+      report = report_path |> File.read!() |> JSON.decode!()
+
+      assert %{
+               "agreement" => true,
+               "exit_status" => 0,
+               "total" => ^census,
+               "agreed" => ^census,
+               "disagreed" => 0,
+               "index_sha256_base64url" => ^pin
+             } = report,
+             "the #{dir} report does not carry the pinned census #{census} and index pin: " <>
+               inspect(report)
     end
   end
 
   @tag :conformance
-  test "every certified case agrees, with the executed census proven from the RESULTS" do
-    # Review repair (B2 round): the census is proven from the RUNNER'S
-    # RESULTS, not from the loaded corpus — an empty or truncated result set
-    # cannot pass — and the executed case-id set must equal the loaded one.
-    for {major, census} <- @pinned_total_cases do
-      {:ok, corpus} = Corpus.load(corpus_map(major))
-      results = Runner.run(corpus)
+  @tag :tmp_dir
+  test "the CLI is not vacuous: a tampered corpus copy exits 1", %{tmp_dir: tmp_dir} do
+    # Append a byte to a .raw sidecar, which the loader hash-checks and never parses, so the
+    # failure proves hash enforcement rather than a decode error.
+    copy = Path.join(tmp_dir, "v3-corpus")
+    File.cp_r!(Path.join(@corpus_root, "v3/corpus"), copy)
+    assert Cli.run(["--corpus", copy, "--report", Path.join(tmp_dir, "intact.json")]) == 0
 
-      executed_ids =
-        for {_path, file_results} <- results, result <- file_results, do: result.case_id
+    sidecar =
+      Path.wildcard(Path.join(copy, "**/*.raw")) |> Enum.sort() |> List.first() ||
+        flunk("no .raw sidecar in the v3 corpus")
 
-      assert length(executed_ids) == census, major
-      assert length(Enum.uniq(executed_ids)) == census, major
-      assert MapSet.new(executed_ids) == MapSet.new(corpus.case_ids), major
+    File.write!(sidecar, <<0>>, [:append])
 
-      disagreements =
-        for id <- executed_ids, result = find_result(results, id), not result.agree, do: id
-
-      assert disagreements == [],
-             "#{major} corpus cases disagreed with the dependency: " <> inspect(disagreements)
-    end
+    assert Cli.run(["--corpus", copy, "--report", Path.join(tmp_dir, "tampered.json")]) == 1
   end
 
-  @tag :conformance
-  test "the integrity verification is not vacuous: a tampered corpus byte reds the load" do
-    # Non-vacuity proof (the defect-injection discipline), repaired per the
-    # B2 review: tamper a .raw SIDECAR (hash-verified, never parsed) so the
-    # rejection proves HASH ENFORCEMENT — flipping a byte inside a JSON case
-    # file would fail at decode before the hash check could fire.
-    map = corpus_map("v3")
-
-    {path, bytes} =
-      Enum.find(Enum.sort(map), fn {p, _} -> String.ends_with?(p, ".raw") end) ||
-        raise "no .raw sidecar in the v3 corpus"
-
-    tampered = Map.put(map, path, bytes <> <<0>>)
-    assert {:error, :invalid} = Corpus.load(tampered)
-  end
-
-  defp find_result(results, case_id) do
-    Enum.find_value(results, fn {_path, file_results} ->
-      Enum.find(file_results, &(&1.case_id == case_id))
-    end)
-  end
-
-  defp corpus_map(major) do
-    walk(Path.join([@corpus_root, major, "corpus"]))
-  end
-
-  # The corpus map in the pure loader's shape: every file under the corpus
-  # dir keyed by its path relative to the corpus root (the same walk the
-  # package's CLI performs — `Conformance.Cli`'s read_corpus_dir).
-  defp walk(dir) do
-    walk(dir, File.ls!(dir), "")
-  end
-
-  defp walk(_dir, [], _prefix), do: %{}
-
-  defp walk(dir, [entry | rest], prefix) do
-    full = Path.join(dir, entry)
-    rel = if prefix == "", do: entry, else: Path.join(prefix, entry)
-
-    if File.dir?(full) do
-      Map.merge(walk(full, File.ls!(full), rel), walk(dir, rest, prefix))
-    else
-      Map.put(walk(dir, rest, prefix), rel, File.read!(full))
-    end
-  end
+  defp index_identity(bytes),
+    do: Base.url_encode64(:crypto.hash(:sha256, bytes), padding: false)
 end
