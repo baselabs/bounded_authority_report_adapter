@@ -214,7 +214,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
           | {:producer_error, :invalid}
 
   # NIST P-256 (secp256r1) group order and the integer-floor half — the
-  # low-S normalization boundary (ADR-0021 Decision 4: `n` is odd, so
+  # low-S normalization boundary (`n` is odd, so
   # `s = ⌊n/2⌋` stays untouched and `s = ⌊n/2⌋ + 1` maps to exactly `⌊n/2⌋`).
   @ec_n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
   @ec_half_n div(@ec_n, 2)
@@ -351,7 +351,9 @@ defmodule BoundedAuthorityReportAdapter.V3 do
     * `:invalid_role_attestation` — `opts` contains `:role_attestation` (as a map key or a
       keyword), whatever its value. The option is refused here, not ignored.
     * `:signing_failed` — as for `sign_report/3` on this surface.
-    * `{:producer_error, :invalid}` — the protocol package refused the grant.
+    * `{:producer_error, :invalid}` — the protocol package refused the grant. With protocol
+      1.0 this includes a selector value or range bound (`lte`, `gte`) that holds a
+      float-tagged whole number, as in `BoundedAuthorityReportAdapter.sign_grant/3`.
 
   ## Example
 
@@ -534,7 +536,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   # normalization → verify the NORMALIZED bytes against the resolved key →
   # assemble through BAP's v3 façade. There is no producer-side backstop
   # downstream: BAP 0.5.1's v3 assembler accepts any 64-byte signature blob,
-  # so the range/low-S duty is wholly this library's (ADR-0021 Decision 4).
+  # so the range/low-S duty is wholly this library's.
   #
   # The ECDSA verify guard is deliberately independent of BAP's
   # V3.Es256 (which stays verify-side): equivalence is carried by the
@@ -650,7 +652,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   end
 
   # ---------------------------------------------------------------------------
-  # The v3 resolvers — the key-type discriminator (ADR-0021 Decision 2). The
+  # The v3 resolvers — the key-type discriminator. The
   # accepted shape is EXACTLY the 65-byte uncompressed-SEC1 point, and the
   # point must be valid: width alone does not discriminate (a secp256k1 point
   # is also 65 bytes with an 0x04 prefix), so validation routes through the
@@ -708,7 +710,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   # The one certified point-validation call: V3.EcJwk.encode_public/2 checks
   # the width, the 0x04 prefix, the coordinate range, and on-curve membership
   # by pure arithmetic. A compile-time dependency on a module outside the
-  # versioned façade — recorded in ADR-0021 Decision 2; if the protocol
+  # versioned façade, taken deliberately; if the protocol
   # package moves it, this library stops compiling rather than silently
   # accepting bad keys.
   defp p256_public_key(public_key) when is_binary(public_key) and byte_size(public_key) == 65 do
@@ -763,7 +765,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   defp validate_report(_report), do: {:error, :invalid_report}
 
-  # The mixed-major fail-fast (ADR-0021 Decision 8): a v3 proof pairs with a
+  # The mixed-major fail-fast: a v3 proof pairs with a
   # v3 grant, and BAP's proof producer only HASHES grant_compact — without
   # this gate a v1 (or v2) grant would sail through into a credential no
   # verifier accepts. The gate is the major's own bounded DECODER, not the

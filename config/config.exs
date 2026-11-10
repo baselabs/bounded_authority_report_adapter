@@ -1,6 +1,6 @@
 import Config
 
-# Self-enforcing toolchain (ADR-0019): the repository refuses to build on an
+# Self-enforcing toolchain: the repository refuses to build on an
 # Erlang/OTP major outside the supported set — every major on which the
 # dependency stack actually compiles for the supported Elixir line
 # (1.18/1.19/1.20). Probed 2026-09-16 four ways: asdf list-all, the official

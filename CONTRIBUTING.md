@@ -60,6 +60,13 @@ wall derives from them), both locks, and the Livebook's version sentence, and th
 says the requirement "moves from `x` to `y`", with the `lib/` delta classified as compatible,
 corrective, or breaking.
 
+## Releases
+
+A release follows the [release runbook](docs/release.md): the release commit, the gates
+before the tag (local and remote CI, the supply-chain attestation, and an archive
+checksum equal to the attested one), the owner's tag and publish, and the registry
+read-back within Hex's one-hour revert window.
+
 ## Docs
 
 Docs for a capability ship in the same change as the capability. Three tests keep them

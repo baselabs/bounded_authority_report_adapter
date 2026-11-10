@@ -6,10 +6,9 @@ engineering + release posture.
 
 ## 1. Release posture: public package and public source
 
-`bounded_authority_report_adapter` is public on Hex (ADR 0004 records the earlier
-posture and its replacement) and consumes the
+`bounded_authority_report_adapter` is public on Hex and consumes the
 public `bounded_authority_protocol` Hex package. Its GitHub source is public and
-the release tags are the durable source identities. The adapter is pre-1.0 and every
+the release tags are the durable source identities. Every
 release remains responsible for its own compatibility, conformance, provenance,
 security, and clean-consumer evidence.
 
@@ -72,7 +71,7 @@ re-architecture, not a refactor.
 ## 5. Cryptographic posture
 
 - **Ed25519** on the major-1 surface, **EC P-256 / `ES256`** on the `V3` surface
-  (ADR-0021) for holder proofs + grants (matching each BAP major's closed
+  for holder proofs + grants (matching each BAP major's closed
   header). The private key is held by the edge agent; only the public key +
   signatures cross the boundary.
 - **Deterministic signing inputs** from BAP (`proof_signing_input`,
@@ -85,7 +84,7 @@ re-architecture, not a refactor.
   adapter a thin glue layer across every object it signs. In the
   `sign_report/3` flow the grant arrives issuer-signed as input and the
   adapter signs only the proof; grant signing is the issuer-role
-  instantiation's concern (`sign_grant/3`, ADR-0007) (charter §2/§4).
+  instantiation's concern (`sign_grant/3`; charter §2/§4).
 - **`assemble_compact`** frames the signed result. The adapter does not roll its
   own envelope format.
 - **Key custody** is the edge agent's responsibility (how it loads/secures the
@@ -96,9 +95,12 @@ re-architecture, not a refactor.
 
 - **0.x is public** — pre-1.0; compatibility follows the package's declared
   pre-1.0 policy and every change must retain conformance and release evidence.
-- **1.0.0** — cut only when the public API, consumer evidence, source identity,
-  and release operations meet the 1.0 acceptance contract, and the release line has
-  seen real consumer use with the surface settled.
+- **1.0.0** — cut when three things hold: the shipped surface is exactly the
+  [stability contract](upgrading.md#stability-contract); the package requires the
+  protocol's 1.0 line from Hex; and the release passes every gate in the
+  [release runbook](release.md) (green CI, the supply-chain attestation, a local archive
+  checksum equal to the attested one, and the registry read-back after publish). From
+  1.0.0, breaking changes to that contract need a major release.
 - Package publication and source-repository visibility are separate operations;
   neither may be inferred from the other.
 
@@ -113,10 +115,10 @@ are the explicit identities that gate an adapter bump.
 
 ## 8. Following protocol releases
 
-`sign_content_assertion/3` (0.9.0, ADR-0022)
+`sign_content_assertion/3` (0.9.0)
 shows the release order this library follows: BAP publishes a release with its own
 normative contract, certified corpus, and independent SDK agreement; this adapter moves
 its protocol requirement and lock to that published release and qualifies the adoption
-with its own suite (ADR-0023). No consumer's pin
+with its own suite. No consumer's pin
 or schedule is a precondition; consumers adopt protocol and adapter releases on their own
 schedules.

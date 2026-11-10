@@ -626,7 +626,13 @@ defmodule BoundedAuthorityReportAdapter do
       signature, or returned a signature that does not verify against the snapshot's
       public key.
     * `{:producer_error, :invalid}` — the protocol package refused the grant, for example
-      an inverted time window or a `holder_thumbprint` that is not 32 bytes.
+      an inverted time window or a `holder_thumbprint` that is not 32 bytes. With protocol
+      1.0 (erratum 6), it also refuses a selector value that holds a float-tagged whole
+      number at any depth, such as `{:equals, ["quantity"], {:float, 2.0}}` or a `one_of`
+      member `{:float, 0.0}`: RFC 8785 writes `2.0` as `2`, which a verifier decodes as an
+      integer, so the grant would not say what the issuer meant. Use `{:integer, 2}`; a
+      non-integral float such as `{:float, 2.5}` is unaffected. Protocol 0.9.1 signs these
+      values. The refusal comes before `sign/2`.
 
   ## Example
 
@@ -672,7 +678,7 @@ defmodule BoundedAuthorityReportAdapter do
     end)
   end
 
-  # The role-attestation gate (ADR-0008; the protocol's `bap-role-attestation/1` profile):
+  # The role-attestation gate (the protocol's `bap-role-attestation/1` profile):
   # a second sign-time check, alongside the wrong-key guard. Neither verifies the content of
   # what is signed. The caller supplies the attestation compact, signed by the authority, and
   # the trusted attestor key (`HistoricalPublicKey`); the EXPECTED subject is the handle's
@@ -1070,7 +1076,7 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp validate_report(_report), do: {:error, :invalid_report}
 
-  # The mixed-major fail-fast, v1 direction (ADR-0021 Decision 8): a v1
+  # The mixed-major fail-fast, v1 direction: a v1
   # proof pairs with a v1 grant, and BAP's proof producer only hashes
   # grant_compact — without this gate a v2 or v3 grant would pass through
   # into an envelope no verifier accepts. The gate is the major's own
@@ -1167,7 +1173,7 @@ defmodule BoundedAuthorityReportAdapter do
 
   # The grant's atomic signing identity — the role (:issuer | :holder) AND the key's
   # registry id AND its 32-byte public key — resolved as ONE snapshot, with the role
-  # gate folded into the match. This is the issuer-role gate (ADR-0006's grant-signing
+  # gate folded into the match. This is the issuer-role gate (the grant-signing
   # pre-commitment): ONLY a snapshot whose role is :issuer passes; a :holder snapshot,
   # a malformed snapshot, a callback failure, or a missing signing_identity/1 (the
   # UndefinedFunctionError from apply/3 caught by safe_callback) all collapse to
@@ -1299,7 +1305,7 @@ defmodule BoundedAuthorityReportAdapter do
   # coherence, the 32-byte holder_thumbprint, operation shape) and a semantic violation
   # surfaces as {:producer_error, :invalid}. key_id is NEVER read from grant_input — it
   # comes from the handle's signing_identity/1 snapshot (the _key_id param), so a caller
-  # :key_id smuggled into the map is silently ignored (ADR-0006 decision 3).
+  # :key_id smuggled into the map is silently ignored.
   defp build_grant(grant_input, key_id) when is_map(grant_input) do
     with {:ok, issuer} <- required_grant_binary(grant_input, :issuer),
          {:ok, grant_id} <- required_grant_binary(grant_input, :grant_id),
@@ -1385,7 +1391,7 @@ defmodule BoundedAuthorityReportAdapter do
   # (a self-transition where next_public_key == current_public_key surfaces here as
   # {:producer_error, :invalid}). current_{key_id, public_key} come from the handle's atomic
   # key_identity/1 snapshot (the _current_* params), so a caller :current_key_id /
-  # :current_public_key smuggled into the map is silently ignored (ADR-0006 decision 3).
+  # :current_public_key smuggled into the map is silently ignored.
   defp build_key_transition(transition_input, current_key_id, current_public_key)
        when is_map(transition_input) do
     with {:ok, transition_id} <- required_transition_binary(transition_input, :transition_id),

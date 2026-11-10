@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-bap-drift.sh — one-command ecosystem drift check for the protocol dependency.
 #
-# What BARA compiles against is a deliberate, reviewed choice (ADR-0023: the pin follows
+# What BARA compiles against is a deliberate, reviewed choice (the lock follows
 # published BAP releases; the requirement is a range with a security floor and the wall
 # test's clauses pin the range shape and the locked version). This probe
 # answers, READ-ONLY, the three questions every bump or audit session needs:
@@ -11,7 +11,7 @@
 #   3. how far the protocol's main has     (git ls-remote on the remote URL — no fetch,
 #      moved, and what lib/ says             no sibling .git writes, no tag clobber)
 #
-# It reads no consumer's repository: no consumer's pin gates a BARA bump (ADR-0023).
+# It reads no consumer's repository: no consumer's pin gates a BARA bump.
 #
 # Verdicts render only from verified inputs; every degraded input prints its own skip
 # line. NOT a gate: exits 0 unless the script itself is broken; it never writes to any
@@ -134,12 +134,12 @@ if [ -n "$hex_latest" ] && [ "$hex_latest" != "?" ] && [ "$hex_latest" != "$lock
 
     if [ -z "$lib_files" ]; then
       say "  Release span lib/ is EMPTY; a bump is still a deliberate, enumerated," \
-          "same-commit move (wall attributes + both locks; ADR-0023)."
+          "same-commit move (wall attributes + both locks)."
     else
       say "  Release span lib/ is NON-EMPTY:"
       print_files "$lib_files"
       say "  A bump classifies these library changes in the bump commit and exercises" \
-          "the consumed surfaces in BARA's suite (ADR-0023 Decision 3)."
+          "the consumed surfaces in BARA's suite."
     fi
   else
     say "  Span UNVERIFIED (remote tags or local objects unavailable) — verify first-hand" \
@@ -161,7 +161,7 @@ if [ -n "$bap_main" ] && [ -n "$locked_commit" ]; then
     else
       say "MAIN DRIFT: main sits past our lock with lib/ NON-EMPTY:"
       print_files "$main_lib"
-      say "  A bump to a release from this span classifies these changes (ADR-0023 Decision 3)."
+      say "  A bump to a release from this span classifies these changes."
     fi
   else
     say "MAIN DRIFT: WITHHELD (span not locally verifiable) — locked ${locked_commit:0:12} vs main ${bap_main:0:12}."

@@ -43,8 +43,10 @@ and for a P-256 handle that returns DER.
 ### Run it
 
 Open it in Livebook (the desktop app: *File → Open* → this file; or `livebook server` from the
-repo root and open the URL), then **Run All**. The setup cell installs this repository as a path
-dependency and resolves `bounded_authority_protocol` from Hex. Every key is generated when the
+repo root and open the URL), then **Run All**. The setup cell installs the published
+`bounded_authority_report_adapter` release from Hex with `Mix.install/1`, which resolves
+`bounded_authority_protocol` from Hex too, so the notebook runs the released package, not this
+checkout (the test below runs its cells against the checkout). Every key is generated when the
 notebook runs. The value under each cell is the result that cell returns.
 
 ### CI

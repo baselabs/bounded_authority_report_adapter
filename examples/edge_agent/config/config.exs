@@ -1,6 +1,6 @@
 import Config
 
-# Self-enforcing toolchain (ADR-0019): same supported-OTP set as the library —
+# Self-enforcing toolchain: same supported-OTP set as the library —
 # {27..29}. OTP 25 and 26 are excluded with the library: the protocol
 # package's codecs decode through :json, which enters stdlib in OTP 27, so
 # the stack cannot run there even though images exist. LOCKSTEP with the

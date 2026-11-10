@@ -3,7 +3,7 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
-## 0.12.0 — ADR-free public distribution
+## 0.12.0 — public distribution without decision records
 
 Use `{:bounded_authority_report_adapter, "~> 0.12.0"}`. The protocol requirement is now
 `~> 0.9.1`; update any application constraint that still selects 0.8.x, then run

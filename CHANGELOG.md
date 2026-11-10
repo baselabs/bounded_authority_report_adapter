@@ -31,6 +31,12 @@
   unchanged.
 - The guides state that key-handle callbacks run in the caller's process with no timeout
   from the adapter, so a handle must bound its own remote calls.
+- The errors guide, `sign_grant/3` and `V3.sign_grant/3` document the protocol's erratum 6,
+  which this library inherits with protocol 1.0: a grant whose selector value holds a
+  float-tagged whole number (`{:float, 2.0}`, at any depth or in a range bound) is refused
+  with `{:producer_error, :invalid}` before `sign/2`. Pass whole numbers as
+  `{:integer, n}`. A new test signs and verifies `equals`, `one_of` and range selectors on
+  both surfaces and pins the locked protocol's verdict on those values.
 
 ## [0.12.0] — 2026-10-31
 
@@ -290,6 +296,7 @@ SHA-256 of the published tarball, read back from the registry API:
 
 | Version | Registry checksum |
 |---|---|
+| 0.12.0 | `39ef67bd10913ba83af495b2c225b5eaceaf470c0ae97ffb3ff7eef755047ae2` |
 | 0.11.0 | `ab088564a58a2e5a4bfa6db3e69b79005fdb338178b69336df27474855475926` |
 | 0.10.0 | `a2a4637630e492f0eca152b4c0dc0919166a17980aff96832da389d0b1890c5d` |
 | 0.9.1 | `b2c7222ee60c4fcbc688e9f76933832b73e7a9169d5ea6e973e3ad79c7e66b85` |
@@ -353,7 +360,7 @@ shipped `== 0.4.0`), the loopback profile's provenance was misattributed to BAP
 0.4.0 (it is 0.3.0's), the charter under-counted the landed instantiations (the
 local-loopback signer was omitted), the telemetry/errors copy said "four entry
 points" over five-row tables, and the upgrading stability-contract link targeted a
-nonexistent anchor. Cross-reference census: every ADR/RA citation, relative doc
+nonexistent anchor. Cross-reference census: every decision-record and roadmap citation, relative doc
 link, and module/function reference in the public corpus resolves, and the README's
 registry checksums were re-verified against the published tarballs. One
 moduledoc article fix in lib/ (documentation-only). No code, API, or

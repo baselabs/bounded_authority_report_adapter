@@ -27,7 +27,7 @@ meanings, for P-256 keys; the differences are listed under [The V3 surface](#the
 |---|---|---|---|
 | `:invalid_key_handle` | The handle is not a `{module, term}` pair; a handle callback the entry point needs (`public_key/1`, `key_identity/1` or `signing_identity/1`) is missing, failed, raised, threw or exited; or it returned an invalid value: an Ed25519 public key that is not 32 bytes or that the protocol's strict rule refuses (small-order, non-canonical, not on the curve), or an empty key id. For `sign_grant/3` it also means the handle did not declare the `:issuer` role. | The handle module implements the callbacks the entry point uses; the handle term is what those callbacks expect; for grants, the key really is the issuer's. | Fix the handle or the key-store connection. It is configuration, never caller input. |
 | `:signing_failed` | `sign/2` failed, raised, threw or exited; returned something other than `{:ok, <<_::512>>}`; or returned a signature that does not verify against the public key the handle reported (the wrong-key guard). | Whether `public_key/1` and the identity callbacks describe the same key `sign/2` uses; whether the HSM or KMS call is healthy. | Fix the custody side. A sustained rate of this error is the custody alarm; see [Telemetry](telemetry.md). |
-| `{:producer_error, :invalid}` | The protocol package refused to produce or assemble the signed object: a value violated a protocol rule or a bound. Examples: a target URI that is not canonical, an invocation id that is not a canonical UUID, a `cast_arguments` value that is not the protocol's tagged form, a digest of the wrong size, an inverted time window, a key transition to the same key. | The input values against the protocol's field rules; `cast_arguments` comes from `BoundedAuthorityProtocol.V1.Json.decode/2`. | Fix the input. |
+| `{:producer_error, :invalid}` | The protocol package refused to produce or assemble the signed object: a value violated a protocol rule or a bound. Examples: a target URI that is not canonical, an invocation id that is not a canonical UUID, a `cast_arguments` value that is not the protocol's tagged form, a digest of the wrong size, an inverted time window, a key transition to the same key. With protocol 1.0, `sign_grant/3` and `V3.sign_grant/3` also return it for a grant whose selector value (an `equals` value, a `one_of` member or, on `V3`, an `lte`/`gte` bound) holds a float-tagged whole number at any depth, such as `{:float, 2.0}` or `{:float, 0.0}` ([erratum 6](#selector-values-and-erratum-6)). | The input values against the protocol's field rules; `cast_arguments` comes from `BoundedAuthorityProtocol.V1.Json.decode/2`; whole numbers in selectors are `{:integer, n}`. | Fix the input. |
 
 ## The input errors
 
@@ -68,6 +68,21 @@ Calling an entry point without the options argument means `%{}`.
 - `:invalid_role_attestation` from `V3.sign_grant/3` whenever `:role_attestation` is
   present in the options: that surface has no role-attestation gate and refuses the option
   rather than ignore it. `V3`'s `grant_sign_error/0` type lists it.
+
+## Selector values and erratum 6
+
+RFC 8785, the canonical JSON every grant is signed over, writes a float-tagged whole number
+as an integer: `{:float, 2.0}` becomes `2`, which a verifier decodes as `{:integer, 2}`. The
+signed grant would then say something other than what the issuer passed in. The protocol's
+erratum 6 closes this: from protocol 1.0, the grant producer refuses any selector value
+that holds a float-tagged whole number, at any depth (inside an array or an object) and in
+range bounds, and this library's `sign_grant/3` and `V3.sign_grant/3` return
+`{:producer_error, :invalid}` before the handle's `sign/2` is called. This library adds no
+check of its own; the refusal is the protocol package's.
+
+Pass whole numbers as `{:integer, n}`. A non-integral float such as `{:float, 2.5}` is
+unaffected, and so are `:all` selectors. Protocol 0.9.1 and earlier sign these values; a
+grant signed that way carries the integer, not the float.
 
 ## Where the error types live
 

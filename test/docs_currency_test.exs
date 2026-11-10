@@ -245,6 +245,20 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     end
   end
 
+  test "the landing page's Hex badge names the current package version" do
+    version = Mix.Project.config()[:version]
+    site = File.read!("site/index.html")
+
+    badges = Regex.scan(~r/<li>hex (\d+\.\d+\.\d+[^<]*)<\/li>/, site)
+    assert badges != [], "site/index.html has no Hex version badge; the scan is broken"
+
+    for [_badge, shown] <- badges do
+      assert shown == version,
+             "site/index.html shows hex #{shown} but mix.exs is #{version}; move the badge " <>
+               "in the release commit"
+    end
+  end
+
   ## helpers
 
   # The atoms of one @type error set, from the lib source (the source of

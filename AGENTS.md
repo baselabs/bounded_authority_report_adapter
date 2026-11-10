@@ -14,10 +14,8 @@ holder-side by default, issuer-side for grants). It takes a `{module(), term()}`
 BAP signing input, signs via the handle's local key, and assembles the compact via the public
 `bounded_authority_protocol` (BAP) package. It signs proofs, grants, boundary anchors and key
 transitions; it does NOT verify, transport, persist, or act as the runtime. The package and this
-source repository are public. The separate `bounded_authority` runtime is a private commercial
-application: not a public Hex package, not published to private Hex (no paid private-package
-subscription exists), and never a dependency of this library. Any future private Hex release
-requires an active subscription and fresh approval for that exact release and destination.
+source repository are public. The separate `bounded_authority` runtime is a private application
+and never a dependency of this library.
 
 ## Read BAP first-hand
 
