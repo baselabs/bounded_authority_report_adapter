@@ -30,15 +30,11 @@ defmodule BoundedAuthorityReportAdapter.ConformanceCorpusTest do
   # Each certified corpus: its directory under priv/conformance, the base64url SHA-256 of its
   # exact index.json bytes, and its case census. A corpus rotation reds here until the pin
   # and census move deliberately.
-  #
-  # RELEASE COMMIT (protocol 1.0): add the selector-float-zero corpus, which the protocol
-  # ships from 1.0.0 on, as
-  #   {"selector-float-zero", "l_16mc2_OswKePW6HGVW4jpj4K1m9TPjH9afgtxfMAM", 161}
-  # (directory, index pin, census), in the same commit that moves the requirement to `~> 1.0`.
   @corpora [
     {"v1/corpus", "TLUHKrQP_UsRFlnm1KsgIJICOAUF8fhCS5bSLlM8uRs", 283},
     {"v2/corpus", "beYom39HsOCnjqRhDnhEoPHVJH2OrOAuyc-YQTCPE9A", 268},
-    {"v3/corpus", "pcgHXnU0NFw7tmEdC0ApKQS8-jrwcC4HrgFPpmkmQzw", 292}
+    {"v3/corpus", "pcgHXnU0NFw7tmEdC0ApKQS8-jrwcC4HrgFPpmkmQzw", 292},
+    {"selector-float-zero", "l_16mc2_OswKePW6HGVW4jpj4K1m9TPjH9afgtxfMAM", 161}
   ]
 
   @tag :conformance

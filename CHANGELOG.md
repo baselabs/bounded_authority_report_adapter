@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.0] — 2026-11-10
+
+The 1.0 stability contract takes effect (see the upgrading guide).
 
 ### Added
 
@@ -23,11 +25,13 @@
   contract-major from its configuration and the RFC 7638 preimage from the key type. The
   test suite runs it on contract-major-3 envelopes.
 - The Livebook narrows a grant with `one_of` and `equals` selectors and shows the verifier
-  refusing arguments outside them. Every cell still returns its pinned value against the
-  published 0.12.0 package and protocol 0.9.1.
+  refusing arguments outside them.
 
 ### Changed
 
+- The public protocol dependency moves from `~> 0.9.1` to `~> 1.0` (protocol 1.0.0, which
+  carries erratum 6). Protocol minors are additive or soundness repairs, so any 1.x release
+  satisfies it.
 - **`:role_attestation` refuses unknown keys.** A key other than `:compact`, `:attestor`
   and `:now` inside `sign_grant/3`'s `:role_attestation` option (a misspelled `:now`, a
   caller-supplied subject) returns `{:error, :invalid_role_attestation}` before any

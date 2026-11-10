@@ -64,9 +64,9 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # @protocol_ceiling, so a range move edits these three attributes, mix.exs and the locks in
   # one commit, and nothing else in this file.
   @protocol_app "bounded_authority_protocol"
-  @protocol_requirement "~> 0.9.1"
-  @protocol_floor "0.9.1"
-  @protocol_ceiling "0.10.0"
+  @protocol_requirement "~> 1.0"
+  @protocol_floor "1.0.0"
+  @protocol_ceiling "2.0.0"
 
   # The requirement is acceptable only when it is a floored range: it admits the security
   # floor, admits every later release below the ceiling (so it is not an exact pin), and

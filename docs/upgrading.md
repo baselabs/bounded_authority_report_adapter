@@ -3,6 +3,27 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 1.0.0 — the stability contract takes effect
+
+Use `{:bounded_authority_report_adapter, "~> 1.0"}`. The protocol requirement is now `~> 1.0`;
+run `mix deps.update bounded_authority_report_adapter bounded_authority_protocol`. From 1.0.0 the
+[stability contract](#stability-contract) below is in force.
+
+What a caller may need to change:
+
+- **Whole numbers in selector values are integers.** Protocol 1.0 carries erratum 6: a grant
+  whose selector value holds a float-tagged whole number (`{:float, 2.0}`, at any depth or in a
+  range bound) is refused with `{:producer_error, :invalid}` before `sign/2` is called. Pass
+  `{:integer, 2}` instead. Floats with a fractional part are unchanged.
+- **`:role_attestation` refuses unknown keys.** Only `:compact`, `:attestor` and `:now` are
+  accepted; anything else returns `{:error, :invalid_role_attestation}`. A misspelled `:now` was
+  previously ignored, so the attestation was evaluated at the current time.
+- **The telemetry emitters are internal.** `Telemetry.sign_span/2`, `Telemetry.emit_start/1`
+  and `Telemetry.emit_stop/3` are no longer documented. If you called one, attach a handler to the events
+  instead; the event names, measurements and closed metadata are the contract.
+
+New: `public_key_thumbprint/1` returns a key's raw RFC 7638 thumbprint in one call.
+
 ## 0.12.0 — public distribution without decision records
 
 Use `{:bounded_authority_report_adapter, "~> 0.12.0"}`. The protocol requirement is now
@@ -247,9 +268,8 @@ SemVer §4 policy applies.
 
 ## Stability contract
 
-This is the 1.0 contract. It takes effect with the 1.0.0 release; until then each 0.x
-release follows SemVer's pre-1.0 rule and its CHANGELOG. From 1.0.0, a breaking change to
-anything below requires a major version:
+This is the 1.0 contract, in force from the 1.0.0 release. A breaking change to anything below
+requires a major version:
 
 - The six major-1 signing functions and their return shapes:
   `sign_report/3` → `{:ok, %{grant: binary, proof: binary}}`,

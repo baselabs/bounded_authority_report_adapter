@@ -1,7 +1,7 @@
 defmodule BoundedAuthorityReportAdapter.MixProject do
   use Mix.Project
 
-  @version "0.12.0"
+  @version "1.0.0"
   @source_url "https://github.com/baselabs/bounded_authority_report_adapter"
 
   def project do
@@ -116,14 +116,14 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # compatible with and only an application locks an exact version.
       #   * The floor is the oldest protocol release this adapter supports. Every supported
       #     release carries the strict Ed25519 rule (BoundedAuthorityProtocol.Ed25519) that the
-      #     key refusal and self-check call and the producer-canonicality checks (0.9.1 and
-      #     later), so 0.7.x never resolves.
+      #     key refusal and self-check call, the producer-canonicality checks, and the
+      #     selector float-zero repair (erratum 6, 1.0.0 and later), so no 0.x release resolves.
       #   * The ceiling (exclusive) is the protocol's next compatibility boundary: the next
       #     minor while the protocol is 0.x, the next major from 1.0 on, where protocol minors
       #     are additive or soundness repairs. Crossing it is a deliberate, reviewed change.
       # The dependency wall test derives its probes from the floor and the ceiling, so a range
       # move edits only this requirement, the wall's three range attributes and the locks.
-      {:bounded_authority_protocol, "~> 0.9.1"},
+      {:bounded_authority_protocol, "~> 1.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # The install task (lib/mix/tasks) uses Igniter when present; the file
       # compiles to a Mix.raise fallback without it.

@@ -23,7 +23,7 @@ defmodule BoundedAuthorityReportAdapter.SelectorFloatRefusalTest do
 
   # RELEASE COMMIT (protocol 1.0): set to true in the commit that moves the requirement to
   # `~> 1.0`. The locked 0.9.1 producer signs these values.
-  @protocol_refuses_integral_float_selectors false
+  @protocol_refuses_integral_float_selectors true
 
   @now 1_750_000_000
 

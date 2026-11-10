@@ -62,9 +62,14 @@ defmodule BoundedAuthorityReportAdapter.LivebookWalkthroughTest do
     assert [setup] = context.setup_cells,
            "the notebook must have exactly one Mix.install setup cell"
 
-    assert setup.code =~
-             ~s({:bounded_authority_report_adapter, "~> #{Mix.Project.config()[:version]}"}),
-           "the setup cell must install the current public Hex release"
+    version = Mix.Project.config()[:version]
+
+    assert [_, requirement] =
+             Regex.run(~r/\{:bounded_authority_report_adapter, "~> ([\d.]+)"\}/, setup.code),
+           "the setup cell must install the package from Hex with a ~> requirement"
+
+    assert Version.match?(version, "~> #{requirement}"),
+           "the setup cell must install the current public Hex release (#{version})"
 
     output_blocks = count_occurrences(context.source, @output_marker)
     assert output_blocks > 0

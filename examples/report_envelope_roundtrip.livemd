@@ -4,7 +4,7 @@
 
 ```elixir
 Mix.install([
-  {:bounded_authority_report_adapter, "~> 0.12.0"}
+  {:bounded_authority_report_adapter, "~> 1.0"}
 ])
 ```
 
@@ -15,8 +15,8 @@ public `bounded_authority_protocol` package, and then shows each check failing c
 database, no container and no other running service. Every key is generated in the notebook when
 it runs. Run the cells in order; the value under each cell is the result it returns.
 
-It installs the public Hex release: version 0.12.0 in `mix.exs`, which declares
-`bounded_authority_protocol` `~> 0.9.1`. The published 0.12.0 release declares the same
+It installs the public Hex release: version 1.0.0 in `mix.exs`, which declares
+`bounded_authority_protocol` `~> 1.0`. The published 1.0.0 release declares the same
 requirement. The CHANGELOG records the dependency update. The repository's test suite runs these same cells against
 the repository source and compares each result with the value pinned under its cell, so a cell
 that stops running, or starts returning something else, fails the build.
@@ -82,7 +82,7 @@ to_string(Application.spec(:bounded_authority_report_adapter, :vsn))
 <!-- livebook:{"output":true} -->
 
 ```
-"0.12.0"
+"1.0.0"
 ```
 
 ## Key handles: the adapter signs without ever holding a private key
