@@ -24,8 +24,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   @env_guard_step "run --no-start scripts/ci_env_guard.exs"
 
   # The BaseLabs runner expression, verbatim.
-  @runner_expression "${{ vars.BASELABS_RUNNER == 'baselabs-gcp' && github.run_attempt != '1' " <>
-                       "&& 'baselabs-gcp-od' || vars.BASELABS_RUNNER || 'ubuntu-24.04' }}"
+  @runner_expression "${{ vars.BASELABS_RUNNER || 'ubuntu-24.04' }}"
 
   @pinned_action ~r/\A[\w.-]+\/[\w.\/-]+@[0-9a-f]{40}\z/
 

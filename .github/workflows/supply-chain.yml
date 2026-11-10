@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     name: Build release package evidence
-    runs-on: ${{ vars.BASELABS_RUNNER == 'baselabs-gcp' && github.run_attempt != '1' && 'baselabs-gcp-od' || vars.BASELABS_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.BASELABS_RUNNER || 'ubuntu-24.04' }}
     # Deliberately NO id-token/attestations here: this job compiles and runs
     # ~40 third-party packages' code — it must not hold OIDC identity. The
     # attest job below is the only one that can mint attestations, and it
@@ -51,7 +51,7 @@ jobs:
       # other than :test (the RA7 trap) instead of self-forcing it — the
       # caller owns the environment now.
       - name: Run the full gate battery
-        run: MIX_ENV=test mix ci
+        run: MIX_ENV="test" mix ci
 
       # Artifact names derive from mix.exs @version — never hardcoded (a stale
       # name after a version bump silently attests nothing).
@@ -88,7 +88,7 @@ jobs:
   attest:
     name: Attest provenance and SBOM
     needs: build
-    runs-on: ${{ vars.BASELABS_RUNNER == 'baselabs-gcp' && github.run_attempt != '1' && 'baselabs-gcp-od' || vars.BASELABS_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.BASELABS_RUNNER || 'ubuntu-24.04' }}
     # The ONLY job with signing permissions (SLSA's build/attest split): the
     # artifact-metadata permission is on actions/attest@v4's documented
     # required set alongside id-token + attestations.

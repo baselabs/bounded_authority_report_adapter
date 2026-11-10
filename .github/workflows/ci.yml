@@ -4,7 +4,7 @@ name: CI
 # Markdown guides, so a docs-only push is a code change to those tests.
 on:
   push:
-    branches: [master]
+    branches: [master, 'kci/**']
   pull_request:
 
 permissions:
@@ -19,7 +19,7 @@ jobs:
     name: Gate battery (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     # The BaseLabs runner expression. The organization's BASELABS_RUNNER variable is visible
     # to private repositories only, so this public repository resolves to ubuntu-24.04.
-    runs-on: ${{ vars.BASELABS_RUNNER == 'baselabs-gcp' && github.run_attempt != '1' && 'baselabs-gcp-od' || vars.BASELABS_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.BASELABS_RUNNER || 'ubuntu-24.04' }}
 
     # Local parity: `mix ci` reproduces these steps step-for-step on the
     # PINNED lane only (asdf .tool-versions, the local floor). The matrix is
@@ -109,7 +109,7 @@ jobs:
 
   example:
     name: examples/edge_agent (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
-    runs-on: ${{ vars.BASELABS_RUNNER == 'baselabs-gcp' && github.run_attempt != '1' && 'baselabs-gcp-od' || vars.BASELABS_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.BASELABS_RUNNER || 'ubuntu-24.04' }}
 
     # Same matrix as the gate job (one Linux lane per supported OTP major):
     # the example app is part of the supported surface (its
