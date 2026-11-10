@@ -268,10 +268,18 @@ defmodule EdgeAgent.Receiver do
     Supervisor.start_link(children, strategy: :one_for_one, name: __MODULE__.Supervisor)
   end
 
-  @doc "Convenience for `mix run -e EdgeAgent.Receiver.start` — starts + returns :ok."
-  @spec start() :: :ok
-  def start do
-    {:ok, _pid} = start_link([])
+  @doc """
+  Starts the receiver for standalone use (`mix run --no-halt -e EdgeAgent.Receiver.start`)
+  and returns `:ok`. Takes the options of `start_link/1`.
+
+  The supervisor is unlinked from the caller: `mix run -e` evaluates the expression in a
+  process that exits when the expression returns, and a supervisor linked to it would
+  shut the listener down with it, leaving `--no-halt` holding an idle VM.
+  """
+  @spec start(keyword()) :: :ok
+  def start(opts \\ []) do
+    {:ok, pid} = start_link(opts)
+    true = Process.unlink(pid)
     :ok
   end
 end

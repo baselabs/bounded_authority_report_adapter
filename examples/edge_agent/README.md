@@ -25,6 +25,7 @@ edge_agent/
   test/edge_agent_test.exs      # the round-trip + the four rejection classes
   test/local_loopback_test.exs  # the loopback profile over IPv4 and IPv6
   test/plug_recipe_test.exs     # runs the library's Plug recipe as written
+  test/receiver_start_test.exs  # the receiver outlives the `mix run -e` caller
 ```
 
 ## Run it
@@ -35,20 +36,11 @@ From `examples/edge_agent/`:
 # 0. fetch deps (bounded_authority_protocol resolves from Hex)
 mix deps.get
 
-# 1. terminal one — start the receiver (listens on 127.0.0.1:4001 by default)
+# 1. terminal one: start the receiver (listens on 127.0.0.1:4001 by default)
 mix run --no-halt -e EdgeAgent.Receiver.start
 
-# 2. terminal two — run the agent once against it
+# 2. terminal two: run the agent once against it
 mix run -e 'EdgeAgent.run() |> IO.inspect(label: "result")'
-
-# The local-loopback profile flow (development listeners): the byte-distinct
-# ba+loopback-proof profile. The flow is challenge-first — GET the receiver to
-# obtain a LISTENER-RESERVED single-use nonce, sign it via
-# EdgeAgent.run_local_loopback/1, POST; the receiver's profile mode derives its
-# target from its own bound ip/port, refuses to boot on a non-loopback
-# interface, and consumes the challenge atomically at verification
-# (test/local_loopback_test.exs runs it over real IPv4 AND IPv6 listeners).
-# Loopback HTTP is plain HTTP — not equivalent to HTTPS.
 ```
 
 You should see:
@@ -56,6 +48,26 @@ You should see:
 ```
 result: {:ok, 200, "accepted"}
 ```
+
+The local-loopback profile (development listeners) has its own pair of commands. Its flow
+is challenge-first: the agent GETs a single-use nonce that the listener reserved, signs it
+with `sign_local_loopback_report/3`, and POSTs. The receiver derives its expected target
+from its own bound address and port, refuses to boot on a non-loopback interface, and
+consumes the challenge when it verifies. Loopback HTTP is plain HTTP, not equivalent to
+HTTPS.
+
+```bash
+# 1. terminal one: the loopback receiver on 127.0.0.1:4002 (the configured loopback URL)
+mix run --no-halt -e 'EdgeAgent.Receiver.start(profile: :local_loopback, port: 4002)'
+
+# 2. terminal two
+mix run -e 'EdgeAgent.run_local_loopback() |> IO.inspect(label: "result")'
+```
+
+It prints the same `result: {:ok, 200, "accepted"}`. `test/local_loopback_test.exs` runs
+this flow over real IPv4 and IPv6 listeners, and `test/receiver_start_test.exs` holds the
+first pair of commands to working: the receiver keeps serving after the `-e` expression
+returns.
 
 `200 accepted` means the receiver decoded the raw report body, ran
 `check_envelope/2` against the published demo issuer key, bound the verified
@@ -118,8 +130,9 @@ See the repo-root [`AGENTS.md`](../../AGENTS.md) for the full operational pictur
 
 ## What this is, and is not
 
-- **Not a production issuer.** `DemoIssuer` mints the grant from a demo issuer key
-  so the loop is self-contained. A real grant is minted by your authority service
+- **Not a production issuer.** `DemoIssuer` signs the grant with
+  `BoundedAuthorityReportAdapter.sign_grant/3` and a demo issuer key handle, so the loop is
+  self-contained. A real grant is minted by your authority service
   and arrives at the edge out of band.
 - **Not production key custody.** `EdgeAgent.Handle` holds a `{pub, priv}` tuple in
   memory. A production edge agent implements the handle callbacks against an HSM,

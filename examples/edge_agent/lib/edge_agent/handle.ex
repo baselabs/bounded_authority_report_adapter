@@ -23,8 +23,6 @@ defmodule EdgeAgent.Handle do
 
   @behaviour BoundedAuthorityReportAdapter
 
-  alias BoundedAuthorityProtocol.V1.Jwk
-
   @impl true
   def sign(message, {_public_key, private_key}) when is_binary(message) do
     {:ok, :crypto.sign(:eddsa, :none, message, [private_key, :ed25519])}
@@ -36,14 +34,10 @@ defmodule EdgeAgent.Handle do
   def public_key({public_key, _private_key}), do: {:ok, public_key}
   def public_key(_handle), do: {:error, :invalid_handle}
 
+  # The raw RFC 7638 thumbprint: the value a grant's holder_thumbprint carries.
   @impl true
-  def thumbprint({public_key, _private_key}) do
-    # The raw RFC 7638 thumbprint, from the protocol package's documented JWK functions.
-    with {:ok, jwk} <- Jwk.encode_public(public_key, %{}),
-         {:ok, thumbprint} <- Jwk.thumbprint(jwk, %{}) do
-      {:ok, Base.url_decode64!(thumbprint, padding: false)}
-    end
-  end
+  def thumbprint({public_key, _private_key}),
+    do: BoundedAuthorityReportAdapter.public_key_thumbprint(public_key)
 
   def thumbprint(_handle), do: {:error, :invalid_handle}
 end
