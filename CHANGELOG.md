@@ -49,6 +49,10 @@
   with `{:producer_error, :invalid}` before `sign/2`. Pass whole numbers as
   `{:integer, n}`. A new test signs and verifies `equals`, `one_of` and range selectors on
   both surfaces and pins the locked protocol's verdict on those values.
+- Development tooling: sbom 0.12.1 (with purl 0.5.2) accepts hex_core 0.21, so the `hex_core`
+  override is gone and hex_core 0.21.1 arrives dev/test-only through sbom. CI moves to
+  actions/checkout 7.0.1, upload-pages-artifact 5.0.0 and deploy-pages 5.0.1. Nothing shipped
+  changes.
 
 ## [0.12.0] — 2026-10-31
 
