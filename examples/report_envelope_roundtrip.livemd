@@ -521,6 +521,62 @@ hotter = {:object, [{"sensor", {:string, "greenhouse-4"}}, {"celsius", {:integer
 ]
 ```
 
+### Narrowing a grant with selectors
+
+The grant above allows any arguments (`:all`). A selector narrows what an operation may be
+called with, and the verifier enforces it. This grant lets the holder submit readings only from
+two named sensors, and only in Celsius: `one_of` lists the allowed values at a path in the request
+body, and `equals` names the one allowed value. Contract-major 3 adds inclusive numeric ranges
+(`lte`, `gte`). Write whole numbers in selector values as `{:integer, n}`: with protocol 1.0 the
+grant producer refuses a float-tagged whole number such as `{:float, 21.0}`, because canonical
+JSON writes it as `21`, which decodes as an integer.
+
+```elixir
+sensor_grant_input = %{
+  grant_input
+  | grant_id: "urn:example:grant:greenhouse-2",
+    operations: [
+      %V1.Operation{
+        name: "submit_reading",
+        selectors: [
+          {:one_of, ["sensor"], [{:string, "greenhouse-4"}, {:string, "greenhouse-5"}]},
+          {:equals, ["unit"], {:string, "celsius"}}
+        ]
+      }
+    ]
+}
+
+{:ok, %{grant: sensor_grant}} = Adapter.sign_grant(sensor_grant_input, issuer_handle)
+
+reading_from = fn sensor, unit ->
+  {:object, [{"sensor", {:string, sensor}}, {"unit", {:string, unit}}, {"value", {:integer, 21}}]}
+end
+
+submit = fn arguments ->
+  sensor_report = %{report | grant_compact: sensor_grant, cast_arguments: arguments}
+
+  {:ok, %{proof: sensor_proof}} =
+    Adapter.sign_report(sensor_report, holder_handle, %{issued_at: now - 5})
+
+  V1.check_envelope(
+    %V1.Credentials{grant: sensor_grant, proof: sensor_proof},
+    %{expected | cast_arguments: arguments}
+  )
+end
+
+[
+  listed_sensor: submit.(reading_from.("greenhouse-5", "celsius")) |> elem(0),
+  unlisted_sensor: submit.(reading_from.("greenhouse-9", "celsius")),
+  other_unit: submit.(reading_from.("greenhouse-4", "fahrenheit"))
+]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[listed_sensor: :ok, unlisted_sensor: {:error, :invalid}, other_unit: {:error, :invalid}]
+```
+
 ### A listener on the loopback interface: `sign_local_loopback_report/3`
 
 A development listener on `127.0.0.1` or `[::1]` uses a separate proof profile

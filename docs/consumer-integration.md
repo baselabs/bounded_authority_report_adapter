@@ -65,7 +65,10 @@ Notes:
 
 This module is the complete path, including the identity binding from §8. A verifier that
 copies only the `check_envelope/2` call, without the binding, is open to cross-identity
-replay. The `config` map carries the values your service configures and validates at boot.
+replay. The `config` map carries the values your service configures and validates at boot,
+including the contract-major it accepts: 1 (Ed25519 keys, `BoundedAuthorityProtocol.V1`)
+by default, or 3 (P-256 keys, `BoundedAuthorityProtocol.V3`). Both take the same input
+structs.
 
 ```elixir
 defmodule MyApp.EnvelopeVerifier do
@@ -73,8 +76,9 @@ defmodule MyApp.EnvelopeVerifier do
 
   @doc """
   Verifies one request. `headers` is the request's headers as a map with lowercase names,
-  `raw_body` the exact body bytes, and `identity_public_key` the raw Ed25519 public key of
-  the identity your transport authenticated. Returns `{:ok, facts}` or `:invalid`.
+  `raw_body` the exact body bytes, and `identity_public_key` the public key of the identity
+  your transport authenticated: a raw 32-byte Ed25519 key, or a 65-byte uncompressed P-256
+  point for contract-major 3. Returns `{:ok, facts}` or `:invalid`.
   """
   def verify(raw_body, headers, identity_public_key, config) do
     with {:ok, grant} <- Map.fetch(headers, "x-ba-grant"),
@@ -83,7 +87,7 @@ defmodule MyApp.EnvelopeVerifier do
          {:ok, nonce} <- Map.fetch(headers, "x-ba-nonce"),
          {:ok, cast_arguments} <- V1.Json.decode(raw_body),
          {:ok, facts} <-
-           V1.check_envelope(
+           protocol(config).check_envelope(
              %V1.Credentials{grant: grant, proof: proof},
              %V1.ExpectedRequest{
                trusted_issuer: %V1.TrustedIssuer{
@@ -113,14 +117,24 @@ defmodule MyApp.EnvelopeVerifier do
     end
   end
 
+  defp protocol(%{contract_major: 3}), do: BoundedAuthorityProtocol.V3
+  defp protocol(_config), do: V1
+
   # Returns :ok or {:error, _}, not a boolean: a boolean never matches `:ok <-`.
   defp bind_holder_to_identity(bound_holder_thumbprint, identity_public_key) do
-    with {:ok, jwk} <- V1.Jwk.encode_public(identity_public_key, %{}),
-         {:ok, thumbprint} <- V1.Jwk.thumbprint(jwk, %{}),
+    with {:ok, jwk_module} <- jwk_module(identity_public_key),
+         {:ok, jwk} <- jwk_module.encode_public(identity_public_key, %{}),
+         {:ok, thumbprint} <- jwk_module.thumbprint(jwk, %{}),
          {:ok, identity_thumbprint} <- Base.url_decode64(thumbprint, padding: false) do
       if identity_thumbprint == bound_holder_thumbprint, do: :ok, else: {:error, :not_bound}
     end
   end
+
+  # The RFC 7638 preimage follows the key type: OKP members for an Ed25519 key, EC members
+  # for a P-256 point. A key of the other type then never matches the grant's thumbprint.
+  defp jwk_module(<<_::binary-size(32)>>), do: {:ok, V1.Jwk}
+  defp jwk_module(<<4, _::binary-size(64)>>), do: {:ok, BoundedAuthorityProtocol.V3.EcJwk}
+  defp jwk_module(_other), do: {:error, :unsupported_key}
 end
 ```
 
@@ -128,8 +142,9 @@ The holder obtains the same tagged form before calling `sign_report/3`, by decod
 body it is about to send with `V1.Json.decode/2`. The adapter takes `cast_arguments`
 already in that form; it does not convert a map.
 
-The test suite runs this module against a real envelope: it accepts the matching request,
-and returns `:invalid` for a different identity, a different request body, and a missing
+The test suite runs this module against real envelopes of both contract-majors: it accepts
+the matching request, and returns `:invalid` for a different identity (including a P-256
+identity whose key differs from the holder's), a different request body, and a missing
 header. The proof binds the decoded body, so a change that decodes to the same value (extra
 whitespace between JSON tokens, for example) is the same request.
 

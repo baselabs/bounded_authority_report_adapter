@@ -264,7 +264,7 @@ content appears. A sustained `:signing_failed` rate means custody is misconfigur
 - [Getting started](docs/getting-started.md): first sign, then a production key handle.
 - [Usage rules](usage-rules.md): the integration contract as a checklist.
 - [Errors](docs/errors.md): every error reason and what to check.
-- [Recipes](docs/recipes.md): HSM and KMS handles, a Plug consumer, the loopback listener.
+- [Recipes](docs/recipes.md): HSM and KMS handles (Ed25519, and ES256 over DER), grants with selectors, an attested issuer role, key rotation, error handling with telemetry alerts, a Plug consumer, the loopback listener.
 - [Security model](docs/security.md): trust boundaries and named misuses.
 - [Telemetry](docs/telemetry.md): events, result classes and alerting.
 - [Consumer integration](docs/consumer-integration.md): the verifier side of the contract.

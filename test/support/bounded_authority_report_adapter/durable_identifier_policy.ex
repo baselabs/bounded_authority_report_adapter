@@ -87,6 +87,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "test/bounded_authority_report_adapter/optional_callback_users_test.exs",
                        "test/bounded_authority_report_adapter/selector_float_refusal_test.exs",
                        "test/bounded_authority_report_adapter/v3_sign_test.exs",
+                       "test/doc_samples_test.exs",
                        "test/support/test_keys.ex"
                      ])
 

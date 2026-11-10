@@ -14,6 +14,18 @@
   and `shape_report/3` (report keys and fatal/advisory classification, not message text),
   and the naming conventions the 1.0 surface keeps.
 
+- New recipes, each run by the test suite with its `#=>` values checked: an ES256 handle
+  over a KMS or HSM that returns DER (through `BoundedAuthorityProtocol.Es256.der_to_raw/1`
+  and `normalize_low_s/1`), grants with `equals`, `one_of` and (contract-major 3) range
+  selectors, an attested issuer role, key rotation with `sign_key_transition/3`, and
+  error handling with a telemetry custody alarm.
+- Consumer integration §4's verifier binds a P-256 identity too: it selects the
+  contract-major from its configuration and the RFC 7638 preimage from the key type. The
+  test suite runs it on contract-major-3 envelopes.
+- The Livebook narrows a grant with `one_of` and `equals` selectors and shows the verifier
+  refusing arguments outside them. Every cell still returns its pinned value against the
+  published 0.12.0 package and protocol 0.9.1.
+
 ### Changed
 
 - **`:role_attestation` refuses unknown keys.** A key other than `:compact`, `:attestor`

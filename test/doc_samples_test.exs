@@ -43,6 +43,27 @@ defmodule MyApp.KmsClient do
   end
 end
 
+defmodule MyApp.EcKmsClient do
+  @moduledoc false
+  # A real local signer in place of the KMS the ES256 recipe calls: one current P-256 key
+  # version per key reference, derived from it. Like a cloud KMS or a PKCS#11 HSM, sign_es256/2
+  # returns the signature DER-encoded.
+  def current_version(ref), do: {:ok, {"kms-p256-#{ref}-v1", public_key_of(ref)}}
+
+  def role(:issuer), do: :issuer
+  def role(_ref), do: :holder
+
+  def sign_es256(ref, message),
+    do: {:ok, :crypto.sign(:ecdsa, :sha256, message, [private_key(ref), :prime256v1])}
+
+  defp private_key(ref), do: :crypto.hash(:sha256, "kms-p256:#{ref}:v1")
+
+  defp public_key_of(ref) do
+    {public_key, _private} = :crypto.generate_key(:ecdh, :prime256v1, private_key(ref))
+    public_key
+  end
+end
+
 defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
   @moduledoc """
   Runs the Elixir code samples in the guides and the API reference, so a sample a reader
@@ -263,6 +284,91 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
     assert verifier.verify(other_body, headers, holder_public_key, config) == :invalid
 
     assert verifier.verify(raw_body, Map.delete(headers, "x-ba-nonce"), holder_public_key, config) ==
+             :invalid
+  end
+
+  test "the consumer-integration verifier binds a P-256 identity on contract-major 3" do
+    # The V3 moduledoc defines the development P-256 handle; it is looked up by name.
+    ec_key = doc_module("DevP256Key")
+    verifier = doc_module("EnvelopeVerifier")
+    now = System.system_time(:second)
+    issuer = {ec_key, {:issuer, "ec-issuer-key-1"}}
+    holder = {ec_key, {:holder, "ec-holder-key-1"}}
+    {:ok, issuer_public_key} = ec_key.public_key({:issuer, "ec-issuer-key-1"})
+    {:ok, holder_public_key} = ec_key.public_key({:holder, "ec-holder-key-1"})
+    {:ok, stranger_public_key} = ec_key.public_key({:holder, "ec-stranger-key-1"})
+    {:ok, holder_thumbprint} = ec_key.thumbprint({:holder, "ec-holder-key-1"})
+    {:ok, ed25519_identity} = doc_module("DevKey").public_key({:holder, "holder-key-1"})
+
+    {:ok, %{grant: grant}} =
+      BoundedAuthorityReportAdapter.V3.sign_grant(
+        %{
+          issuer: "https://issuer.example",
+          grant_id: "urn:example:grant:p256-consumer",
+          audiences: ["https://records.example"],
+          issued_at: now,
+          not_before: now,
+          expires_at: now + 3600,
+          holder_thumbprint: holder_thumbprint,
+          operations: [
+            %BoundedAuthorityProtocol.V3.Operation{name: "archive_document", selectors: [:all]}
+          ]
+        },
+        issuer
+      )
+
+    raw_body = ~s({"document":"minutes-2026-10-01.pdf"})
+    {:ok, cast_arguments} = Json.decode(raw_body)
+    invocation_id = "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b"
+
+    {:ok, %{proof: proof}} =
+      BoundedAuthorityReportAdapter.V3.sign_report(
+        %{
+          grant_compact: grant,
+          operation: "archive_document",
+          method: "POST",
+          target_uri: "https://records.example/archive",
+          invocation_id: invocation_id,
+          cast_arguments: cast_arguments,
+          nonce: "nonce-p256-consumer-1"
+        },
+        holder,
+        %{issued_at: now}
+      )
+
+    headers = %{
+      "x-ba-grant" => grant,
+      "x-ba-proof" => proof,
+      "x-ba-invocation-id" => invocation_id,
+      "x-ba-nonce" => "nonce-p256-consumer-1"
+    }
+
+    config = %{
+      contract_major: 3,
+      issuer_key_id: "ec-issuer-key-1",
+      issuer_public_key: issuer_public_key,
+      issuer: "https://issuer.example",
+      audience: "https://records.example",
+      target_uri: "https://records.example/archive",
+      operation: "archive_document",
+      clock_skew: 60,
+      proof_max_age: 300
+    }
+
+    assert {:ok, %{operation: "archive_document"}} =
+             verifier.verify(raw_body, headers, holder_public_key, config)
+
+    assert verifier.verify(raw_body, headers, stranger_public_key, config) == :invalid
+    assert verifier.verify(raw_body, headers, ed25519_identity, config) == :invalid
+    assert verifier.verify(raw_body, headers, <<4, 1, 2>>, config) == :invalid
+
+    # The same credentials under the contract-major-1 configuration are refused.
+    assert verifier.verify(
+             raw_body,
+             headers,
+             holder_public_key,
+             Map.delete(config, :contract_major)
+           ) ==
              :invalid
   end
 
