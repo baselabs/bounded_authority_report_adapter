@@ -58,6 +58,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                        "test/bounded_authority_report_adapter/sign_key_transition_test.exs",
                        "test/bounded_authority_report_adapter/sign_local_loopback_report_test.exs",
                        "test/bounded_authority_report_adapter/role_attestation_corpus_test.exs",
+                       "test/bounded_authority_report_adapter/selector_float_refusal_test.exs",
                        "test/bounded_authority_report_adapter/sign_grant_role_attestation_test.exs",
                        "test/bounded_authority_report_adapter/sign_report_test.exs",
                        "test/bounded_authority_report_adapter/strict_ed25519_keys_test.exs",
@@ -78,10 +79,13 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
   @external_v2_paths MapSet.new(["test/bounded_authority_report_adapter/v3_sign_test.exs"])
 
   @external_v3_paths MapSet.new([
+                       # public_key_thumbprint/1 computes a P-256 thumbprint through V3.EcJwk.
+                       "lib/bounded_authority_report_adapter.ex",
                        "lib/bounded_authority_report_adapter/v3.ex",
                        "lib/mix/tasks/bounded_authority_report_adapter.doctor.ex",
                        "test/bounded_authority_report_adapter/keyword_options_test.exs",
                        "test/bounded_authority_report_adapter/optional_callback_users_test.exs",
+                       "test/bounded_authority_report_adapter/selector_float_refusal_test.exs",
                        "test/bounded_authority_report_adapter/v3_sign_test.exs",
                        "test/support/test_keys.ex"
                      ])
