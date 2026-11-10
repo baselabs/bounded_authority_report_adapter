@@ -607,7 +607,9 @@ defmodule BoundedAuthorityReportAdapter do
         evaluation time in Unix seconds (default `System.system_time(:second)`). `:now`
         is a trust input: it decides which instant the attestation must cover, so a
         caller that chooses a past `:now` accepts an attestation that has since expired.
-        Given as a map or a keyword list; other keys in it are ignored.
+        Given as a map or a keyword list. Any other key in it (a misspelled `:now`, a
+        caller-supplied subject) is refused with `:invalid_role_attestation` before any
+        callback: the subject always comes from the handle's `signing_identity/1`.
 
   ## Errors
 

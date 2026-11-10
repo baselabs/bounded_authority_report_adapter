@@ -16,6 +16,11 @@
 
 ### Changed
 
+- **`:role_attestation` refuses unknown keys.** A key other than `:compact`, `:attestor`
+  and `:now` inside `sign_grant/3`'s `:role_attestation` option (a misspelled `:now`, a
+  caller-supplied subject) returns `{:error, :invalid_role_attestation}` before any
+  key-handle callback. Before, it was ignored, so a misspelled `:now` evaluated the
+  attestation at the current time. Every other option already refused unknown keys.
 - `Telemetry.sign_span/2`, `Telemetry.emit_start/1` and `Telemetry.emit_stop/3` are no
   longer documented: they are internal from 1.0. Their only callers are the signing entry
   points. The event names, measurements, closed metadata, `Telemetry.objects/0` and

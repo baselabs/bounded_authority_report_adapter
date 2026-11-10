@@ -14,8 +14,10 @@ defmodule BoundedAuthorityReportAdapter.Options do
   # Nested options follow the same rule all the way down: a :bounds or :role_attestation
   # value given as a keyword list is the equivalent map, and a malformed one is refused here,
   # before any callback (a role attestation's shape: a binary :compact, a
-  # BoundedAuthorityProtocol.V1.HistoricalPublicKey :attestor and an optional integer :now;
-  # other keys in it are ignored, because its subject always comes from the key handle).
+  # BoundedAuthorityProtocol.V1.HistoricalPublicKey :attestor and an optional integer :now,
+  # and no other key: a misspelled :now would otherwise fall back to the wall clock, and a
+  # caller-supplied subject would look as if it counted, when the subject always comes from
+  # the key handle).
   #
   # The result is {:ok, map} or {:error, key}, where key names the offending option, or is
   # :options when the problem is not one option's value. The entry point maps that to its
@@ -34,6 +36,8 @@ defmodule BoundedAuthorityReportAdapter.Options do
     key_transition: %{bounds: :bounds},
     content_assertion: %{bounds: :bounds}
   }
+
+  @role_attestation_keys [:compact, :attestor, :now]
 
   @doc false
   @spec schema(:report | :anchor | :grant | :key_transition | :content_assertion) :: schema()
@@ -94,7 +98,10 @@ defmodule BoundedAuthorityReportAdapter.Options do
   defp value(:role_attestation, %{compact: compact, attestor: attestor} = value)
        when is_binary(compact) and not is_struct(value) and
               is_struct(attestor, BoundedAuthorityProtocol.V1.HistoricalPublicKey) do
-    if is_integer(Map.get(value, :now, 0)), do: {:ok, value}, else: :error
+    if Enum.all?(Map.keys(value), &(&1 in @role_attestation_keys)) and
+         is_integer(Map.get(value, :now, 0)),
+       do: {:ok, value},
+       else: :error
   end
 
   defp value(_kind, _value), do: :error

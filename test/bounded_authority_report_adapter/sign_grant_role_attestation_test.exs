@@ -181,16 +181,12 @@ defmodule BoundedAuthorityReportAdapter.SignGrantRoleAttestationTest do
 
       handle = counting_issuer_handle()
 
-      # Decoy caller-supplied binding keys pointing at the ATTESTED subject: the gate must
-      # bind to the HANDLE SNAPSHOT and ignore them (the lying-handle discriminator).
+      # The gate binds to the HANDLE SNAPSHOT: an attestation for another key never signs.
       assert {:error, :invalid_role_attestation} =
                BoundedAuthorityReportAdapter.sign_grant(
                  grant_input(),
                  handle,
-                 attestation_opts(attestation_for,
-                   subject_key_id: "issuer-2026-07",
-                   subject_public_key: foreign_pub
-                 )
+                 attestation_opts(attestation_for)
                )
 
       assert GrantIssuerCountingHandle.sign_call_count() == 0
@@ -201,15 +197,12 @@ defmodule BoundedAuthorityReportAdapter.SignGrantRoleAttestationTest do
       attestation_for = mint_attestation(@attestor_pair, "some-other-kid", issuer_pub, "issuer")
       handle = counting_issuer_handle()
 
-      # Decoy binding keys naming the attested kid — same discriminator, the kid axis.
+      # Same discriminator, the kid axis.
       assert {:error, :invalid_role_attestation} =
                BoundedAuthorityReportAdapter.sign_grant(
                  grant_input(),
                  handle,
-                 attestation_opts(attestation_for,
-                   subject_key_id: "some-other-kid",
-                   subject_public_key: issuer_pub
-                 )
+                 attestation_opts(attestation_for)
                )
 
       assert GrantIssuerCountingHandle.sign_call_count() == 0
@@ -301,6 +294,48 @@ defmodule BoundedAuthorityReportAdapter.SignGrantRoleAttestationTest do
                BoundedAuthorityReportAdapter.sign_grant(grant_input(), issuer_handle(), %{
                  role_attestation: %{compact: compact, now: @now}
                })
+    end
+
+    test "an unknown key inside the option is refused before any callback" do
+      # The attestation is valid for the handle's own key, so only the extra key refuses it.
+      valid = attestation_opts(issuer_attestation())
+
+      assert {:ok, _grant} =
+               BoundedAuthorityReportAdapter.sign_grant(
+                 grant_input(),
+                 counting_issuer_handle(),
+                 valid
+               )
+
+      assert GrantIssuerCountingHandle.sign_call_count() == 1
+
+      {issuer_pub, _} = TestKeys.issuer_keypair()
+
+      for extra <- [
+            # A misspelled :now would otherwise fall back to the wall clock.
+            [nwo: @now],
+            [{"now", @now}],
+            # A caller-supplied subject would look as if it counted.
+            [subject_key_id: "issuer-2026-07"],
+            [subject_public_key: issuer_pub]
+          ] do
+        handle = counting_issuer_handle()
+        opts = %{role_attestation: Map.merge(valid.role_attestation, Map.new(extra))}
+
+        assert {:error, :invalid_role_attestation} =
+                 BoundedAuthorityReportAdapter.sign_grant(grant_input(), handle, opts),
+               "#{inspect(extra)} inside :role_attestation must be refused"
+
+        keyword_opts = [role_attestation: Map.to_list(opts.role_attestation)]
+
+        if Enum.all?(Map.keys(opts.role_attestation), &is_atom/1) do
+          assert {:error, :invalid_role_attestation} =
+                   BoundedAuthorityReportAdapter.sign_grant(grant_input(), handle, keyword_opts)
+        end
+
+        # No further sign/2 call after the one valid signing above.
+        assert GrantIssuerCountingHandle.sign_call_count() == 1
+      end
     end
   end
 
