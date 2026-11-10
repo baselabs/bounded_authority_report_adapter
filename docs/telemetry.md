@@ -54,12 +54,32 @@ not the keys involved.
 Metadata carries exactly the two closed atoms above and NOTHING else — never
 key ids, thumbprints, message bytes, report content, caller opts, or error
 values. Adding a value-carrying field to an emission is a **named misuse** of
-this surface, not an extension: the emitters (`Telemetry.emit_start/1`,
-`Telemetry.emit_stop/3`) are shape-validated and refuse anything outside the
-closed shapes with `{:error, :telemetry_invalid}` instead of emitting it. A
-compacted JWS's bytes, a report's fields, and a key id are all caller material
-the event stream must never carry — downstream sinks (logs, metrics labels)
-are not trusted to redact.
+this surface, not an extension: the library's internal emitters are
+shape-validated and refuse anything outside the closed shapes instead of
+emitting it. A compacted JWS's bytes, a report's fields, and a key id are all
+caller material the event stream must never carry — downstream sinks (logs,
+metrics labels) are not trusted to redact.
+
+## Stability
+
+From 1.0.0 the event names, the measurement keys, the two metadata keys, and the
+values of `BoundedAuthorityReportAdapter.Telemetry.objects/0` and
+`BoundedAuthorityReportAdapter.Telemetry.classes/0` are part of the
+[stability contract](upgrading.md#stability-contract). Adding a metadata key, or
+renaming or removing an event, object or class, needs a major release. A minor release
+may add an object (with a new signing entry point) or a class (with a new error),
+announced in the CHANGELOG, so write handlers that accept atoms they do not know.
+
+The emitter functions `Telemetry.sign_span/2`, `Telemetry.emit_start/1` and
+`Telemetry.emit_stop/3` were documented before 1.0 and are internal from 1.0 on. If
+your code called them, attach a handler to the two events instead; to exercise a
+handler in a test, call a signing entry point or `:telemetry.execute/3` with the
+documented event name, measurements and metadata.
+
+Hiding the emitters is surface minimisation, not a security boundary. Any code in the
+VM can call `:telemetry.execute/3` with these event names, so an event is not proof
+that a signing call happened. Treat the stream as an operational signal, never as an
+audit record.
 
 ## Attaching a handler
 
@@ -117,9 +137,8 @@ error term into telemetry.
 
 ## Telemetry never outranks the signature
 
-`Telemetry.sign_span/2` returns the signer's result unchanged. A failure
-inside an emission is swallowed (`{:error, :telemetry_invalid}`); a raise
-inside the SIGNER propagates — only the emission is guarded, never the crypto.
+Each signing entry point returns the signer's result unchanged. A failure
+inside an emission is swallowed; a raise inside the SIGNER propagates — only the emission is guarded, never the crypto.
 (Consequence for counters: a crashing signer leaves an unpaired `:start` — no
 `:stop` is emitted after a raise. Treat `start − stop` accumulation as a
 crash-rate signal, not a bug; the classes cannot classify a call that never

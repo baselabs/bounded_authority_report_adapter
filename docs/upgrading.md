@@ -226,14 +226,13 @@ override this package back to BAP 0.1.x or retain parallel BAP lines.
 
 ## 0.3.0
 
-Pre-1.0 feature release carrying everything the proposed
-[stability contract](#proposed-stability-contract) enumerates: the value-free
+Pre-1.0 feature release carrying everything the
+[stability contract](#stability-contract) enumerates: the value-free
 telemetry surface, the gate battery (coverage floor, dialyzer, doc warnings,
 dependency audits), the package boundary check, the three-cell CI matrix, the
 full guide set, the Igniter installer, the doctor preflight, and the
-supply-chain workflow. The contract itself is not yet in force: 1.0 waits until
-the release line sees real consumer use, and until then the pre-1.0 SemVer §4 policy
-applies.
+supply-chain workflow. The contract takes effect at 1.0.0; until then the pre-1.0
+SemVer §4 policy applies.
 
 ## 0.2.1
 
@@ -246,12 +245,11 @@ applies.
   (`~> 0.1.1` at the time). Lockfiles that referenced the git remote should
   `mix deps.get` fresh.
 
-## Proposed stability contract
+## Stability contract
 
-Proposed, not yet in force: 1.0 waits until this release line sees real consumer use
-and the surface settles. When 1.0 is cut, the following becomes the public surface, and
-breaking changes to it then require a major version (SemVer §4's pre-1.0 carve-out
-ends):
+This is the 1.0 contract. It takes effect with the 1.0.0 release; until then each 0.x
+release follows SemVer's pre-1.0 rule and its CHANGELOG. From 1.0.0, a breaking change to
+anything below requires a major version:
 
 - The six major-1 signing functions and their return shapes:
   `sign_report/3` → `{:ok, %{grant: binary, proof: binary}}`,
@@ -264,18 +262,57 @@ ends):
   their major-1 namesakes, and their `@spec` input maps (`report()`,
   `local_loopback_report()`, `anchor_input()`, `grant_input()`, `transition_input()`,
   `content_assertion_input()` and the options maps).
+- `BoundedAuthorityReportAdapter.public_key_thumbprint/1` and its return shape.
 - The closed error sets: `sign_error/0`, `anchor_sign_error/0`, `grant_sign_error/0`,
   `transition_sign_error/0` and `content_assertion_sign_error/0`, and `V3`'s matching
   types, including the fixed `{:producer_error, :invalid}` tuple shape (the
   local-loopback entry point shares `sign_error/0`).
 - The key-handle behavior: `sign/2`, `public_key/1`, `thumbprint/1`, `key_identity/1`,
-  `signing_identity/1` and their `{:ok, _} | {:error, _}` contracts.
-- The telemetry surface: `BoundedAuthorityReportAdapter.Telemetry`'s public functions
-  (`Telemetry.sign_span/2`, `Telemetry.emit_start/1`, `Telemetry.emit_stop/3`, `Telemetry.objects/0`, `Telemetry.classes/0` — the `BoundedAuthorityReportAdapter.Telemetry` module), the two event
-  names, and the value-free metadata contract (adding a metadata KEY is breaking by
-  definition — the closed shape IS the contract).
+  `signing_identity/1` and their `{:ok, _} | {:error, _}` contracts. The adapter calls
+  them in the caller's process, with no timeout of its own.
+- The telemetry surface: the two event names
+  (`[:bounded_authority_report_adapter, :sign, :start]` and `[..., :stop]`), their
+  measurement keys (`count`, `duration`), the closed metadata (`object` on both,
+  `result_class` on `:stop`, and no other key), and `Telemetry.objects/0` and
+  `Telemetry.classes/0`. Adding a metadata key is breaking by definition: the closed shape
+  is the contract. A minor release may add an object with a new signing entry point, or a
+  class with a new error, and says so in the CHANGELOG. The emitters
+  (`Telemetry.sign_span/2`, `Telemetry.emit_start/1`, `Telemetry.emit_stop/3`) are
+  internal from 1.0 on: attach a handler to the events instead. Hiding them is surface
+  minimisation, not a security boundary; any code can call `:telemetry.execute/3` with
+  these event names.
+- The doctor's pure preflight: `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.check/3`,
+  `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.check/4` and
+  `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.shape_report/3`. Frozen: both `check`
+  functions return a map with exactly the keys
+  `:fatals` and `:advisories`, each a list of strings; which findings are fatal and which
+  are advisory (as the task's documentation lists them); and `shape_report` returning a
+  string for a valid key of the requested shape and `nil` otherwise. Not frozen: the
+  English text of each finding. Match on the classification, not the words. The
+  `mix bounded_authority_report_adapter.doctor` task's flags (`--handle`, `--ref`,
+  `--live`, `--major`) and its exit status (non-zero when a fatal finding exists or an
+  argument is invalid, zero otherwise) are frozen too.
 - The dependency posture: the library depends only on the public protocol package (plus
   `:telemetry`) — a runtime dependency on anything else is breaking.
+
+### Naming conventions
+
+The names predate 1.0 and stay: renaming them would break every caller for no change in
+behavior. Read them this way:
+
+- **The package name.** `bounded_authority_report_adapter` signs every object the protocol
+  defines, not only reports. The name records where it started: adapting an application
+  report into a signed proof.
+- **Contract-majors.** The top-level `BoundedAuthorityReportAdapter` module is the
+  contract-major-1 surface (Ed25519 keys). `BoundedAuthorityReportAdapter.V3` is the
+  contract-major-3 surface (ES256, P-256 keys). This library signs contract-majors 1 and
+  3; there is no `V2` module.
+- **`sign_report/3`.** Takes the holder's report of one request and returns the envelope:
+  the grant it was given and the proof it signs. `sign_local_loopback_report/3` is the
+  local-loopback profile's sibling.
+- **Input field names.** Inputs the adapter assembles itself use descriptive names
+  (`issued_at`, `not_before`, `expires_at` on a grant). The content-assertion input is the
+  protocol's payload, so its fields keep the protocol's member names (`iat`, `nbf`, `exp`).
 
 ### Reserved break-rights (changes that may land in a MINOR)
 

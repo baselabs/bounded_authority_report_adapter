@@ -45,12 +45,23 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   `--ref` is an Elixir term, evaluated in the doctor's VM (`--ref "{:demo, 1}"`) —
   a dev-tool affordance over your own configuration, nothing more. Read/probe
   only: the doctor never writes, never configures, and never signs caller
-  material.
+  material. The probes call the handle in the doctor's process with no timeout,
+  as the adapter does, so a handle that hangs hangs the doctor.
+
+  ## Stability
+
+  From 1.0.0 the task's flags, its exit status (non-zero when a fatal finding exists or
+  an argument is invalid), and the pure functions `check/3`, `check/4` and
+  `shape_report/3` are part of the stability contract. Frozen: `check/3,4` return a map
+  with exactly the keys `:fatals` and `:advisories`, each a list of strings; each
+  finding's classification as fatal or advisory, as listed above; and `shape_report/3`
+  returning a string for a valid key of the requested shape and `nil` otherwise. Not
+  frozen: the English text of a finding, which may be reworded in any release. Match on
+  the classification and on whether a list is empty, never on the words.
   """
 
   use Mix.Task
 
-  alias BoundedAuthorityProtocol.V1
   alias BoundedAuthorityProtocol.V3
 
   @required_callbacks [sign: 2, public_key: 1, thumbprint: 1]
@@ -113,7 +124,8 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   @doc """
   The pure preflight over a loaded handle module. Returns `%{fatals: [String.t()],
   advisories: [String.t()]}` — no printing, no exits, no side effects beyond the
-  callbacks it probes.
+  callbacks it probes. The keys and each finding's classification are stable; the
+  message text is not (see "Stability" above).
   """
   @spec check(module(), term(), boolean()) :: %{fatals: [String.t()], advisories: [String.t()]}
   def check(module, ref, live?), do: check(module, ref, live?, nil)
@@ -173,7 +185,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   # The key-type gate: only meaningful once public_key/1 exists. A key valid
   # for NEITHER shape is always fatal; with --major, a valid key of the wrong
-  # type for that major is fatal too (ADR-0021 Decision 2).
+  # type for that major is fatal too.
   defp public_key_fatals(module, ref, major) do
     if Code.ensure_loaded?(module) and function_exported?(module, :public_key, 1) do
       case safe_call(module, :public_key, [ref]) do
@@ -213,7 +225,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   defp wrong_type_fatal(major, got) do
     "wrong key type for --major #{major}: got #{got}; that surface's entry " <>
-      "points accept only their own suite's key shape (ADR-0021)"
+      "points accept only their own suite's key shape"
   end
 
   # The thumbprint-match gate: the issuer mints cnf.jkt from the RFC 7638
@@ -275,26 +287,15 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   defp expected_thumbprint(key) do
     case classify_public_key(key) do
-      {:ed25519, pub} -> raw_thumbprint(V1.Jwk.encode_public(pub, %{}), &V1.Jwk.thumbprint/2)
-      {:p256, pub} -> raw_thumbprint(V3.EcJwk.encode_public(pub, %{}), &V3.EcJwk.thumbprint/2)
       :invalid -> :error
+      {_suite, pub} -> BoundedAuthorityReportAdapter.public_key_thumbprint(pub)
     end
   end
-
-  # The raw RFC 7638 digest, through the protocol package's documented JWK functions only:
-  # encode the public JWK, take its canonical base64url thumbprint, decode it.
-  defp raw_thumbprint({:ok, jwk}, thumbprint) do
-    with {:ok, encoded} <- thumbprint.(jwk, %{}) do
-      Base.url_decode64(encoded, padding: false)
-    end
-  end
-
-  defp raw_thumbprint(_encode_error, _thumbprint), do: :error
 
   # Shape classification — the doctor's mirror of the adapter's resolver
   # discrimination (diagnostics infer the suite from the key's wire shape;
-  # defensible because a report is not wire bytes — ADR-0021's rejected-
-  # alternative note). P-256 validation is BAP's certified arithmetic.
+  # defensible because a report is not wire bytes). P-256 validation is the
+  # protocol package's certified arithmetic.
   #
   # A 32-byte key is an Ed25519 key only if BAP's key acceptance (rule S1) passes it:
   # canonical, not small-order, on the curve. The adapter's resolvers refuse every other
@@ -400,7 +401,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
       if high_s?,
         do: [
           "--live probe: sign/2 returns a HIGH-S spelling — the adapter normalizes it " <>
-            "(the low-S producer duty is the adapter's, ADR-0021 Decision 4), but a " <>
+            "(low-S normalization is the adapter's duty as the producer), but a " <>
             "custodian that can emit low-S directly should"
         ],
         else: []

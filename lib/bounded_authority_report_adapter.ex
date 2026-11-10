@@ -39,6 +39,11 @@ defmodule BoundedAuthorityReportAdapter do
   `{:error, :signing_failed}` for `sign/2` and `{:error, :invalid_key_handle}` for the
   others.
 
+  Callbacks run in the caller's process, one after another, and the adapter sets no
+  timeout of its own: a callback that never returns blocks the signing call for as long as
+  it waits. Bound every remote call inside the handle (for example the `timeout` of a
+  `GenServer.call/3` to your HSM client); the timeout's exit is contained as above.
+
   The behavior requires `sign/2`, `public_key/1` and `thumbprint/1`, and makes
   `key_identity/1` and `signing_identity/1` optional. Which callbacks each entry point
   calls (the same on `BoundedAuthorityReportAdapter.V3`, for its four entry points):
@@ -58,6 +63,7 @@ defmodule BoundedAuthorityReportAdapter do
       it is refused.
     * `thumbprint/1` — no entry point calls it. It returns the RFC 7638 thumbprint the
       issuer puts in a grant's `cnf.jkt`, so callers can check a handle against a grant.
+      `public_key_thumbprint/1` computes it from the public key in one call.
 
   Key and signature shapes depend on the surface. Under this module, public keys are raw
   32-byte Ed25519 keys that pass the protocol's strict acceptance rule
@@ -927,6 +933,51 @@ defmodule BoundedAuthorityReportAdapter do
   defp content_assertion_opts(opts),
     do: normalize_opts(opts, :invalid_content_assertion, :content_assertion)
 
+  @doc """
+  Returns the raw RFC 7638 thumbprint of a public key: the 32-byte SHA-256 digest that a
+  grant's `holder_thumbprint` carries and a key handle's `thumbprint/1` returns.
+
+  Accepts a raw 32-byte Ed25519 public key (contract-major 1) or a 65-byte uncompressed
+  SEC1 P-256 point, `0x04 || x || y` (contract-major 3). The digest is computed by the
+  protocol package's JWK functions (`BoundedAuthorityProtocol.V1.Jwk` for Ed25519,
+  `BoundedAuthorityProtocol.V3.EcJwk` for P-256), so the preimage is exactly the
+  protocol's. Any other value, including an Ed25519 key the protocol's strict rule refuses
+  and a point off the curve, returns `{:error, :invalid}`.
+
+  ## Example
+
+  ```elixir
+  {:ok, holder_public_key} = MyApp.DevKey.public_key({:holder, "holder-key-1"})
+  {:ok, thumbprint} = BoundedAuthorityReportAdapter.public_key_thumbprint(holder_public_key)
+  byte_size(thumbprint)
+  #=> 32
+  ```
+
+  ```elixir
+  BoundedAuthorityReportAdapter.public_key_thumbprint(<<0::256>>)
+  #=> {:error, :invalid}
+  ```
+  """
+  @doc since: "1.0.0"
+  @spec public_key_thumbprint(binary()) :: {:ok, <<_::256>>} | {:error, :invalid}
+  def public_key_thumbprint(<<_::binary-size(32)>> = public_key),
+    do: raw_thumbprint(BoundedAuthorityProtocol.V1.Jwk, public_key)
+
+  def public_key_thumbprint(<<4, _::binary-size(64)>> = public_key),
+    do: raw_thumbprint(BoundedAuthorityProtocol.V3.EcJwk, public_key)
+
+  def public_key_thumbprint(_public_key), do: {:error, :invalid}
+
+  defp raw_thumbprint(jwk_module, public_key) do
+    with {:ok, jwk} <- jwk_module.encode_public(public_key, %{}),
+         {:ok, encoded} <- jwk_module.thumbprint(jwk, %{}),
+         {:ok, <<_::binary-size(32)>> = thumbprint} <- Base.url_decode64(encoded, padding: false) do
+      {:ok, thumbprint}
+    else
+      _invalid -> {:error, :invalid}
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # The shared signing tail (the universal-companion primitive).
   #
@@ -1520,9 +1571,7 @@ defmodule BoundedAuthorityReportAdapter do
 
   No entry point calls this callback. It lets callers check a handle against a grant, and
   `mix bounded_authority_report_adapter.doctor` checks it against `public_key/1`. Compute
-  it with the protocol package's `BoundedAuthorityProtocol.V1.Jwk.encode_public/2` and
-  `BoundedAuthorityProtocol.V1.Jwk.thumbprint/2` (or the `BoundedAuthorityProtocol.V3.EcJwk`
-  pair for P-256), and decode the base64url result.
+  it from the public key with `BoundedAuthorityReportAdapter.public_key_thumbprint/1`.
   """
   @callback thumbprint(handle :: term()) :: {:ok, binary()} | {:error, term()}
 

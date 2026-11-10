@@ -108,11 +108,14 @@ its receiver's `profile: :local_loopback` mode, in the repository's `examples/ed
 Requires: nothing beyond this package. The HSM client is injected through configuration;
 your client module is the integration point.
 
-The handle's `sign/2` fronts a network HSM. Two properties matter. The callback must
-return `{:ok, binary}` or `{:error, term}`. And a timeout must not crash your caller: the
+The handle's `sign/2` fronts a network HSM. Three properties matter. The callback must
+return `{:ok, binary}` or `{:error, term}`. A timeout must not crash your caller: the
 adapter contains a callback that raises, throws or exits (a `GenServer.call` timeout is an
 exit) and returns `:signing_failed` for `sign/2` or `:invalid_key_handle` for the other
-callbacks. Still, return errors explicitly whenever you can.
+callbacks. And the timeout is yours to set: the adapter runs every callback in the
+caller's process with no timeout of its own, so a client call without one blocks the
+signing call for as long as the HSM does not answer. Still, return errors explicitly
+whenever you can.
 
 **The P-256 variant (the `V3` surface).** The same recipe serves
 `BoundedAuthorityReportAdapter.V3` with a P-256-backed handle, with THREE
@@ -160,10 +163,7 @@ defmodule MyApp.HsmHandle do
   @impl true
   def thumbprint(key_ref) do
     with {:ok, public_key} <- public_key(key_ref),
-         {:ok, jwk} <- BoundedAuthorityProtocol.V1.Jwk.encode_public(public_key, %{}),
-         {:ok, thumbprint} <- BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{}) do
-      {:ok, Base.url_decode64!(thumbprint, padding: false)}
-    end
+         do: BoundedAuthorityReportAdapter.public_key_thumbprint(public_key)
   end
 
   @impl true
@@ -215,10 +215,7 @@ defmodule MyApp.KmsHandle do
   @impl true
   def thumbprint(key_ref) do
     with {:ok, {_key_id, public_key}} <- key_identity(key_ref),
-         {:ok, jwk} <- BoundedAuthorityProtocol.V1.Jwk.encode_public(public_key, %{}),
-         {:ok, thumbprint} <- BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{}) do
-      {:ok, Base.url_decode64!(thumbprint, padding: false)}
-    end
+         do: BoundedAuthorityReportAdapter.public_key_thumbprint(public_key)
   end
 
   @impl true

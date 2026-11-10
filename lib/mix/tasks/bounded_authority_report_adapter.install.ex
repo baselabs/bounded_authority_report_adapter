@@ -107,14 +107,10 @@ if Code.ensure_loaded?(Igniter) do
 
         @impl true
         def thumbprint(_handle) do
-          # Real shape (after public_key/1 is wired) — the SUITE'S RFC 7638
-          # preimage: OKP members for a 32-byte Ed25519 key, EC members for a
-          # 65-byte P-256 key:
+          # Real shape (after public_key/1 is wired); one call covers both
+          # a 32-byte Ed25519 key and a 65-byte P-256 point:
           #   {:ok, pub} = public_key(_handle)
-          #   {:ok, jwk} = BoundedAuthorityProtocol.V1.Jwk.encode_public(pub, %{})
-          #   {:ok, b64} = BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{})
-          #   {:ok, Base.url_decode64!(b64, padding: false)}
-          #   (P-256: SHA-256 of BoundedAuthorityProtocol.V3.EcJwk's preimage)
+          #   BoundedAuthorityReportAdapter.public_key_thumbprint(pub)
           raise "wire #{inspect(module)}.thumbprint/1 (delegate to public_key/1)"
         end
 

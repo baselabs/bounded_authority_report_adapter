@@ -55,14 +55,10 @@ defmodule MyApp.DevKey do
   @impl true
   def public_key({_role, name}), do: {:ok, public_key_of(name)}
 
-  # The raw RFC 7638 thumbprint, from the protocol package's documented JWK functions.
+  # The raw RFC 7638 thumbprint: the value a grant's holder_thumbprint carries.
   @impl true
-  def thumbprint({_role, name}) do
-    with {:ok, jwk} <- BoundedAuthorityProtocol.V1.Jwk.encode_public(public_key_of(name), %{}),
-         {:ok, thumbprint} <- BoundedAuthorityProtocol.V1.Jwk.thumbprint(jwk, %{}) do
-      {:ok, Base.url_decode64!(thumbprint, padding: false)}
-    end
-  end
+  def thumbprint({_role, name}),
+    do: BoundedAuthorityReportAdapter.public_key_thumbprint(public_key_of(name))
 
   # Key id and public key in one call, so a rotating key store cannot split them.
   @impl true

@@ -23,6 +23,12 @@ private key. What it guarantees follows from that narrow job.
 - **Closed errors and value-free telemetry.** Errors are atoms; telemetry metadata is two
   closed atoms. Neither can carry key material, message bytes or report content. See
   [telemetry.md](telemetry.md) for the handler side.
+- **Callbacks run in your process, without a timeout.** The adapter calls the handle's
+  callbacks in the process that called the entry point, one after another, and sets no
+  timeout of its own. A custodian that never answers blocks that call for as long as
+  your client waits: bound every remote call inside the handle. A callback that raises,
+  throws or exits (a `GenServer.call/3` timeout is an exit) is contained and returns a
+  closed error.
 - **Authorization is the verifier's decision.** A signed envelope proves possession and
   binding. Identity binding, replay protection and revocation happen in the verifying
   service; see [consumer-integration.md](consumer-integration.md) §8 and §9.
@@ -56,6 +62,11 @@ attested, for the handle's own key, by an attestor the caller trusts.
 material in every downstream sink (logs, metric labels, dashboards), and the stream is no
 longer safe to ship anywhere. The emitters validate their shape so this cannot be
 expressed; treat the refusal as the feature.
+
+**Misuse: treating a telemetry event as evidence.** The events are an operational signal.
+Any code in the VM can call `:telemetry.execute/3` with the adapter's event names, so an
+event proves neither that a signing call happened nor which code emitted it. Audit what
+was signed from the signed objects themselves.
 
 **Misuse: shipping a test-support reference handle.** The handles in the source
 repository's `test/support/` keep a private key in process memory as a plain binary. In

@@ -21,15 +21,33 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   (`{:producer_error, :invalid}` is the class `:producer_error`, full stop; a
   wrong-key failure is `:signing_failed`, not the keys involved). Adding a
   value-carrying field to an emission is a named MISUSE of this surface, not an
-  extension: the emitters are shape-validated (`emit_start/1`, `emit_stop/3`)
-  and REFUSE anything outside the closed shapes with
-  `{:error, :telemetry_invalid}` rather than emitting it.
+  extension: the library's internal emitters are shape-validated and refuse
+  anything outside the closed shapes rather than emitting it.
+
+  ## Stability
+
+  From 1.0.0 the two event names, their measurement keys, the two metadata keys, and the
+  values of `objects/0` and `classes/0` are part of the stability contract (see the
+  upgrading guide). Adding a metadata key, or renaming or removing an event, object or
+  class, is a breaking change. A minor release may add an object (with a new signing entry
+  point) or a class (with a new error), announced in the CHANGELOG, so a handler should
+  accept atoms it does not know.
+
+  The emitters (`sign_span/2`, `emit_start/1`, `emit_stop/3`) were documented before 1.0
+  and are internal from 1.0 on; they remain callable but are not part of the contract.
+  To observe signing, attach a handler to the two events. To test a handler, call a
+  signing entry point, or call `:telemetry.execute/3` with the documented event name,
+  measurements and metadata.
+
+  Hiding the emitters is surface minimisation, not a security boundary: any code in the
+  VM can call `:telemetry.execute/3` with these event names. A handler must not treat an
+  event as proof that a signing call happened, or as evidence of which code emitted it.
 
   ## Telemetry never outranks the signature
 
-  `sign_span/2` returns the signer's result UNCHANGED. A failure inside the
-  emission is swallowed (`{:error, :telemetry_invalid}`); a raise inside the
-  SIGNER propagates — only the emission is guarded, never the crypto.
+  Each signing entry point returns the signer's result UNCHANGED. A failure inside the
+  emission is swallowed; a raise inside the SIGNER propagates — only the emission is
+  guarded, never the crypto.
   """
 
   @prefix [:bounded_authority_report_adapter, :sign]
@@ -64,18 +82,12 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   @spec classes() :: [atom()]
   def classes, do: @classes
 
-  @doc """
-  Runs `fun` inside a `:sign` span: emits `:start`, runs it, emits `:stop`
-  with the monotonic duration and the classified result, and returns whatever
-  `fun` returned — unchanged. `object` must be one of `objects/0`.
-
-  Telemetry failures are swallowed inside the emitters; a raise inside `fun`
-  propagates (the emission is guarded, the crypto is not). An `object` outside
-  `objects/0` raises `FunctionClauseError`.
-
-      iex> BoundedAuthorityReportAdapter.Telemetry.sign_span(:grant, fn -> {:error, :invalid_grant} end)
-      {:error, :invalid_grant}
-  """
+  # Internal from 1.0 (was documented before): runs `fun` inside a `:sign` span — emits
+  # :start, runs it, emits :stop with the monotonic duration and the classified result, and
+  # returns whatever `fun` returned, unchanged. Telemetry failures are swallowed inside the
+  # emitters; a raise inside `fun` propagates. An `object` outside objects/0 raises
+  # FunctionClauseError.
+  @doc false
   @spec sign_span(atom(), (-> term())) :: term()
   def sign_span(object, fun) when object in @objects and is_function(fun, 0) do
     started = System.monotonic_time()
@@ -87,16 +99,9 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
     result
   end
 
-  @doc """
-  Emits `[:bounded_authority_report_adapter, :sign, :start]` with
-  `%{count: 1}` / `%{object: object}`. Refuses an unknown object with
-  `{:error, :telemetry_invalid}` instead of emitting garbage.
-
-      iex> BoundedAuthorityReportAdapter.Telemetry.emit_start(:report)
-      :ok
-      iex> BoundedAuthorityReportAdapter.Telemetry.emit_start(:unknown_object)
-      {:error, :telemetry_invalid}
-  """
+  # Internal from 1.0: emits the :start event, or refuses an unknown object with
+  # {:error, :telemetry_invalid} instead of emitting it.
+  @doc false
   @spec emit_start(atom()) :: :ok | {:error, :telemetry_invalid}
   def emit_start(object) do
     case validate_object(object) do
@@ -113,19 +118,10 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
     _kind, _reason -> {:error, :telemetry_invalid}
   end
 
-  @doc """
-  Emits `[:bounded_authority_report_adapter, :sign, :stop]` with
-  `%{duration: duration}` / `%{object: object, result_class: result_class}`.
-  Refuses an unknown object or class, or a non-nonnegative-integer duration,
-  with `{:error, :telemetry_invalid}` instead of emitting garbage — this
-  validation is the mechanical value-free guarantee: a metadata key outside
-  the closed shape is not expressible through this emitter.
-
-      iex> BoundedAuthorityReportAdapter.Telemetry.emit_stop(:anchor, 1_200, :ok)
-      :ok
-      iex> BoundedAuthorityReportAdapter.Telemetry.emit_stop(:anchor, -1, :ok)
-      {:error, :telemetry_invalid}
-  """
+  # Internal from 1.0: emits the :stop event. Refuses an unknown object or class, or a
+  # duration that is not a non-negative integer, with {:error, :telemetry_invalid}: a
+  # metadata key outside the closed shape is not expressible through this emitter.
+  @doc false
   @spec emit_stop(atom(), integer(), atom()) :: :ok | {:error, :telemetry_invalid}
   def emit_stop(object, duration, result_class) do
     with :ok <- validate_object(object),

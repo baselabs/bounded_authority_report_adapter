@@ -62,13 +62,8 @@ defmodule BoundedAuthorityReportAdapter.V3 do
     def public_key({_role, name}), do: {:ok, public_key_of(name)}
 
     @impl true
-    def thumbprint({_role, name}) do
-      with {:ok, jwk} <-
-             BoundedAuthorityProtocol.V3.EcJwk.encode_public(public_key_of(name), %{}),
-           {:ok, thumbprint} <- BoundedAuthorityProtocol.V3.EcJwk.thumbprint(jwk, %{}) do
-        {:ok, Base.url_decode64!(thumbprint, padding: false)}
-      end
-    end
+    def thumbprint({_role, name}),
+      do: BoundedAuthorityReportAdapter.public_key_thumbprint(public_key_of(name))
 
     @impl true
     def key_identity({_role, name}), do: {:ok, {name, public_key_of(name)}}

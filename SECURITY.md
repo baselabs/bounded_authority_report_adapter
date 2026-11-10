@@ -2,9 +2,10 @@
 
 ## Supported versions
 
-The latest published `0.x` release is supported. After 1.0, the supported-versions policy
-is the stability contract's ([the proposed stability
-contract](docs/upgrading.md#proposed-stability-contract)).
+Security fixes land in the latest published release. Before 1.0.0 that is the latest
+`0.x` release. From 1.0.0 it is the latest release of the current major, and the
+[stability contract](docs/upgrading.md#stability-contract) defines what a release within
+that major may change.
 Wire compatibility is governed by the protocol package's contract-major discipline — this
 library's releases track it.
 

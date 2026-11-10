@@ -1,5 +1,32 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `BoundedAuthorityReportAdapter.public_key_thumbprint/1` returns the raw RFC 7638
+  thumbprint of a 32-byte Ed25519 key or a 65-byte P-256 point in one call, through the
+  protocol package's JWK functions, and `{:error, :invalid}` for anything else. A key
+  handle's `thumbprint/1` is now one line; the guides, the install task's template, the
+  doctor and the example app use it.
+- The upgrading guide's stability contract is the 1.0 contract. It takes effect with
+  1.0.0 and now also covers `public_key_thumbprint/1`, the doctor's `check/3`, `check/4`
+  and `shape_report/3` (report keys and fatal/advisory classification, not message text),
+  and the naming conventions the 1.0 surface keeps.
+
+### Changed
+
+- `Telemetry.sign_span/2`, `Telemetry.emit_start/1` and `Telemetry.emit_stop/3` are no
+  longer documented: they are internal from 1.0. Their only callers are the signing entry
+  points. The event names, measurements, closed metadata, `Telemetry.objects/0` and
+  `Telemetry.classes/0` are the contract. If you called an emitter, attach a handler to the
+  events instead. Hiding them is surface minimisation, not a security boundary: any code
+  can call `:telemetry.execute/3`.
+- The doctor's findings no longer cite internal decision records; their classification is
+  unchanged.
+- The guides state that key-handle callbacks run in the caller's process with no timeout
+  from the adapter, so a handle must bound its own remote calls.
+
 ## [0.12.0] — 2026-10-31
 
 ### Changed

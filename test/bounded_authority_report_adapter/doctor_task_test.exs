@@ -262,6 +262,24 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     assert %{fatals: [], advisories: []} = Doctor.check(FullHandle, :ref, true)
   end
 
+  test "the stable report shape: exactly :fatals and :advisories, each a list of strings" do
+    # The 1.0 contract freezes the keys and the classification, not the wording.
+    for {module, live?, major} <- [
+          {FullHandle, true, nil},
+          {NoSignHandle, true, 1},
+          {MinimalHandle, false, 3},
+          {NoSuchHandleModule, false, nil}
+        ] do
+      report = Doctor.check(module, :ref, live?, major)
+      assert Map.keys(report) |> Enum.sort() == [:advisories, :fatals]
+      assert Enum.all?(report.fatals ++ report.advisories, &is_binary/1)
+    end
+
+    assert Doctor.shape_report(FullHandle, :ref, 1) |> is_binary()
+    assert Doctor.shape_report(FullHandle, :ref, 3) == nil
+    assert Doctor.shape_report(NoSuchHandleModule, :ref, nil) == nil
+  end
+
   test "RED: an unloaded module trips exactly the not-loaded fatal" do
     assert %{fatals: [fatal]} = Doctor.check(NoSuchHandleModule, :ref, false)
     assert fatal =~ "not loaded / does not exist"
