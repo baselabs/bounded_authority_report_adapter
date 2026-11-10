@@ -62,7 +62,7 @@ corrective, or breaking.
 
 ## Releases
 
-A release follows the [release runbook](docs/release.md): the release commit, the gates
+A release follows the [release runbook](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/release.md): the release commit, the gates
 before the tag (local and remote CI, the supply-chain attestation, and an archive
 checksum equal to the attested one), the owner's tag and publish, and the registry
 read-back within Hex's one-hour revert window.
