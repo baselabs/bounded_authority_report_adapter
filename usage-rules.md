@@ -8,7 +8,10 @@
    implementing the `BoundedAuthorityReportAdapter` behavior (`sign/2`, `public_key/1`,
    `thumbprint/1`, and as needed `key_identity/1` and `signing_identity/1`). If you find
    yourself passing key bytes into the adapter, the integration is wrong; see
-   [Getting started](docs/getting-started.md).
+   [Getting started](docs/getting-started.md). `thumbprint/1` is one call:
+   `public_key_thumbprint/1` of the handle's public key. The adapter calls the handle in the
+   caller's process and sets no timeout, so bound every remote custody call inside the
+   handle.
 3. `sign_grant/3` signs only for a handle whose `signing_identity/1` declares
    `{:issuer, _, _}`; any other handle gets `:invalid_key_handle` before `sign/2` is called.
    The adapter cannot check that the declaration is true: a handle that returns `:issuer`
