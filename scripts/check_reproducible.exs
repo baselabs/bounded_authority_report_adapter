@@ -23,6 +23,7 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
   def run! do
     source_root = File.cwd!()
     assert_mix_lock_present!(source_root)
+    assert_hex_pinned!(source_root)
 
     tmp = unique_tmp_root!()
 
@@ -75,6 +76,23 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
       _other ->
         Process.sleep(200)
         remove_scratch!(path, retries - 1)
+    end
+  end
+
+  # The Hex client writes its own version into the archive's metadata.config (build_env), so the
+  # same source builds different bytes under different Hex releases. .hex-version pins the client
+  # that CI and the supply-chain attestation use; a local build must match it to reproduce the
+  # attested archive.
+  defp assert_hex_pinned!(source_root) do
+    pinned = source_root |> Path.join(".hex-version") |> File.read!() |> String.trim()
+    running = to_string(Application.spec(:hex, :vsn) || "none")
+
+    unless running == pinned do
+      raise(
+        "release candidate check failed: Hex #{running} is running but .hex-version pins " <>
+          "#{pinned}; the archive would not match CI's attested bytes. Run " <>
+          "`mix local.hex #{pinned} --force` and retry."
+      )
     end
   end
 

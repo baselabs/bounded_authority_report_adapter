@@ -67,12 +67,16 @@ Run each and keep its output.
    `SHA`:
 
    ```sh
+   mix local.hex "$(cat .hex-version)" --force
    mix deps.get
    mix hex.build --output /tmp/bounded_authority_report_adapter-X.Y.Z.tar
    sha256sum /tmp/bounded_authority_report_adapter-X.Y.Z.tar
    ```
 
-   The digest must equal the one in `evidence/SHA256SUMS`. If it does not, stop.
+   The Hex client writes its own version into the archive metadata, so the build must run on
+   the client `.hex-version` pins, the one CI and the attestation used. The digest must equal the
+   one in `evidence/SHA256SUMS`. If it does not, stop. Publish from this same checkout with the
+   same Hex client, so the published archive is these bytes.
 
 ## 3. Tag and publish
 

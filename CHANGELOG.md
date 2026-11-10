@@ -53,6 +53,10 @@
   override is gone and hex_core 0.21.1 arrives dev/test-only through sbom. CI moves to
   actions/checkout 7.0.1, upload-pages-artifact 5.0.0 and deploy-pages 5.0.1. Nothing shipped
   changes.
+- Release reproducibility: the Hex client is pinned in `.hex-version` (2.7.0). CI, the
+  supply-chain attestation and the reproducibility gate use it, and the gate refuses another
+  client, because Hex writes its own version into the archive metadata and a different client
+  builds different archive bytes. The release runbook builds and publishes on that client.
 
 ## [0.12.0] — 2026-10-31
 

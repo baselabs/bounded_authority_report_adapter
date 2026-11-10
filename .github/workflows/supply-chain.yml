@@ -39,6 +39,11 @@ jobs:
           elixir-version: "1.20.2"
           otp-version: "29.0.3"
 
+      - name: Pin the Hex client
+        # The Hex version is written into the archive metadata; .hex-version keeps CI, the
+        # attestation and a local release build on the same client.
+        run: mix local.hex "$(cat .hex-version)" --force
+
       - name: Install dependencies
         run: mix deps.get
 
