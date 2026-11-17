@@ -3,7 +3,7 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
-## 1.0.0 — the stability contract takes effect
+## 1.0.0: the stability contract takes effect
 
 Use `{:bounded_authority_report_adapter, "~> 1.0"}`. The protocol requirement is now `~> 1.0`;
 run `mix deps.update bounded_authority_report_adapter bounded_authority_protocol`. From 1.0.0 the
@@ -24,7 +24,7 @@ What a caller may need to change:
 
 New: `public_key_thumbprint/1` returns a key's raw RFC 7638 thumbprint in one call.
 
-## 0.12.0 — public distribution without decision records
+## 0.12.0: public notebook distribution
 
 Use `{:bounded_authority_report_adapter, "~> 0.12.0"}`. The protocol requirement is now
 `~> 0.9.1`; update any application constraint that still selects 0.8.x, then run
@@ -33,9 +33,8 @@ Use `{:bounded_authority_report_adapter, "~> 0.12.0"}`. The protocol requirement
 Protocol 0.9.0 added canonical-signature refusals to its producers. The adapter already
 normalizes ES256 signatures and validates signing results, so its signing API and wire formats
 are unchanged. The Livebook and its diagram now ship in the Hex archive and HexDocs.
-Architecture decision records are local, ignored files and are excluded from this release.
 
-## 0.11.0 — options are checked; the protocol dependency is a range
+## 0.11.0: options are checked; the protocol dependency is a range
 
 ### Breaking changes
 
@@ -76,7 +75,7 @@ The range itself changes no wire bytes, signing behavior or error atoms. If your
 application locks `bounded_authority_protocol` at a 0.8.x release, `mix deps.get`
 resolves it alongside this package without an override.
 
-## 0.10.0 — strict Ed25519 key acceptance and the BAP 0.8.0 pin
+## 0.10.0: strict Ed25519 key acceptance and the BAP 0.8.0 pin
 
 0.10.0 moves the exact protocol pin to `0.8.0`, the release that adds
 `BoundedAuthorityProtocol.Ed25519`, and uses it in two places.
@@ -93,7 +92,7 @@ Migration notes:
 - **No new error atom, no API change.** `mix deps.update bounded_authority_report_adapter`
   is the whole migration; the example app's lock moves with it.
 
-## 0.9.0 — content assertions and the BAP 0.7.0 pin
+## 0.9.0: content assertions and the BAP 0.7.0 pin
 
 0.9.0 adds `sign_content_assertion/3` for BAP's standalone
 `bap-content-assertion/1` profile, and the exact protocol pin moves to `0.7.0`, the release
@@ -113,14 +112,14 @@ Migration notes:
 - **Pin policy:** this package now follows published protocol releases directly;
   consumers adopt protocol and adapter releases on their own schedules.
 
-## 0.8.1 — the documentation-truth patch
+## 0.8.1: the documentation-truth patch
 
 Documentation-only: the 0.8.0 package shipped docs/getting-started.md still showing
 the `~> 0.7.0` install pin; 0.8.1 republishes with the pin reading `~> 0.8.0`. No
-code, API, or dependency change — nothing for a consumer to do beyond preferring
+code, API, or dependency change: nothing for a consumer to do beyond preferring
 0.8.1's docs.
 
-## 0.8.0 — the role-attestation gate and the BAP 0.6.0 pin
+## 0.8.0: the role-attestation gate and the BAP 0.6.0 pin
 
 0.8.0 adds the optional `:role_attestation` input to `sign_grant/3`: an
 authority-signed `bap-role-attestation/1` compact plus the caller-trusted attestor key
@@ -138,11 +137,11 @@ Migration notes:
   `subject_key_id` / `subject_public_key` keys in the option are ignored, a keyword-list
   opts form is honored (not silently dropped), and an explicit `nil` is malformed.
 - **V3's `sign_grant/3` fails closed on the option** with `{:error, :invalid_role_attestation}`
-  — the profile is Ed25519-bound at schema 1, so no P-256 subject can be attested under it;
+ : the profile is Ed25519-bound at schema 1, so no P-256 subject can be attested under it;
   the option is the major-1 surface's.
-- **`sbom` (dev/test) moves ~> 0.11** — no consumer impact.
+- **`sbom` (dev/test) moves ~> 0.11**: no consumer impact.
 
-## 0.7.0 — the ES256 surface (`BoundedAuthorityReportAdapter.V3`) and one v1 tightening
+## 0.7.0: the ES256 surface (`BoundedAuthorityReportAdapter.V3`) and one v1 tightening
 
 0.7.0 adds the contract-major-3 signing surface: the same four
 standard instantiations over the `BAP3-ES256-SHA256` suite (EC P-256 keys,
@@ -156,7 +155,7 @@ Migration notes:
   byte-identity suite captured before the change).
 - **One deliberate v1 tightening:** `sign_report/3` and
   `sign_local_loopback_report/3` now reject a `grant_compact` that is not a
-  v1 grant — a v2 or v3 grant, or a malformed compact — with
+  v1 grant (a v2 or v3 grant, or a malformed compact) with
   `{:error, :invalid_report}` before signing, instead of emitting an
   envelope that `BoundedAuthorityProtocol.V1.check_envelope/2` later rejects.
   Callers that fed grants of another major see the earlier, clearer error.
@@ -167,7 +166,7 @@ Migration notes:
 
 ## 0.6.3
 
-The protocol pin moves to `bounded_authority_protocol == 0.4.1` — the September 17, 2026 protocol
+The protocol pin moves to `bounded_authority_protocol == 0.4.1`: the September 17, 2026 protocol
 release is wire-identical to 0.4.0 (docs and tooling only), so no signing or verification
 behavior changes; consumers gain nothing functional and lose nothing by staying on 0.6.2 with
 protocol 0.4.0 until they choose to move. Also in 0.6.3: the spitfire 0.4.2 transitive and the
@@ -175,7 +174,7 @@ README cross-links to the protocol repository.
 
 ## 0.6.2
 
-Repository tooling release — no library code, API, or runtime-dependency change; nothing
+Repository tooling release: no library code, API, or runtime-dependency change; nothing
 for a consumer to do. This release ported the developer surface to Windows rather than
 adding a CI leg for it: the dependency-currency gate is an `.exs` (same behavior), the
 `mix ci` alias uses an env-guard instead of `env(1)` re-execs, the release gates spawn
@@ -183,21 +182,21 @@ adding a CI leg for it: the dependency-currency gate is an `.exs` (same behavior
 extraction (each a real Windows defect found while porting), and `.gitattributes` keeps
 every checkout byte-identical. Developer portability across macOS, Linux, and Windows is
 a property of the developer setup, proven on a developer machine, not a CI leg.
-One named test exclusion: `DriftProbeTest` skips on Windows — its stub harness intercepts
+One named test exclusion: `DriftProbeTest` skips on Windows: its stub harness intercepts
 git/curl via POSIX shebang exec, which Git Bash bypasses (the drift probe itself runs
 there); the exclusion is declared in the workflow's gate-job comment.
 
 ## 0.6.1
 
-Repository tooling/hygiene release — no library code, API, or runtime-dependency change.
+Repository tooling/hygiene release: no library code, API, or runtime-dependency change.
 The repository now enforces its own toolchain: builds refuse Erlang/OTP majors outside the
 supported set {27–29} at config load, before compilation. OTP 25 and 26 are
-explicitly outside the set — `bounded_authority_protocol` 0.4.0's codecs decode through
+explicitly outside the set: `bounded_authority_protocol` 0.4.0's codecs decode through
 OTP 27's `:json` module, so the stack cannot compile its test battery there (probe-proven
 on the official `elixir:1.18.4-otp-25` and `elixir:1.19.6-otp-26` images). The assert
 lives in the repository's `config/config.exs`, which is NOT part of the published
-package — consumers are unaffected. The CI matrix keeps its three lanes (1.18/27,
-1.19/28, 1.20/29 — one per supported major), now locked to the enforced set. A
+package: consumers are unaffected. The CI matrix keeps its three lanes (1.18/27,
+1.19/28, 1.20/29: one per supported major), now locked to the enforced set. A
 dependency-currency gate (latest-first policy) runs in CI and `mix ci` for
 both mix projects; dev-only dependency bumps: `dialyxir` 1.4.8, `ex_doc` 0.40.4
 (example app: `req` 0.7.4). Nothing for a consumer to do.
@@ -205,8 +204,8 @@ both mix projects; dev-only dependency bumps: `dialyxir` 1.4.8, `ex_doc` 0.40.4
 ## 0.6.0
 
 The protocol dependency now selects `bounded_authority_protocol == 0.4.0` exactly
-(from `== 0.3.0`; released September 14, 2026). BAP 0.4.0 is additive — the v2 contract-major
-lands beside the byte-frozen v1 profile — so this is a package-resolution break for
+(from `== 0.3.0`; released September 14, 2026). BAP 0.4.0 is additive: the v2 contract-major
+lands beside the byte-frozen v1 profile. The exact dependency change breaks resolution for
 consumers retaining BAP 0.3.x, with zero adapter behavior change. (The protocol's
 0.4.1, a wire-identical tooling and docs patch, arrived with adapter 0.6.3 above.) The four signing APIs, return shapes,
 key-handle contract, telemetry, and produced V1 wire forms are unchanged.
@@ -218,7 +217,7 @@ override this package back to BAP 0.3.x or retain parallel BAP lines.
 
 The protocol dependency now selects `bounded_authority_protocol == 0.3.0`
 exactly. BAP 0.3.0 adds the local-loopback application-proof profile without
-changing any standard `dpop+jwt` byte, bound, or verdict — the four existing
+changing any standard `dpop+jwt` byte, bound, or verdict: the four existing
 signing APIs, return shapes, key-handle contract, telemetry, and produced V1
 wire forms are unchanged, and the standard conformance oracle re-ran green at
 the new pin. The version moves to a pre-1.0 minor because the exact pin is a
@@ -226,8 +225,8 @@ package-resolution break for consumers retaining BAP 0.2.x.
 
 New capability: `sign_local_loopback_report/3` signs the byte-distinct
 `ba+loopback-proof` profile for canonical `http://127.0.0.1` / `http://[::1]`
-targets with a mandatory nonce. It is additive — nothing existing calls it —
-and its errors are the same closed `sign_error()` set. Local-loopback HTTP is
+targets with a mandatory nonce. Existing entry points are unaffected; the new function
+uses the same closed `sign_error()` set. Local-loopback HTTP is
 plain HTTP (no TLS, not equivalent to HTTPS); the verifying host owns nonce
 reservation, replay control, and listener-derived target state.
 
@@ -252,8 +251,8 @@ Pre-1.0 feature release carrying everything the
 telemetry surface, the gate battery (coverage floor, dialyzer, doc warnings,
 dependency audits), the package boundary check, the three-cell CI matrix, the
 full guide set, the Igniter installer, the doctor preflight, and the
-supply-chain workflow. The contract takes effect at 1.0.0; until then the pre-1.0
-SemVer §4 policy applies.
+supply-chain workflow. At the time, this was a pre-1.0 release under SemVer §4. The stability contract later
+took effect with 1.0.0.
 
 ## 0.2.1
 
@@ -299,7 +298,7 @@ requires a major version:
   class with a new error, and says so in the CHANGELOG. The emitters
   (`Telemetry.sign_span/2`, `Telemetry.emit_start/1`, `Telemetry.emit_stop/3`) are
   internal from 1.0 on: attach a handler to the events instead. Hiding them is surface
-  minimisation, not a security boundary; any code can call `:telemetry.execute/3` with
+  minimization, not a security boundary; any code can call `:telemetry.execute/3` with
   these event names.
 - The doctor's pure preflight: `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.check/3`,
   `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.check/4` and
@@ -312,8 +311,9 @@ requires a major version:
   `mix bounded_authority_report_adapter.doctor` task's flags (`--handle`, `--ref`,
   `--live`, `--major`) and its exit status (non-zero when a fatal finding exists or an
   argument is invalid, zero otherwise) are frozen too.
-- The dependency posture: the library depends only on the public protocol package (plus
-  `:telemetry`) — a runtime dependency on anything else is breaking.
+- The dependency posture: the required runtime dependencies are the public protocol
+  package and telemetry, with optional Igniter installer support. Adding a required
+  runtime dependency outside that graph is breaking.
 
 ### Naming conventions
 

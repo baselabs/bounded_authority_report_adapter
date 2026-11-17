@@ -1,25 +1,25 @@
 defmodule BoundedAuthorityReportAdapter.LocalLoopbackCorpusTest do
   @moduledoc """
   Executes BAP's COMPLETE packaged local-loopback profile corpus through the
-  dependency — the profile-side acceptance oracle for the 0.3.0 pin (the
+  dependency: the profile-side acceptance oracle for the 0.3.0 pin (the
   standard corpus stays discharged by `conformance_roundtrip_test.exs`).
 
   Coverage (every certified case, no sampling):
 
-    * **identity** — the index's declared profile string + revision, and its
+    * **identity**: the index's declared profile string + revision, and its
       sha256 self-declaration over BOTH content files (the loader refuses an
       unverified corpus at compile time; this test re-asserts the counts the
       index declares so corpus growth/revision reds until deliberately
       extended).
-    * **8 proof cases** — each case's three DECLARED verdicts
+    * **8 proof cases**: each case's three DECLARED verdicts
       (`decode_local`, `decode_standard`, `envelope_local`) against the
       dependency's profile decoder, the standard decoder, and the profile
       envelope verifier with the corpus's own `expected_overrides` derivation
       (mirrors BAP's own runner, read first-hand).
-    * **36 URI cases** — `normalize_uri/2` against each case's declared
+    * **36 URI cases**: `normalize_uri/2` against each case's declared
       accept/reject (the exact admission code `sign_local_loopback_report/3`
       delegates to).
-    * **certified proofs** — both certified compacts reproduce BYTE-EXACTLY
+    * **certified proofs**: both certified compacts reproduce BYTE-EXACTLY
       from `proof_signing_input/2` + `assemble_compact/3` over the corpus's
       own context (the producer/assembler pair the adapter drives), and each
       verifies green through `check_envelope/2` with its per-family target.
@@ -39,7 +39,7 @@ defmodule BoundedAuthorityReportAdapter.LocalLoopbackCorpusTest do
     assert index["profile"] == "bap-application-proof/local-loopback-http/1"
     assert index["revision"] == 1
 
-    # The exact certified file set — a corpus file added or removed reds here.
+    # The exact certified file set: a corpus file added or removed reds here.
     assert Enum.sort(Enum.map(index["files"], & &1["path"])) == [
              "profile.json",
              "proof-cases.json"

@@ -1,17 +1,18 @@
 # Recipes
 
-Integration shapes, each runnable: the local-loopback development listener, a
-network-HSM key handle, a KMS key-identity handle, an ES256 handle over a KMS or HSM that
-returns DER, grants with selectors on both contract-majors, an attested issuer role, key
-rotation, error handling with telemetry alerts, and a Plug consumer, plus a note on
-porting the signing side to another language. Each recipe module names an integration
-module that is yours to write (`MyApp.HsmClient`, `MyApp.KmsClient`,
-`MyApp.EcKmsClient`, `MyApp.NonceLedger`). The test suite runs every recipe as written:
-the HSM and KMS handles against real local Ed25519 and P-256 signers standing in for the
-HSM and the KMS (the P-256 one returns DER, as a KMS does), with each `#=>` value checked;
-the example app's tests run the Plug recipe with real `Plug.Conn` requests. The loopback
-recipe is a fragment (its variables come from your application); the test suite compiles
-it with those variables as stub parameters.
+Integration examples cover development listeners, custodian key handles, selectors,
+attested issuer roles, key rotation, error handling and a Plug consumer. The local
+signing examples use development keys and real cryptography. The Plug recipe runs
+with real `Plug.Conn` requests in the example app's tests.
+
+Custody recipes are application fragments: `MyApp.HsmClient`, `MyApp.KmsClient` and
+`MyApp.EcKmsClient` are interfaces the application supplies for its actual custodian.
+These fragments are compiled but not executed by the documentation tests. No local
+signer substitutes for an HSM or KMS, and compilation does not validate remote custody,
+credentials, device permissions or timeouts. Configure and exercise those clients
+against the real custodian before production use. Listener fragments similarly require
+the application's challenge ledger; the notebook and edge-agent tests run complete
+local signing and verification flows.
 
 ## Recipe: the local-loopback development listener
 
@@ -28,7 +29,7 @@ repository's Livebook runs this flow end to end.
 
 <!-- doc-sample: fragment -->
 ```elixir
-# The holder side — the target is the listener's OWN canonical URL.
+# The holder side: the target is the listener's OWN canonical URL.
 report = %{
   grant_compact: grant_compact,          # issuer-signed, passes through untouched
   operation: "run_local_tool",
@@ -46,8 +47,8 @@ report = %{
 ```
 
 The verifier (the listener's operator) checks it with the profile's envelope
-verifier, deriving the expected target from the listener's own bound address —
-never from a Host or X-Forwarded-* header:
+verifier. Derive the expected target from the listener's own bound address rather
+than a Host or X-Forwarded-* header:
 
 <!-- doc-sample: fragment -->
 ```elixir
@@ -55,13 +56,13 @@ alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: Loop
 alias BoundedAuthorityProtocol.V1, as: StandardV1
 
 # 1. The LISTENER mints the challenge (single-use, atomically consumed at
-#    verify) — the signer never chooses the nonce.
+#    verify): the signer never chooses the nonce.
 challenge = MyApp.ChallengeLedger.reserve()
 
 # 2. The signer binds it (this is the adapter call above).
 
 # 3. The verifier: the expected target comes from the listener's own bound
-#    address — never a Host or X-Forwarded-* header.
+#    address: never a Host or X-Forwarded-* header.
 :ok = MyApp.ChallengeLedger.consume!(challenge)
 
 {:ok, _facts} =
@@ -88,7 +89,7 @@ challenge = MyApp.ChallengeLedger.reserve()
 The rules that bite:
 
 - The nonce is **required** at signing and `{:required, nonce}` at
-  verification — and it is the LISTENER's challenge, not the signer's choice:
+  verification. The listener chooses the challenge:
   the receiver mints it (single-use) and consumes it atomically at
   verification, so a captured request cannot be replayed even once. The
   signer obtains the challenge first (in the example app, with a GET), then signs it in.
@@ -97,7 +98,7 @@ The rules that bite:
   uppercase schemes, explicit `:80`, leading-zero ports, dot-segments,
   queries, fragments, and HTTPS all fail closed with
   `{:error, {:producer_error, :invalid}}`. Nothing is rewritten for you.
-- Loopback HTTP is **not equivalent to HTTPS** — no confidentiality, no server
+- Loopback HTTP is **not equivalent to HTTPS**: no confidentiality, no server
   authentication, and not process isolation. Keep it on the literal loopback
   interface and behind an explicit profile decision.
 
@@ -108,8 +109,8 @@ its receiver's `profile: :local_loopback` mode, in the repository's `examples/ed
 
 ## Recipe: a network-HSM key handle
 
-Requires: nothing beyond this package. The HSM client is injected through configuration;
-your client module is the integration point.
+Requires an application-provided HSM client and access to its real custodian. The
+following fragment shows the handle contract; configure bounded calls in that client.
 
 The handle's `sign/2` fronts a network HSM. Three properties matter. The callback must
 return `{:ok, binary}` or `{:error, term}`. A timeout must not crash your caller: the
@@ -124,15 +125,15 @@ whenever you can.
 `BoundedAuthorityReportAdapter.V3` with a P-256-backed handle, with THREE
 suite-specific duties: `public_key/1` returns the 65-byte uncompressed-SEC1
 point (`0x04 || x || y`); `sign/2` returns the RFC 7518 §3.4 RAW `r || s`
-form (exactly 64 bytes) — convert your HSM's DER output first (decode the
+form (exactly 64 bytes): convert your HSM's DER output first (decode the
 SEQUENCE to `(r, s)` and re-encode as two padded big-endian 32-byte
 integers); and `thumbprint/1` uses the EC RFC 7638 preimage
-(`{"crv":"P-256","kty":"EC","x":X,"y":Y}`). Low-S is the adapter's duty —
-it normalizes a high-S return — but a custodian that can emit low-S
-directly should. Run `mix bounded_authority_report_adapter.doctor
+(`{"crv":"P-256","kty":"EC","x":X,"y":Y}`). The adapter normalizes high-S signatures
+to low-S. A custodian can also emit low-S directly. Run `mix bounded_authority_report_adapter.doctor
 --handle MyApp.HsmHandle --live` to preflight either surface (`--major 1`
 or `--major 3` applies that surface's strict key-type gate).
 
+<!-- doc-sample: fragment -->
 ```elixir
 defmodule MyApp.HsmHandle do
   @moduledoc """
@@ -179,14 +180,16 @@ end
 
 ## Recipe: a KMS key-identity handle (why the snapshot is ONE call)
 
-Requires: nothing beyond this package (same config-injection shape as above).
+Requires an application-provided KMS client and access to its real custodian. The
+following fragment shows the atomic-identity contract.
 
 `sign_anchor/3` and `sign_key_transition/3` resolve `key_id` AND `public_key` from ONE
 atomic `key_identity/1` call. Against a KMS with key VERSIONS, a handle that resolves the
-two in separate calls can straddle a rotation — kid from version N, public key from
-version N+1 — and the signed header then names a key it was not signed with. One call,
-one version:
+two in separate calls can straddle a rotation and pair the key id from version N with
+the public key from version N+1. The signed header would then name a different key.
+Read both from one version:
 
+<!-- doc-sample: fragment -->
 ```elixir
 defmodule MyApp.KmsHandle do
   @moduledoc """
@@ -224,7 +227,7 @@ defmodule MyApp.KmsHandle do
   @impl true
   def key_identity(key_ref) do
     # ONE call. The adapter signs the kid into the header and verifies the
-    # signature against this same public key — a split snapshot cannot pass
+    # signature against this same public key: a split snapshot cannot pass
     # the wrong-key guard silently, but it CAN sign the wrong kid into the
     # header. Do not "helpfully" cache the halves separately.
     @kms.current_version(key_ref)
@@ -243,7 +246,8 @@ end
 
 ## Recipe: an ES256 handle over a KMS or HSM that returns DER
 
-Requires: nothing beyond this package. The KMS client is injected through configuration.
+Requires an application-provided P-256 KMS or HSM client and access to its real
+custodian. The following fragment shows DER conversion and the key-handle contract.
 
 Cloud KMS ECDSA operations and PKCS#11 HSMs return a P-256 signature DER-encoded
 (`SEQUENCE { INTEGER r, INTEGER s }`). The `BoundedAuthorityReportAdapter.V3` entry points
@@ -255,6 +259,7 @@ optional, because the adapter normalizes a
 high-S signature itself, but with it the signature your device logged equals the one in the
 compact.
 
+<!-- doc-sample: fragment -->
 ```elixir
 defmodule MyApp.EcKmsHandle do
   @moduledoc """
@@ -316,10 +321,10 @@ enforces them at the verifier; the holder cannot widen them.
 
 | Selector | Contract-major 1 (`BoundedAuthorityReportAdapter`) | Contract-major 3 (`.V3`) |
 |---|---|---|
-| `:all` — any arguments | yes | yes |
-| `{:equals, path, value}` — the value at `path` equals `value` | yes | yes |
-| `{:one_of, path, values}` — it equals one of `values` | yes | yes |
-| `{:lte, path, bound}` / `{:gte, path, bound}` — inclusive numeric range | no | yes |
+| `:all`: any arguments | yes | yes |
+| `{:equals, path, value}`: the value at `path` equals `value` | yes | yes |
+| `{:one_of, path, values}`: it equals one of `values` | yes | yes |
+| `{:lte, path, bound}` / `{:gte, path, bound}`: inclusive numeric range | no | yes |
 
 A `path` is a list of object member names; values use the protocol's tagged form
 (`{:string, s}`, `{:integer, n}`, `{:float, f}`, `{:boolean, b}`, `{:array, list}`,
@@ -416,12 +421,59 @@ reserve_v1 = &reserve.(BoundedAuthorityReportAdapter, V1, stock_grant, holder, t
 #=> {true, {:error, :invalid}, {:error, :invalid}}
 ```
 
-Contract-major 3 adds inclusive ranges. The same reservation with a P-256 issuer and holder
-(the KMS handle from the previous recipe), now also capped at 1 to 50 units:
+Contract-major 3 adds inclusive ranges. Use the same development-only P-256 handle as
+in the V3 API reference to run this example without a remote custodian. It uses real
+local cryptography; never use these deterministically derived development keys in
+production.
 
 ```elixir
-{:ok, ec_holder_thumbprint} = MyApp.EcKmsHandle.thumbprint(:field_agent)
-{:ok, {ec_issuer_key_id, ec_issuer_public_key}} = MyApp.EcKmsHandle.key_identity(:issuer)
+defmodule MyApp.DevP256Key do
+  @moduledoc "Development only: derives a P-256 key from its name. Never use in production."
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  def sign(message, {_role, name}) do
+    der = :crypto.sign(:ecdsa, :sha256, message, [private_key(name), :prime256v1])
+    # DER: SEQUENCE { INTEGER r, INTEGER s }. Re-encode as two 32-byte integers.
+    <<0x30, _length, 0x02, r_size, r::binary-size(r_size), 0x02, s_size,
+      s::binary-size(s_size)>> = der
+
+    {:ok,
+     <<:binary.decode_unsigned(r)::unsigned-big-256,
+       :binary.decode_unsigned(s)::unsigned-big-256>>}
+  end
+
+  @impl true
+  def public_key({_role, name}), do: {:ok, public_key_of(name)}
+
+  @impl true
+  def thumbprint({_role, name}),
+    do: BoundedAuthorityReportAdapter.public_key_thumbprint(public_key_of(name))
+
+  @impl true
+  def key_identity({_role, name}), do: {:ok, {name, public_key_of(name)}}
+
+  @impl true
+  def signing_identity({role, name}), do: {:ok, {role, name, public_key_of(name)}}
+
+  # A P-256 private key is a scalar in [1, n - 1]; a SHA-256 digest is below n with
+  # overwhelming probability, which is good enough for a development handle.
+  defp private_key(name), do: :crypto.hash(:sha256, "development only: " <> name)
+
+  defp public_key_of(name) do
+    {public_key, _private_key} =
+      :crypto.generate_key(:ecdh, :prime256v1, private_key(name))
+
+    public_key
+  end
+end
+```
+
+The same reservation with a P-256 issuer and holder, capped at 1 to 50 units:
+
+```elixir
+{:ok, ec_holder_thumbprint} = MyApp.DevP256Key.thumbprint({:holder, "recipe-ec-holder"})
+{:ok, {ec_issuer_key_id, ec_issuer_public_key}} = MyApp.DevP256Key.key_identity({:issuer, "recipe-ec-issuer"})
 
 {:ok, %{grant: ec_stock_grant}} =
   BoundedAuthorityReportAdapter.V3.sign_grant(
@@ -444,7 +496,7 @@ Contract-major 3 adds inclusive ranges. The same reservation with a P-256 issuer
         }
       ]
     },
-    {MyApp.EcKmsHandle, :issuer}
+    {MyApp.DevP256Key, {:issuer, "recipe-ec-issuer"}}
   )
 
 ec_trusted = %V1.TrustedIssuer{key_id: ec_issuer_key_id, public_key: ec_issuer_public_key}
@@ -454,7 +506,7 @@ reserve_v3 =
     BoundedAuthorityReportAdapter.V3,
     V3,
     ec_stock_grant,
-    {MyApp.EcKmsHandle, :field_agent},
+    {MyApp.DevP256Key, {:holder, "recipe-ec-holder"}},
     ec_trusted,
     &1
   )

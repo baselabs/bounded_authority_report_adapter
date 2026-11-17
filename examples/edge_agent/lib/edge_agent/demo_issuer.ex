@@ -1,6 +1,6 @@
 defmodule EdgeAgent.DemoIssuer do
   @moduledoc """
-  DEMO-ONLY grant minter — plays the ISSUER role so the example loop is
+  DEMO-ONLY grant minter: plays the ISSUER role so the example loop is
   self-contained, exactly as the Livebook and the adapter's `TestKeys` do.
 
   ## What this is, and is not
@@ -44,7 +44,7 @@ defmodule EdgeAgent.DemoIssuer do
   end
 
   @doc """
-  Returns the demo issuer keypair (deterministic seed — never a production key).
+  Returns the demo issuer keypair (deterministic seed: never a production key).
   A production issuer's key is custodied by the authority runtime, not derived
   from a fixed seed.
   """

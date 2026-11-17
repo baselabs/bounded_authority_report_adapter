@@ -4,7 +4,7 @@ defmodule BoundedAuthorityReportAdapter.V3TestHandles do
   failure-modes matrix). Compiled in `:test` only, like every handle under
   `test/support/` (ADR-0014).
 
-  The modules below are TOP-LEVEL (not nested under this wrapper) — the
+  The modules below are TOP-LEVEL (not nested under this wrapper): the
   house pattern `test_handles.ex` documents: handles defined inside a
   wrapper or at the bottom of a `_test.exs` file can stay unloaded in some
   `mix test` orderings, which makes the suites flaky.
@@ -27,7 +27,7 @@ end
 defmodule HighSECKeyHandle do
   @moduledoc """
   Signs VALIDLY, then deterministically re-spells the signature HIGH-S
-  (`s ← n − s` when the return is low) — a real `(r, n − s)` counterpart
+  (`s ← n − s` when the return is low): a real `(r, n − s)` counterpart
   that satisfies the verification equation but violates `REQ3-SIGNING-low-s`.
   The adapter's normalization (ADR-0021 Decision 4) must recover the low-S
   spelling and emit a conforming compact.
@@ -64,7 +64,7 @@ end
 
 defmodule DerReturnECKeyHandle do
   @moduledoc """
-  Returns OTP's native `:crypto.sign/5` ECDSA output — DER
+  Returns OTP's native `:crypto.sign/5` ECDSA output: DER
   (`0x30`-led SEQUENCE). DER is never a v3 wire spelling: the tail must
   close it as `:signing_failed`, never convert, never emit a compact
   (ADR-0021 Decision 3).
@@ -91,7 +91,7 @@ defmodule CraftedSignatureHandle do
   @moduledoc """
   Returns a caller-crafted 64-byte blob as the signature (the handle term
   is `{public_key, blob}`). The scalar-range legs drive this with zero `r`,
-  `r = n`, `s = n`, `s = n + 1`, and `s = n − 1` spellings — each must
+  `r = n`, `s = n`, `s = n + 1`, and `s = n − 1` spellings: each must
   collapse to `:signing_failed` with no raise and no compact (ADR-0021
   Decision 4's order: the RAW range check precedes normalization).
   """
@@ -112,9 +112,9 @@ end
 defmodule OffCurveKeyHandle do
   @moduledoc """
   `public_key/1` returns a 65-byte `0x04`-led binary whose coordinates are
-  NOT a P-256 point (all-`0xFF` — outside the field). The v3 resolvers must
+  NOT a P-256 point (all-`0xFF`: outside the field). The v3 resolvers must
   reject it as `:invalid_key_handle` through the point validation
-  (ADR-0021 Decision 2) — INCLUDING on `V3.sign_grant/3`, whose bytes never
+  (ADR-0021 Decision 2): INCLUDING on `V3.sign_grant/3`, whose bytes never
   reach BAP's own key arithmetic.
   """
   @behaviour BoundedAuthorityReportAdapter
@@ -133,7 +133,7 @@ end
 
 defmodule WrongCurveKeyHandle do
   @moduledoc """
-  `public_key/1` returns a VALID secp256k1 point — exactly the mis-wired
+  `public_key/1` returns a VALID secp256k1 point: exactly the mis-wired
   custody slot of the design review's finding 1: right width, right prefix,
   real point, wrong curve. Only the on-curve arithmetic catches it.
   """
@@ -263,7 +263,7 @@ end
 defmodule CapturingECKeyHandle do
   @moduledoc """
   Captures the message handed to `sign/2` AND the exact signature bytes it
-  returned (the EC mirror of `CapturingKeyHandle`) — the
+  returned (the EC mirror of `CapturingKeyHandle`): the
   differential-agreement leg needs the signing input BAP produced, and the
   low-S pass-through leg needs the handle's own return to compare against
   the compact's signature segment.
@@ -295,7 +295,7 @@ end
 
 defmodule EdSnapshotIssuerHandle do
   @moduledoc """
-  An `{:issuer, kid, 32-byte-key}` snapshot over Ed25519 material — the v3
+  An `{:issuer, kid, 32-byte-key}` snapshot over Ed25519 material: the v3
   grant path must reject it (the width literal and the C1 role share a
   clause head; the design review's finding 5), and `sign/2` must never be
   reached.
@@ -319,7 +319,7 @@ end
 
 defmodule ECSnapshotIssuerHandle do
   @moduledoc """
-  An `{:issuer, kid, 65-byte-key}` snapshot over P-256 material — the v1
+  An `{:issuer, kid, 65-byte-key}` snapshot over P-256 material: the v1
   grant path must reject it (the C1-under-widening mirror of
   `EdSnapshotIssuerHandle`).
   """
@@ -335,7 +335,7 @@ end
 
 defmodule OffCurveIssuerKeyHandle do
   @moduledoc """
-  An `{:issuer, kid, off-curve-65-byte-key}` snapshot — the grant path's
+  An `{:issuer, kid, off-curve-65-byte-key}` snapshot: the grant path's
   point-validation leg (review repair: the rejection must come from the
   arithmetic, not a missing `signing_identity/1`). `sign/2` must never run.
   """
@@ -358,7 +358,7 @@ end
 
 defmodule WrongCurveIssuerKeyHandle do
   @moduledoc """
-  An `{:issuer, kid, secp256k1-point}` snapshot — the wrong-curve leg on the
+  An `{:issuer, kid, secp256k1-point}` snapshot: the wrong-curve leg on the
   grant path (the mis-wired custody slot; only on-curve arithmetic catches
   it).
   """
@@ -375,7 +375,7 @@ end
 
 defmodule OffCurveKeyIdentityHandle do
   @moduledoc """
-  A `{kid, off-curve-65-byte-key}` atomic key identity — the ANCHOR path's
+  A `{kid, off-curve-65-byte-key}` atomic key identity: the ANCHOR path's
   point-validation leg (the `resolve_key_identity/1` resolver).
   """
   @behaviour BoundedAuthorityReportAdapter

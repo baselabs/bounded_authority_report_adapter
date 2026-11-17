@@ -1,21 +1,38 @@
 # Errors
 
-Every entry point returns either `{:ok, map}` or `{:error, reason}`, where `reason` is a
-closed atom or the one fixed tuple `{:producer_error, :invalid}`. Errors carry no values:
-no key ids, no message bytes, no input content.
+Every signing entry point returns `{:ok, map}` or `{:error, reason}`, where `reason`
+is a closed signing error atom or the fixed tuple `{:producer_error, :invalid}`.
+Errors carry no key ids, message bytes or input content.
 
-Each entry point has one input atom; the others are shared:
+## Public function result contracts
 
-| Entry point | Input atom | Error type |
+The type names below belong to the function's module. Signing functions also export a
+`/2` form, equivalent to `/3` with `%{}` options, with the same result contract.
+
+| Function | Success | Error |
 |---|---|---|
-| `sign_report/3` | `:invalid_report` | `sign_error/0` |
-| `sign_local_loopback_report/3` | `:invalid_report` | `sign_error/0` |
-| `sign_anchor/3` | `:invalid_anchor` | `anchor_sign_error/0` |
-| `sign_grant/3` | `:invalid_grant` | `grant_sign_error/0` |
-| `sign_key_transition/3` | `:invalid_transition` | `transition_sign_error/0` |
-| `sign_content_assertion/3` | `:invalid_content_assertion` | `content_assertion_sign_error/0` |
+| `BoundedAuthorityReportAdapter.sign_report/3` | `{:ok, envelope()}` | `{:error, sign_error()}` |
+| `BoundedAuthorityReportAdapter.sign_local_loopback_report/3` | `{:ok, envelope()}` | `{:error, sign_error()}` |
+| `BoundedAuthorityReportAdapter.sign_anchor/3` | `{:ok, anchor_compact()}` | `{:error, anchor_sign_error()}` |
+| `BoundedAuthorityReportAdapter.sign_grant/3` | `{:ok, grant_compact()}` | `{:error, grant_sign_error()}` |
+| `BoundedAuthorityReportAdapter.sign_key_transition/3` | `{:ok, transition_compact()}` | `{:error, transition_sign_error()}` |
+| `BoundedAuthorityReportAdapter.sign_content_assertion/3` | `{:ok, content_assertion_compact()}` | `{:error, content_assertion_sign_error()}` |
+| `BoundedAuthorityReportAdapter.public_key_thumbprint/1` | `{:ok, <<_::256>>}` | `{:error, :invalid}` |
+| `BoundedAuthorityReportAdapter.V3.sign_report/3` | `{:ok, envelope()}` | `{:error, sign_error()}` |
+| `BoundedAuthorityReportAdapter.V3.sign_anchor/3` | `{:ok, anchor_compact()}` | `{:error, anchor_sign_error()}` |
+| `BoundedAuthorityReportAdapter.V3.sign_grant/3` | `{:ok, grant_compact()}` | `{:error, grant_sign_error()}` |
+| `BoundedAuthorityReportAdapter.V3.sign_key_transition/3` | `{:ok, transition_compact()}` | `{:error, transition_sign_error()}` |
 
-Every set also contains `:invalid_key_handle`, `:signing_failed` and
+Success maps contain compact JWS strings: `envelope()` has `:grant` and `:proof`;
+`anchor_compact()` has `:anchor`; `grant_compact()` has `:grant`;
+`transition_compact()` has `:key_transition`; and `content_assertion_compact()` has
+`:content_assertion`. A holder-proof call preserves the input grant unchanged.
+
+Each signing function has an input-shape error: `:invalid_report` for both proof
+functions, `:invalid_anchor`, `:invalid_grant`, `:invalid_transition` or
+`:invalid_content_assertion` for the corresponding object.
+
+Every signing error set also contains `:invalid_key_handle`, `:signing_failed` and
 `{:producer_error, :invalid}`. `grant_sign_error/0` adds `:invalid_role_attestation`.
 
 The `BoundedAuthorityReportAdapter.V3` entry points return the same atoms with the same
@@ -37,7 +54,7 @@ grammar, selectors) and reports them as `{:producer_error, :invalid}`. A field o
 right type but the wrong value is not one of these errors.
 
 Each input atom also covers invalid options, refused before any key-handle callback.
-Every entry point takes its options as a map or as a keyword list, accepts only the keys
+Every signing entry point takes its options as a map or as a keyword list, accepts only the keys
 its documentation lists, and checks each value's kind. The input atom is returned for an
 unknown key (a misspelling such as `role_attestaton:`, or a string key), a present value of
 the wrong kind (`proof_id: nil`, `issued_at: "now"`, `bounds: :maximum`), a list that is
@@ -89,7 +106,8 @@ grant signed that way carries the integer, not the float.
 Each set is a type on `BoundedAuthorityReportAdapter`: `sign_error/0`,
 `anchor_sign_error/0`, `grant_sign_error/0`, `transition_sign_error/0` and
 `content_assertion_sign_error/0`, with matching types on `BoundedAuthorityReportAdapter.V3`
-for its four entry points. The test suite checks this page against the major-1 types.
+for its four signing entry points. The test suite checks the result table against every
+public function and its typespec on both surfaces, and the meanings against the error types.
 
 ## Local-loopback notes
 
@@ -98,3 +116,42 @@ nonce is present and a non-empty string; the protocol package checks the profile
 A nonce over the bounds or not valid UTF-8, and a `target_uri` that is not a canonical
 literal-loopback HTTP URI, are `{:producer_error, :invalid}`. The adapter never rewrites
 the URI.
+
+## Public-key thumbprint helper
+
+`BoundedAuthorityReportAdapter.public_key_thumbprint/1` is a public-key helper, not a
+signing operation. Success is `{:ok, <<_::256>>}`: a raw 32-byte SHA-256 RFC 7638
+thumbprint, not a map, hex string or base64url string. It accepts an acceptable raw
+32-byte Ed25519 public key or an on-curve 65-byte uncompressed SEC1 P-256 point
+(`0x04 || x || y`).
+
+Its only error is `{:error, :invalid}`, for any other input, including an unacceptable
+Ed25519 key, a malformed point or a point off the curve. It never returns signing errors,
+invokes a key handle or emits signing telemetry. The helper is shared by both suites;
+there is no separate `V3.public_key_thumbprint/1`.
+
+## Telemetry and preflight helpers
+
+These public helpers have diagnostic results rather than signing errors. They do not
+return `{:ok, map}` or a closed signing error.
+
+| Function | Result |
+|---|---|
+| `BoundedAuthorityReportAdapter.Telemetry.objects/0` | `[atom()]` |
+| `BoundedAuthorityReportAdapter.Telemetry.classes/0` | `[atom()]` |
+| `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.check/3` | `%{fatals: [String.t()], advisories: [String.t()]}` |
+| `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.check/4` | `%{fatals: [String.t()], advisories: [String.t()]}` |
+| `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.shape_report/3` | `String.t() | nil` |
+
+The telemetry helpers return the documented atom lists without an error result.
+The doctor's `check/3` and `check/4` always return both finding lists for their documented
+arguments; an empty `:fatals` list means no fatal finding. `check/3` accepts either key
+suite; `check/4` can require major 1 or 3. Handle callback failures become findings, not
+signing errors. `shape_report/3` returns a report string for an acceptable key of the
+requested suite, or `nil` for an invalid key, callback failure or suite mismatch.
+These probes run caller-owned callbacks without adding a timeout.
+
+Mix task callbacks follow Mix's command interface. The doctor command exits nonzero on
+invalid arguments or fatal findings. The installer operates through Igniter when available
+and raises a Mix error when Igniter is absent. See the task documentation and the
+[telemetry guide](telemetry.md) for their full contracts.

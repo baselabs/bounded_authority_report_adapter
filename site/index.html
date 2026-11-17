@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BAP in Elixir — the reference signer</title>
-<meta name="description" content="bounded_authority_report_adapter: the Elixir reference implementation of the Bounded Authority Protocol's holder/issuer signing side. Private keys never enter the library — callers supply a {module, term} handle into their own custody.">
+<title>BAP in Elixir: the reference signer</title>
+<meta name="description" content="bounded_authority_report_adapter: the Elixir reference implementation of the Bounded Authority Protocol's holder/issuer signing side. Private keys never enter the library: callers supply a {module, term} handle into their own custody.">
 <link rel="stylesheet" href="./styles.css?v=2">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%230f172a'/%3E%3Ctext x='24' y='32' font-family='Arial,sans-serif' font-size='19' font-weight='800' text-anchor='middle' fill='%23a78bfa'%3E[BAP]%3C/text%3E%3C/svg%3E">
 </head>
@@ -28,8 +28,8 @@
     <span class="brand"><span class="wordmark"><i>[</i>BAP<i>]</i></span></span>
     <span class="fam">
       <a href="https://baselabs.github.io/bounded_authority_protocol/" title="The protocol hub">Protocol</a>
-      <a href="https://baselabs.github.io/bounded_authority_protocol_typescript/" title="The verifier package — the live bench">Verifier</a>
-      <a href="https://baselabs.github.io/bounded_authority_signer_typescript/" title="The signer package — the live envelope playground">Signer</a>
+      <a href="https://baselabs.github.io/bounded_authority_protocol_typescript/" title="The verifier package: the live bench">Verifier</a>
+      <a href="https://baselabs.github.io/bounded_authority_signer_typescript/" title="The signer package: the live envelope playground">Signer</a>
       <a href="#" class="here" title="You are here">Elixir&nbsp;reference</a>
     </span>
     <a class="gh" href="https://github.com/baselabs/bounded_authority_report_adapter">GitHub&nbsp;↗</a>
@@ -42,12 +42,12 @@
     <h1>The reference signer, <em>in Elixir</em>.</h1>
     <p class="lede"><code style="background:none;border:none;color:#cbd5e1">bounded_authority_report_adapter</code> is the holder/issuer
     companion signer the TypeScript package ports: it takes a <strong>{module, term()} key handle</strong> whose callbacks reach
-    your own custody — an HSM, a KMS, an in-process test key — and produces the signed envelope.
+    your own custody (an HSM, a KMS, an in-process test key) and produces the signed envelope.
     <strong>The private key never enters the library.</strong> The dependency is one-directional:
     this adapter depends on the protocol package, never the reverse; verifiers depend only on the
     protocol package, never on this adapter.</p>
     <div class="hero-actions">
-      <a class="btn primary" href="https://baselabs.github.io/bounded_authority_signer_typescript/"><svg class="ic"><use href="#i-terminal"/></svg> See it run — the playground</a>
+      <a class="btn primary" href="https://baselabs.github.io/bounded_authority_signer_typescript/"><svg class="ic"><use href="#i-terminal"/></svg> Try the signer playground</a>
       <a class="btn ghost" href="https://hex.pm/packages/bounded_authority_report_adapter">hex.pm package</a>
     </div>
     <div class="flow" aria-label="The envelope flow">
@@ -67,11 +67,11 @@
 <section id="lifecycle" class="wrap">
   <div class="why-head"><h2>The family lifecycle</h2><p>Three protocols, one chain of evidence: what the agent is, what was agreed, what this call may do.</p></div>
   <div class="lifecycle">
-<a class="lstep" href="https://baselabs.github.io/agent_blueprint_protocol/"><span class="lmark"><i>[</i>ABP<i>]</i></span><div><b>Define the agent</b><small>Blueprint Core + Deployment Manifest — identity, bounds that only narrow, evidence commitments, pinned to one release digest</small></div></a>
+<a class="lstep" href="https://baselabs.github.io/agent_blueprint_protocol/"><span class="lmark"><i>[</i>ABP<i>]</i></span><div><b>Define the agent</b><small>Blueprint Core + Deployment Manifest: identity, bounds that only narrow, evidence commitments, pinned to one release digest</small></div></a>
     <div class="larrow">→</div>
-<a class="lstep" href="https://baselabs.github.io/charter_agreement_protocol/"><span class="lmark"><i>[</i>CAP<i>]</i></span><div><b>Agree the terms</b><small>Charter revisions bind ABP release digests (abp_bindings); every receipt records the action’s deployment digest — signed by both parties</small></div></a>
+<a class="lstep" href="https://baselabs.github.io/charter_agreement_protocol/"><span class="lmark"><i>[</i>CAP<i>]</i></span><div><b>Agree the terms</b><small>Charter revisions bind ABP release digests (abp_bindings); every receipt records the action’s deployment digest: signed by both parties</small></div></a>
     <div class="larrow">→</div>
-<span class="lstep now"><span class="lmark"><i>[</i>BAP<i>]</i></span><div><b>Authorize each request</b><small>Issuer-signed grants + holder proofs govern every call, per request — an authority layer that composes with OAuth</small></div></span>
+<span class="lstep now"><span class="lmark"><i>[</i>BAP<i>]</i></span><div><b>Authorize each request</b><small>Issuer-signed grants + holder proofs govern every call, per request: an authority layer that composes with OAuth</small></div></span>
   </div>
 </section>
 
@@ -81,7 +81,7 @@
   <table class="signers">
     <thead><tr><th>Function</th><th>Object</th><th>Role</th></tr></thead>
     <tbody>
-      <tr><td><code>sign_report/3</code></td><td>holder proof — the grant passes through untouched (major 1, Ed25519)</td><td><span class="role-badge holder">holder</span></td></tr>
+      <tr><td><code>sign_report/3</code></td><td>holder proof: the grant passes through untouched (major 1, Ed25519)</td><td><span class="role-badge holder">holder</span></td></tr>
       <tr><td><code>sign_local_loopback_report/3</code></td><td>local-loopback application proof (<code>ba+loopback-proof</code>)</td><td><span class="role-badge holder">holder</span></td></tr>
       <tr><td><code>sign_anchor/3</code></td><td>boundary anchor</td><td><span class="role-badge">role-agnostic</span></td></tr>
       <tr><td><code>sign_key_transition/3</code></td><td>key transition</td><td><span class="role-badge">role-agnostic</span></td></tr>
@@ -94,7 +94,7 @@
 <section id="why" class="wrap why">
   <div class="why-head">
     <h2>What the reference guarantees</h2>
-    <p>The properties the whole family inherits — enforced here first, ported verbatim.</p>
+    <p>Each signer preserves these protocol properties.</p>
   </div>
   <div class="grid3">
     <article class="whycard">
@@ -102,19 +102,19 @@
       <p class="pain">A signing library that touches key material becomes the most valuable
       target in your system.</p>
       <p class="answer"><svg class="ic"><use href="#i-check"/></svg> The adapter only ever calls <strong>{module, term()} callbacks</strong> into your
-      custody — and every sign path ends in a verify-against-the-public-key guard, so a
+      custody. Every signing path ends in a verify-against-the-public-key guard, so a
       misconfigured custodian fails loudly.</p>
     </article>
     <article class="whycard">
       <h3>A holder cannot mint capability.</h3>
       <p class="pain">If the agent’s key can self-issue grants, the boundary is decorative.</p>
       <p class="answer"><svg class="ic"><use href="#i-check"/></svg> <strong>sign_grant/3 resolves the issuer role atomically</strong> and fails
-      closed before sign/2 is ever called — a holder handle cannot mint its own authority.</p>
+      closed before sign/2 is ever called: a holder handle cannot mint its own authority.</p>
     </article>
     <article class="whycard">
       <h3>Nothing leaks in failure.</h3>
       <p class="pain">Error messages that narrate which check failed are reconnaissance gifts.</p>
-      <p class="answer"><svg class="ic"><use href="#i-check"/></svg> Closed error atoms, value-free telemetry — <strong>no key material, message
+      <p class="answer"><svg class="ic"><use href="#i-check"/></svg> Closed error atoms, value-free telemetry: <strong>no key material, message
       bytes, or report content</strong> ever appears in an error or an event.</p>
     </article>
   </div>
@@ -123,7 +123,7 @@
 <section id="family" class="wrap">
   <div class="why-head">
     <h2>The family</h2>
-    <p>One protocol, four repositories, two ecosystems — same wire bytes everywhere.</p>
+    <p>One protocol, four repositories, two ecosystems: same wire bytes everywhere.</p>
   </div>
   <div class="fammap">
     <article class="famcard">
@@ -133,12 +133,12 @@
     </article>
     <article class="famcard">
       <h3><svg class="ic"><use href="#i-seal"/></svg> The signer (TypeScript)</h3>
-      <p>The npm port of this adapter — with the live envelope playground in your browser.</p>
+      <p>The npm port of this adapter: with the live envelope playground in your browser.</p>
       <div class="links"><a href="https://baselabs.github.io/bounded_authority_signer_typescript/">playground</a><a href="https://www.npmjs.com/package/@bounded-authority-protocol/signer">npm</a></div>
     </article>
     <article class="famcard">
       <h3><svg class="ic"><use href="#i-shield"/></svg> The verifier (TypeScript)</h3>
-      <p>The npm verify side with its live bench — decode, check, tamper.</p>
+      <p>The npm verify side with its live bench: decode, check, tamper.</p>
       <div class="links"><a href="https://baselabs.github.io/bounded_authority_protocol_typescript/">the bench</a><a href="https://www.npmjs.com/package/@bounded-authority-protocol/verifier">npm</a></div>
     </article>
     <article class="famcard here">

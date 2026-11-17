@@ -5,7 +5,7 @@ defmodule EdgeAgent.ReceiverStartTest do
   process that exits as soon as it returns. The receiver must keep serving after that
   process is gone, or terminal two's `EdgeAgent.run()` gets `:econnrefused`.
 
-  `async: false` — the receiver's supervisor and nonce ledger are registered by name.
+  `async: false`: the receiver's supervisor and nonce ledger are registered by name.
   """
 
   use ExUnit.Case, async: false

@@ -4,16 +4,16 @@ defmodule BoundedAuthorityReportAdapter.ConformanceCorpusTest do
   1, 2 and 3 through its documented verifier CLI, `BoundedAuthorityProtocol.Conformance.Cli.run/1`,
   over the corpus directories the package ships in `deps/`.
 
-    * **Index identity** — each corpus's `index.json` SHA-256 equals the value pinned here,
+    * **Index identity**: each corpus's `index.json` SHA-256 equals the value pinned here,
       re-derived from the bytes on disk, not read from the package's own certification map,
       so a patched dependency cannot vouch for itself. The report's
       `index_sha256_base64url` must equal the same pin.
-    * **Every case agrees** — `Cli.run/1` exits 0 only when every index file is present, no
+    * **Every case agrees**: `Cli.run/1` exits 0 only when every index file is present, no
       file is unlisted, every SHA-256 and count matches, the corpus is the certified one,
       and every case's verdict and producer bytes equal the expectation.
-    * **Census** — the report's `total` and `agreed` equal the census pinned here
+    * **Census**: the report's `total` and `agreed` equal the census pinned here
       (283 / 268 / 292) and `disagreed` is 0, so a run that executed fewer cases cannot pass.
-    * **Not vacuous** — a copy of a corpus with one appended byte in a hash-verified sidecar
+    * **Not vacuous**: a copy of a corpus with one appended byte in a hash-verified sidecar
       exits 1.
 
   The v1 and v2 legs are dependency tamper evidence. The v3 leg also certifies the surfaces

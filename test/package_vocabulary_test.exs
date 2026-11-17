@@ -26,9 +26,8 @@ defmodule BoundedAuthorityReportAdapter.PackageVocabularyTest do
   @decision_record ~r/\bADR\b|\.kimosabe|ash_onetime/
 
   # Public documents outside the package that readers of the repository and the site see.
-  # AGENTS.md and docs/reference/agent-history.md are instructions and history for agents
-  # working in a maintainer checkout, where the records exist; they are not listed.
   @public_documents [
+    "AGENTS.md",
     "README.md",
     "CONTRIBUTING.md",
     "SECURITY.md",

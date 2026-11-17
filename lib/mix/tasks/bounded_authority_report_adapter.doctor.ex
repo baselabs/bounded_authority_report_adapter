@@ -24,7 +24,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
       a valid key of the WRONG type for that major is fatal too);
     * `thumbprint/1` disagrees with the RFC 7638 digest derived from
       `public_key/1` (the OKP preimage for Ed25519 keys, the EC preimage
-      for P-256 keys) — the issuer mints `cnf.jkt` from that digest, so a
+      for P-256 keys): the issuer mints `cnf.jkt` from that digest, so a
       mismatched implementation fails every envelope at verification.
 
   ADVISORY (reported, exit stays zero if nothing fatal):
@@ -38,11 +38,11 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
       signature does not verify against `public_key/1`'s key (the same
       wrong-key guard the adapter enforces on every real sign; the probe
       verifies with the key's own suite algorithm). The probe signs a
-      DOCTOR-GENERATED synthetic message only — never caller data. For a
+      DOCTOR-GENERATED synthetic message only: never caller data. For a
       P-256 handle, a high-S probe return is its own advisory: the adapter
       normalizes it, but a custodian that can emit low-S directly should.
 
-  `--ref` is an Elixir term, evaluated in the doctor's VM (`--ref "{:demo, 1}"`) —
+  `--ref` is an Elixir term, evaluated in the doctor's VM (`--ref "{:demo, 1}"`).
   a dev-tool affordance over your own configuration, nothing more. Read/probe
   only: the doctor never writes, never configures, and never signs caller
   material. The probes call the handle in the doctor's process with no timeout,
@@ -123,7 +123,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   @doc """
   The pure preflight over a loaded handle module. Returns `%{fatals: [String.t()],
-  advisories: [String.t()]}` — no printing, no exits, no side effects beyond the
+  advisories: [String.t()]}`: no printing, no exits, no side effects beyond the
   callbacks it probes. The keys and each finding's classification are stable; the
   message text is not (see "Stability" above).
   """
@@ -233,7 +233,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   # hashes anything else fails every envelope at verification with no
   # producer-side catch. Returns {fatals, advisories}: a REJECTED/raised
   # thumbprint callback is fatal (swallowing it made the check vacuously
-  # clean); a mismatch is fatal only for a STABLE key — a stateful handle
+  # clean); a mismatch is fatal only for a STABLE key: a stateful handle
   # that rotated between the two calls reports an inconclusive rotation
   # advisory instead (a review finding).
   defp thumbprint_findings(module, ref) do
@@ -292,7 +292,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
     end
   end
 
-  # Shape classification — the doctor's mirror of the adapter's resolver
+  # Shape classification: the doctor's mirror of the adapter's resolver
   # discrimination (diagnostics infer the suite from the key's wire shape;
   # defensible because a report is not wire bytes). P-256 validation is the
   # protocol package's certified arithmetic.
@@ -338,7 +338,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
     if init == [], do: last, else: Enum.join(init, ", ") <> " and " <> last
   end
 
-  # Which surface the found key unlocks — reported under --major (the caller
+  # Which surface the found key unlocks: reported under --major (the caller
   # asked about a specific surface; this confirms the gate applied). A --major
   # MISMATCH already red the fatal above; default mode stays silent so a
   # fully-wired handle of either type still reports clean.
@@ -389,7 +389,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   # The wrong-key probe: sign a DOCTOR-GENERATED synthetic message and verify
   # the signature against public_key/1's key with the KEY'S OWN suite
-  # algorithm — the adapter's own guard, checked before the first real
+  # algorithm: the adapter's own guard, checked before the first real
   # signing call ever happens.
   defp live_probe_advisories(module, ref) do
     with {:ok, public_key} <- safe_call(module, :public_key, [ref]),
@@ -415,7 +415,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   end
 
   # {:ok, high_s?} on a verified probe; :error (the wrong-key advisory) on any
-  # rejection or backend raise — the doctor's mirror of the adapter's v3 tail.
+  # rejection or backend raise: the doctor's mirror of the adapter's v3 tail.
   defp probe_verdict({:ed25519, public_key}, message, signature) do
     if BoundedAuthorityProtocol.Ed25519.verify_strict(message, signature, public_key) do
       {:ok, false}
@@ -451,7 +451,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   @ec_n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
   @ec_half_n div(@ec_n, 2)
 
-  # The probe accepts any VALID spelling (high or low S) — it reports high-S
+  # The probe accepts any VALID spelling (high or low S): it reports high-S
   # as an advisory rather than a failure, because the adapter normalizes.
   defp probe_canonical(<<r::binary-32, s::binary-32>>) do
     ri = :binary.decode_unsigned(r)
@@ -497,7 +497,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   defp der_length(len) when len < 128, do: <<len>>
 
   # Shape-only redaction for fatal messages: never print the value a
-  # misconfigured handle returned — it may be key material.
+  # misconfigured handle returned: it may be key material.
   defp redact(value) when is_binary(value), do: "a #{byte_size(value)}-byte binary"
   defp redact(value) when is_list(value), do: "a list"
   defp redact(value) when is_map(value), do: "a map"

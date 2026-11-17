@@ -5,15 +5,14 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     * every error atom in docs/errors.md exists in a lib @type error set and
       vice versa;
     * every backticked `fun/arity` identifier in usage-rules.md resolves
-      against the adapter's exported functions, its behaviour callbacks, or a
+      against the adapter's exported functions, its behavior callbacks, or a
       named module;
     * the README's Documentation index matches the ex_doc extras list;
     * the dep requirements shown in getting-started AND the README's install
       block are satisfied by the current package version (the README's pin
       drifted three releases before this tripwire covered it).
 
-  Mutation-proven: deleting an atom row from errors.md and renaming a function
-  in usage-rules.md each red the suite (demonstrated in the slice's red log).
+  Missing error rows and unresolved function references fail these checks.
   """
 
   use ExUnit.Case, async: true
@@ -51,7 +50,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
 
     # :invalid_key_handle / :signing_failed / :producer_error appear once in the
     # shared table (not per-set), and the producer tuple is documented as
-    # `{:producer_error, :invalid}` — special-shaped, not a bare row atom.
+    # `{:producer_error, :invalid}`: special-shaped, not a bare row atom.
     assert Enum.sort(MapSet.to_list(missing)) == [:producer_error],
            "lib error atoms missing from errors.md: #{inspect(MapSet.to_list(missing))}"
 
@@ -83,18 +82,18 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
 
     # Arity-exact: {fun, arity} pairs, not bare names. Arity-0 tokens are
     # excluded: in these docs they are TYPE names (`sign_error/0`, ...), not
-    # functions — the errors.md atom tripwire covers those; the telemetry
+    # functions: the errors.md atom tripwire covers those; the telemetry
     # arity-0 functions are module-qualified so they survive the filter.
     callbacks = @adapter.behaviour_info(:callbacks)
 
     for {module_prefix, fun, arity} <- identifiers do
       module = resolve_module(module_prefix, fun)
-      # function_exported?/3 does not autoload — load the target first.
+      # function_exported?/3 does not autoload: load the target first.
       Code.ensure_loaded!(module)
 
       cond do
         module == @adapter and {fun, arity} in callbacks ->
-          # A behaviour callback (the handle's contract), declared not defined.
+          # A behavior callback (the handle's contract), declared not defined.
           :ok
 
         function_exported?(module, fun, arity) ->
@@ -113,7 +112,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     readme = File.read!("README.md")
     mix_exs = File.read!("mix.exs")
 
-    # Scoped to the docs extras block — the package files: list carries the
+    # Scoped to the docs extras block: the package files: list carries the
     # same .md paths for a different purpose.
     [_, extras_block] = String.split(mix_exs, "extras: [", parts: 2)
     [extras_block, _] = String.split(extras_block, "]\n", parts: 2)
@@ -172,12 +171,39 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     end
   end
 
+  test "the current strategy names the released stability policy and direct dependency graph" do
+    strategy = File.read!("docs/strategy.md") |> String.replace(~r/\s+/, " ")
+    version = Mix.Project.config()[:version]
+    assert Version.compare(version, "1.0.0") in [:eq, :gt]
+    assert strategy =~ "has applied since 1.0.0"
+    assert strategy =~ "Breaking changes to its public API require a major release"
+    refute strategy =~ "does not mean their APIs are 1.0-stable"
+
+    for dep <- Mix.Project.config()[:deps] do
+      {name, requirement, options} =
+        case dep do
+          {name, requirement} -> {name, requirement, []}
+          {name, requirement, options} -> {name, requirement, options}
+        end
+
+      if Keyword.get(options, :runtime, true) do
+        label =
+          if Keyword.get(options, :optional, false),
+            do: "optional installer dependency",
+            else: "required runtime dependency"
+
+        assert strategy =~ "#{name} #{requirement} #{label}",
+               "strategy.md must describe #{name}'s actual dependency role"
+      end
+    end
+  end
+
   test "the 0.11.0 CHANGELOG and upgrading notes cover its breaking changes" do
     [_before, zero_11] = String.split(File.read!("CHANGELOG.md"), "## [0.11.0]", parts: 2)
     [zero_11 | _older] = String.split("[0.11.0]" <> zero_11, ~r/^## /m)
     zero_11 = String.replace(zero_11, ~r/\s+/, " ")
 
-    assert zero_11 =~ ~r/\A\[0\.11\.0\] — 2026-/
+    assert zero_11 =~ ~r/\A\[0\.11\.0\]: 2026-/
     assert zero_11 =~ "### Breaking changes"
 
     for change <- ["`nil`", "unknown option key", "keyword list"] do
@@ -212,7 +238,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     # but others (the test suite among them) record a non-zero exit status and let the
     # later steps run, so the run does not stop at the first failure. Whatever failed,
     # the run exits non-zero.
-    for path <- ["README.md", "CONTRIBUTING.md", "AGENTS.md"] do
+    for path <- ["README.md", "CONTRIBUTING.md"] do
       doc = path |> File.read!() |> String.replace(~r/\s+/, " ")
 
       refute doc =~ ~r/(aborts|stops) at the first (red|failing) step/i,
@@ -262,7 +288,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
   ## helpers
 
   # The atoms of one @type error set, from the lib source (the source of
-  # truth). GENERIC — every :atom in the body is extracted, so a future error
+  # truth). GENERIC: every :atom in the body is extracted, so a future error
   # atom the docs don't cover reds (an allowlisted scan would pass it silent).
   # :invalid is excluded: it is the shape tag of the fixed
   # {:producer_error, :invalid} tuple, not an error atom of its own.

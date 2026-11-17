@@ -11,7 +11,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.Tag do
   ## No type guard on the object/array arms
 
   `:json.decode` decodes JSON objects to Elixir `%{}{}` maps, and `Enum.map`
-  over a map yields `{key, value}` tuples — so the object arm's `fn {k,v}`
+  over a map yields `{key, value}` tuples: so the object arm's `fn {k,v}`
   body is happy with a map. A `when is_list(members)` guard would BREAK on the
   real (map-shaped) data (verified first-hand during the design).
   """
@@ -30,7 +30,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.Tag do
   """
   # The null tagged value is encoded as a SINGLE-element array `["null"]`
   # (BAP's typed JSON form has no value slot for null), so it has its own clause
-  # head before the 2-element `[type, value]` match — otherwise the documented
+  # head before the 2-element `[type, value]` match: otherwise the documented
   # arm is unreachable and `from_json(["null"])` raises FunctionClauseError
   # (cross-vendor CV-null finding). The vector carries no null values today,
   # but the translator must be correct for any future vector encoding.
@@ -53,7 +53,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.Tag do
   end
 
   @doc """
-  Translates a RAW `:json.decode` value (no type tags — the form the
+  Translates a RAW `:json.decode` value (no type tags: the form the
   local-loopback profile corpus stores its `cast_arguments` in) into the
   tagged tuple form. The mirror of `from_json/1` for corpora that carry plain
   JSON instead of the typed-array encoding.

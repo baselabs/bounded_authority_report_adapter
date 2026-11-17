@@ -1,21 +1,21 @@
-# Package boundary check — proves the SHIPPED Hex artifact works, not the source
+# Package boundary check: proves the SHIPPED Hex artifact works, not the source
 # tree (adapted from the BAP sibling's scripts/check_package.exs, read first-hand).
 #
 # 1. `mix hex.build` the exact archive a consumer downloads.
-# 2. Unpack it (two tar layers, via :erl_tar — Hex.Tar is not loadable in a
+# 2. Unpack it (two tar layers, via :erl_tar: Hex.Tar is not loadable in a
 #    project's `mix run` context on this hex version).
-# 3. Exact-set census of the payload against the expected file list — catches
+# 3. Exact-set census of the payload against the expected file list: catches
 #    BOTH a stale `files:` allowlist (missing) and an accidental inclusion
 #    (unexpected). The docs tickets grow the allowlist; this gate keeps it honest.
 # 4. Pin the outer metadata (name/version/requirements read from the LIVE
 #    project config, so the gate never drifts on a bump).
 # 5. Compile the unpacked package in :prod.
 # 6. Compile a minimal consumer against the UNPACKED package (path dep) and run
-#    a sign_report -> check_envelope smoke (positive + tampered negative) —
+#    a sign_report -> check_envelope smoke (positive + tampered negative)
 #    the consumer implements its own key handle, because the package ships
 #    none (design C5).
 #
-# Everything runs under a mktemp scratch root, removed in after — re-runnable
+# Everything runs under a mktemp scratch root, removed in after: re-runnable
 # clean, no tree residue.
 
 defmodule BoundedAuthorityReportAdapter.PackageCheck do
@@ -23,7 +23,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
 
   alias BoundedAuthorityProtocol.V1
 
-  # The exact payload census (what contents.tar.gz must carry — the consumer's
+  # The exact payload census (what contents.tar.gz must carry: the consumer's
   # actual file set). Keep in lockstep with mix.exs `files:`; the exact-set
   # check reds in BOTH directions the moment either side drifts.
   @expected_files MapSet.new([
@@ -126,7 +126,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     end
   end
 
-  ## fixture minting (self-contained — no test/support dependency)
+  ## fixture minting (self-contained: no test/support dependency)
 
   defp keypair(seed), do: :crypto.generate_key(:eddsa, :ed25519, seed)
 
@@ -204,7 +204,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
       "licenses" => ["Apache-2.0"],
       "name" => "bounded_authority_report_adapter",
       # Derived from the LIVE project config's prod deps (no `only:`), in
-      # declaration order — the pin covers exactly what ships, whatever the
+      # declaration order: the pin covers exactly what ships, whatever the
       # runtime dep set grows to.
       "requirements" => requirements,
       "version" => version
@@ -290,7 +290,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     )
   end
 
-  # The consumer implements its OWN key handle (the package ships none — design
+  # The consumer implements its OWN key handle (the package ships none: design
   # C5): a seeded Ed25519 pair behind the full behaviour contract. The smoke is
   # the conformance round-trip's adapter-coherent bar mirrored against the
   # UNPACKED artifact: sign_report through the handle, verify the envelope via
@@ -302,7 +302,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
       @moduledoc false
       @behaviour BoundedAuthorityReportAdapter
 
-      # Interpolated from the script's single @holder_seed — the minted grant
+      # Interpolated from the script's single @holder_seed: the minted grant
       # binds THIS holder's thumbprint, so the constant has exactly one source.
       @holder_seed #{inspect(@holder_seed)}
 
@@ -404,12 +404,12 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
 
   ## plumbing
 
-  # The runtime-dep NAME allowlist — the supply-chain half of the pin: adding a
+  # The runtime-dep NAME allowlist: the supply-chain half of the pin: adding a
   # runtime dependency to mix.exs reds the census here (an intentional addition
   # updates this set in the same commit). Requirement VALUES stay live-derived
   # so version bumps never drift.
   # :igniter ships as an OPTIONAL requirement (the install task; absent deps of
-  # the consumer resolve without it — the hex metadata carries optional: true).
+  # the consumer resolve without it: the hex metadata carries optional: true).
   @runtime_dep_allowlist MapSet.new([:bounded_authority_protocol, :telemetry, :igniter])
 
   defp prod_requirements!(config) do

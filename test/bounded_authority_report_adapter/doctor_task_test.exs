@@ -124,7 +124,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     def public_key(_r), do: {:ok, elem(keypair(), 0)}
 
     # The WRONG preimage: a hash of the raw key bytes, not the RFC 7638 EC
-    # member set — exactly the implementation mistake the fatal exists for.
+    # member set: exactly the implementation mistake the fatal exists for.
     def thumbprint(_r), do: {:ok, :crypto.hash(:sha256, elem(keypair(), 0))}
 
     defp keypair, do: :crypto.generate_key(:ecdh, :prime256v1, <<7::256>>)
@@ -164,7 +164,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
 
   defmodule RotatingHandle do
     # Rotates ONCE after the first call (a real rotation event): the first
-    # public_key sample sees key A, every later call sees key B — so the
+    # public_key sample sees key A, every later call sees key B: so the
     # thumbprint (sampled second) names B while the gate's key was A.
     def public_key(_r), do: {:ok, keypair(rotate())}
 
@@ -429,7 +429,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
   # --- the run/1 CLI wrapper (exit discipline + shell output) ---
 
   # Capture the shell for the run/1 tests, restoring whatever was set before
-  # (never a hardcoded shell — a CI wrapper may run the suite under another one).
+  # (never a hardcoded shell: a CI wrapper may run the suite under another one).
   defp with_process_shell(fun) do
     prior = Mix.shell()
     Mix.shell(Mix.Shell.Process)

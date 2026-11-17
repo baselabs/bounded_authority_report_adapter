@@ -1,6 +1,6 @@
 import Config
 
-# Self-enforcing toolchain: same supported-OTP set as the library —
+# Self-enforcing toolchain: same supported-OTP set as the library
 # {27..29}. OTP 25 and 26 are excluded with the library: the protocol
 # package's codecs decode through :json, which enters stdlib in OTP 27, so
 # the stack cannot run there even though images exist. LOCKSTEP with the
@@ -20,7 +20,7 @@ end
 # A real deployment keeps the edge↔verifier config in sync by operations policy
 # (the single-environment round-trip cannot catch their drift).
 #
-# All keys here are DETERMINISTIC DEMO SEEDS — never production material. In
+# All keys here are DETERMINISTIC DEMO SEEDS: never production material. In
 # production: the grant arrives issuer-signed out-of-band (the BA runtime); the
 # holder key lives behind an HSM/KMS-backed handle; the trusted issuer + expected
 # identity keys are published by the verifier.
@@ -35,7 +35,7 @@ config :edge_agent,
   grant_id: "urn:demo:grant:1",
   audience: "https://demo-verifier.test",
   operation: "submit_status_report",
-  # --- the request-field contract (§3) — IDENTICAL on both sides ---------------
+  # --- the request-field contract (§3): IDENTICAL on both sides ---------------
   target_uri: "https://receiver.local/report",
   report_body: ~s({"record":{"region":"us-east","signal":"ok"}}),
   # --- transport --------------------------------------------------------------

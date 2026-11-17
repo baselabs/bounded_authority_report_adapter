@@ -1,13 +1,13 @@
 defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   @moduledoc """
-  RA3 — the dependency-direction wall (charter §6 invariant 3; strategy §3).
+  RA3: the dependency-direction wall (charter §6 invariant 3; strategy §3).
 
-  The adapter depends ONLY on the public `bounded_authority_protocol` package on the edge
-  path — no private runtime dependency (the `:bounded_authority` runtime app), no transport
+  The adapter uses the public `bounded_authority_protocol` package and telemetry, with
+  optional Igniter installer support. It has no private runtime dependency (the `:bounded_authority` runtime app), no transport
   lib (`:replicant` / `:capstan`), and no reference to the runtime's internal
   `BoundedAuthority.` / `BoundedAuthorityWeb.` namespaces. The adapter adds a
   transport prohibition because it is the holder/signer that
-  lives outside the verifier precisely so it can sign — a transport dep here would
+  lives outside the verifier precisely so it can sign: a transport dep here would
   collapse the invariant that transports stay protocol-free (charter §6 invariant 4).
 
   ## Two clauses
@@ -16,21 +16,21 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   `bounded_authority_protocol` AND no `bounded_authority` runtime / no `replicant` / no
   `capstan`"):
 
-    * **Positive** — `mix.exs` declares the protocol package at a floored range; `mix.lock`
+    * **Positive**: `mix.exs` declares the protocol package at a floored range; `mix.lock`
       resolves it inside that range. A dep-less `mix.exs` passes every negative regex trivially ("no forbidden
       dep" is vacuously true when there are no deps at all), so the positive clause has its
       own falsifier (design §1.2, design-adversarial C2).
-    * **Negative** — no forbidden dep tuple / lock entry, and no runtime-internal namespace
+    * **Negative**: no forbidden dep tuple / lock entry, and no runtime-internal namespace
       reference in compiled source.
 
-  ## Scope (design §1.6.3 — design-adversarial C1, blocking)
+  ## Scope (design §1.6.3: design-adversarial C1, blocking)
 
   The namespace scan covers BOTH compile-bearing source surfaces: `lib/**` AND
   `test/support/**`. `mix.exs:39` compiles `test/support/` into the test env alongside
   `lib/`, and `test/support/` carries signing-path code (`test_keys.ex` calls `:crypto`;
   `test_handles.ex` implements `@behaviour BoundedAuthorityReportAdapter`). A
   `BoundedAuthority.` reference landing in `test/support/` would COMPILE and RUN while a
-  `lib/`-only scan stayed green — the exact silent failure the wall exists to prevent. NEVER
+  `lib/`-only scan stayed green: the exact silent failure the wall exists to prevent. NEVER
   `deps/` (the protocol package is allowed its own dep tree; consumer line 81) or `docs/`
   (prose naming the wall is not a coupling).
 
@@ -38,7 +38,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
   Every banned token + the deletion of the protocol dep is mutation-proven: the proof plants
   the token / deletes the dep and asserts the wall fires. A wall that scans a malformed glob
-  silently returning `[]` passes green while scanning nothing — so each glob AND the positive
+  silently returning `[]` passes green while scanning nothing: so each glob AND the positive
   clause are mutation-proven (design §1.2, consumer line 219).
   """
 
@@ -53,7 +53,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   # The ALLOWED public protocol package the adapter MUST declare (the trust root for the
   # wire profile). Consumed from its Hex release: the adapter requires the published
   # `bounded_authority_protocol` package at @protocol_requirement, and the resolved lock
-  # carries the Hex tuple (not a git ref) — the wall asserts BOTH below.
+  # carries the Hex tuple (not a git ref): the wall asserts BOTH below.
   #
   # The requirement is a RANGE with a security floor: a library declares the range it is
   # compatible with, and only an application locks an exact version. The floor is the oldest
@@ -123,35 +123,35 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     version
   end
 
-  # Forbidden dep-app atoms — form-precise regex so prose does not false-positive (design
+  # Forbidden dep-app atoms: form-precise regex so prose does not false-positive (design
   # §1.4). A REAL dep is the tuple `{:bounded_authority, …}` / `{:replicant, …}` /
   # `{:capstan, …}`. The `(?:["']|)` terminator catches BOTH the bare-atom form
   # (`:bounded_authority,`) AND the quoted-atom forms (`:"bounded_authority",` double-quoted
-  # OR `:'bounded_authority',` single-quoted — security F1 + cross-vendor: Elixir resolves all
+  # OR `:'bounded_authority',` single-quoted: security F1 + cross-vendor: Elixir resolves all
   # three to the SAME atom and declares the SAME dependency, so a quoted forbidden atom is the
   # same coupling; `mix format` does not canonicalize the quotes; single-quoted atoms are
   # deprecated but still valid).
-  # The terminator stops `{:bounded_authority_protocol` (the ALLOWED dep — "_" is a word char
+  # The terminator stops `{:bounded_authority_protocol` (the ALLOWED dep: "_" is a word char
   # so `\b` finds no boundary; and the quoted form ends with `_protocol"`, past the alternation)
   # and stops `{:ash_replicant` (absent here, but the wall future-proofs against the estate
   # wedge consumer documents).
   @mix_exs_forbidden ~r/\{\s*:(?:["']|)(bounded_authority|replicant|capstan)(?:["']|\b)/
   @mix_lock_forbidden ~r/"(bounded_authority|replicant|capstan)"\s*:/
 
-  # Forbidden runtime-internal namespaces (the authority layer's mutable internals — verified
-  # first-hand against `../bounded_authority/lib/`: the runtime owns `BoundedAuthority.*` AND
+  # Forbidden runtime-internal namespaces (the authority layer's mutable internals:
+  # the runtime owns `BoundedAuthority.*` AND
   # `BoundedAuthorityWeb.*`). Three rules:
-  #   - `\bBoundedAuthority(Web)?\.[A-Z]` — the dotted namespace (BoundedAuthority.Authority.*,
+  #   - `\bBoundedAuthority(Web)?\.[A-Z]`: the dotted namespace (BoundedAuthority.Authority.*,
   #     BoundedAuthorityWeb.Foo). Does NOT match `BoundedAuthorityProtocol.` (a distinct token:
   #     "Protocol" is a `.`-less continuation, not the `(Web)?` alternation) nor
   #     `BoundedAuthorityReportAdapter` (no `.` immediately after the prefix).
-  #   - `\bBoundedAuthorityWeb\b` — the dotless Web namespace (alias BoundedAuthorityWeb).
-  #   - `\bBoundedAuthority\b` — the dotless RUNTIME ROOT (cross-vendor claude should-fix):
+  #   - `\bBoundedAuthorityWeb\b`: the dotless Web namespace (alias BoundedAuthorityWeb).
+  #   - `\bBoundedAuthority\b`: the dotless RUNTIME ROOT (including alias/import of the root):
   #     `alias BoundedAuthority` / `import BoundedAuthority` couple to the runtime's namespace
   #     root and are a real one-way-contract violation. The `\b` after the prefix does NOT match
-  #     `BoundedAuthorityProtocol` or `BoundedAuthorityReportAdapter` ("P"/"R" are word chars —
+  #     `BoundedAuthorityProtocol` or `BoundedAuthorityReportAdapter` ("P"/"R" are word chars
   #     no boundary), so the allowed surfaces stay allowed. The runtime root module itself is
-  #     empty (verified — `bounded_authority/lib/bounded_authority.ex` is a bare Application
+  #     empty (verified: `bounded_authority/lib/bounded_authority.ex` is a bare Application
   #     module with no public defs), so `BoundedAuthority.some_fn()` is not a real coupling, but
   #     the bare alias/import IS (it gates all `BoundedAuthority.*` submodules). Verified:
   #     catches `alias BoundedAuthority` + `import BoundedAuthority`, rejects
@@ -163,16 +163,16 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     {"BoundedAuthority (dotless runtime root)", ~r/\bBoundedAuthority\b/}
   ]
 
-  # The scan scope — BOTH compile-bearing source surfaces (design §1.6.3). mix.exs:39
+  # The scan scope: BOTH compile-bearing source surfaces (design §1.6.3). mix.exs:39
   # compiles test/support/ into the test env alongside lib/. NEVER deps/ or docs/.
   @scan_dirs ~w(lib test/support)
 
   # TOCTOU-safe file read (consumer lines 89-94): a concurrent mutation-proof's
   # try/after-File.rm can remove a probe file between the wildcard snapshot + the read.
-  # Returns nil ONLY on :enoent (the file vanished — the TOCTOU case the design §1.8 scopes
+  # Returns nil ONLY on :enoent (the file vanished: the TOCTOU case the design §1.8 scopes
   # this to) instead of raising File.Error (which would flake the wall). gate-integrity F1:
-  # a blanket {:error, _} catch would silently skip a permission-denied offender (chmod 000)
-  # — the namespace scan would pass GREEN while a real BoundedAuthority.* ref sat on disk.
+  # A blanket {:error, _} catch would silently skip a permission-denied offender (chmod 000).
+  # The namespace scan would pass while a real BoundedAuthority.* reference remained on disk.
   # Narrowing to :enoent means any OTHER read failure (permission denied, IO error) RAISES
   # loudly rather than laundering the verdict; the wall's RED must be trustworthy.
   defp safe_read(path) do
@@ -351,7 +351,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     end
   end
 
-  # ------------------------------------------------- negative clause — no forbidden dep
+  # ------------------------------------------------- negative clause: no forbidden dep
 
   describe "no forbidden dependency (the one-way contract)" do
     test "mix.exs declares no forbidden dep tuple" do
@@ -376,7 +376,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     end
   end
 
-  # ------------------------------------- negative clause — no runtime-internal namespace
+  # ------------------------------------- negative clause: no runtime-internal namespace
 
   describe "no runtime-internal module leak into compiled source" do
     test "no file under lib/ or test/support/ references a runtime-internal module" do
@@ -431,7 +431,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
         File.write!(probe, "# probe alias BoundedAuthority.Authority.DecisionOps\n")
 
         # correctness F1: scan via the PRODUCTION source_files/0 (filtered to the lib/ scope),
-        # NOT a separately-constructed glob — a proof that builds its own glob tests a
+        # NOT a separately-constructed glob: a proof that builds its own glob tests a
         # different path than the wall runs in production. source_files/0 is the production
         # scan; filtering it by prefix proves the lib/ scope of THAT scan is non-vacuous.
         offenders =
@@ -443,8 +443,8 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
                "the lib/ mutation proof failed — a planted runtime-internal token was NOT caught " <>
                  "(a malformed glob returning [] would cause this; the lib/ scope is silently unscanned)"
       after
-        # File.rm!/1 raises on deletion failure (cross-vendor codex should-fix: a swallowed
-        # File.rm/1 would leave the probe — a real BoundedAuthority.* ref — in compiled source).
+        # File.rm!/1 raises on deletion failure. Ignoring a File.rm/1 error would leave
+        # the probe, including a real BoundedAuthority.* reference, in compiled source.
         File.rm!(probe)
       end
     end
@@ -480,8 +480,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
     end
 
     test "the real adapter module path is scanned (a planted token in the real .ex fires)" do
-      # consumer's Task-8 pattern (lines 296-326): mutate the REAL lib/bounded_authority_report_adapter.ex
-      # — the module the wall exists to guard. A glob that silently skipped the real module
+      # Mutate lib/bounded_authority_report_adapter.ex, the module the wall guards. A glob that silently skipped the real module
       # (a malformed recursion, a path case the probe files did not exercise) would let a
       # BoundedAuthority.* ref land in the adapter and pass the wall. Mutating the real file
       # (not a copy) + cleaning up in try/after is the only proof that the actual path is in
@@ -504,15 +503,15 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
                  "in the real adapter module was NOT caught (the module the wall guards is " <>
                  "silently unscanned): #{inspect(offenders)}"
       after
-        # Restore the EXACT original bytes. The mutation proof MUST clean up after itself —
+        # Restore the EXACT original bytes. The mutation proof MUST clean up after itself
         # a concurrent run (or a follow-on test) must never observe the probe, and the wall's
         # own GREEN assertion must see the un-mutated file.
         File.write!(adapter_path, original)
       end
     end
 
-    test "the dotless runtime-root alias is caught (cross-vendor: alias/import BoundedAuthority)" do
-      # cross-vendor claude should-fix: `alias BoundedAuthority` / `import BoundedAuthority`
+    test "the dotless runtime-root alias is caught (alias/import BoundedAuthority)" do
+      # `alias BoundedAuthority` / `import BoundedAuthority`
       # couple to the runtime's namespace root (gating all BoundedAuthority.* submodules) but
       # were missed by the dotted regex (no `.[A-Z]` after the prefix). The dotless
       # `\bBoundedAuthority\b` guard closes the gap; this proof pins that it fires.
@@ -531,14 +530,14 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
         assert offenders != [],
                "the bare runtime-root reference #{inspect(ref)} was NOT caught — alias/import " <>
                  "BoundedAuthority couple to the runtime namespace and must trip the wall " <>
-                 "(cross-vendor claude should-fix): #{inspect(offenders)}"
+                 "(including alias/import of the root): #{inspect(offenders)}"
       end
     end
 
     test "the positive clause reds when the protocol dep is removed (a dep-less mix.exs is caught)" do
       # design-adversarial C2: a dep-less mix.exs passes every negative regex trivially ("no
       # forbidden dep" is vacuously true when there are no deps at all). The positive clause is the
-      # falsifier — remove the protocol dep from an in-memory copy and assert the declaration
+      # falsifier: remove the protocol dep from an in-memory copy and assert the declaration
       # assertion reds.
       mix_exs = File.read!("mix.exs")
 
@@ -607,10 +606,10 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
       assert Regex.match?(@mix_exs_forbidden, "{:bounded_authority,\n git: \"...\"}")
 
       # security F1: Elixir resolves :"bounded_authority" to the SAME atom as
-      # :bounded_authority and declares the SAME dependency — so the quoted-atom form is the
+      # :bounded_authority and declares the SAME dependency: so the quoted-atom form is the
       # same coupling and must be caught. (mix format does not canonicalize the quotes.)
       # cross-vendor: single-quoted atoms :'bounded_authority' are deprecated but still valid
-      # and parse to the same atom — both quote forms are caught.
+      # and parse to the same atom: both quote forms are caught.
       assert Regex.match?(@mix_exs_forbidden, "{:\"bounded_authority\", \"~> 1.0\"}")
       assert Regex.match?(@mix_exs_forbidden, "{:\"replicant\", \"~> 1.0\"}")
       assert Regex.match?(@mix_exs_forbidden, "{:\"capstan\", \"~> 1.0\"}")
@@ -618,14 +617,14 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
       assert Regex.match?(@mix_exs_forbidden, "{:'replicant', \"~> 1.0\"}")
       assert Regex.match?(@mix_exs_forbidden, "{:'capstan', \"~> 1.0\"}")
 
-      # The protocol tuple (the allowed form) does NOT match — bare OR double/single-quoted.
+      # The protocol tuple (the allowed form) does NOT match: bare OR double/single-quoted.
       refute Regex.match?(@mix_exs_forbidden, "{:bounded_authority_protocol, ...}")
       refute Regex.match?(@mix_exs_forbidden, "{:\"bounded_authority_protocol\", ...}")
       refute Regex.match?(@mix_exs_forbidden, "{:'bounded_authority_protocol', ...}")
       # Prose mentioning a forbidden atom does NOT match (it's documentation).
       refute Regex.match?(@mix_exs_forbidden, "# never the :bounded_authority app")
       refute Regex.match?(@mix_exs_forbidden, "# no :replicant / :capstan transport lib")
-      # ash_replicant (absent here, but the estate wedge) does NOT match — bare OR quoted.
+      # ash_replicant (absent here, but the estate wedge) does NOT match: bare OR quoted.
       refute Regex.match?(@mix_exs_forbidden, "{:ash_replicant, \"~> 1.0\"}")
       refute Regex.match?(@mix_exs_forbidden, "{:\"ash_replicant\", \"~> 1.0\"}")
       refute Regex.match?(@mix_exs_forbidden, "{:'ash_replicant', \"~> 1.0\"}")

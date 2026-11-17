@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-bap-drift.sh — one-command ecosystem drift check for the protocol dependency.
+# check-bap-drift.sh: one-command ecosystem drift check for the protocol dependency.
 #
 # What BARA compiles against is a deliberate, reviewed choice (the lock follows
 # published BAP releases; the requirement is a range with a security floor and the wall
@@ -8,7 +8,7 @@
 #
 #   1. what BARA locks + requires          (this repo's mix.lock / mix.exs)
 #   2. what hex.pm publishes               (public API; skipped offline)
-#   3. how far the protocol's main has     (git ls-remote on the remote URL — no fetch,
+#   3. how far the protocol's main has     (git ls-remote on the remote URL: no fetch,
 #      moved, and what lib/ says             no sibling .git writes, no tag clobber)
 #
 # It reads no consumer's repository: no consumer's pin gates a BARA bump.
@@ -32,12 +32,12 @@ print_files() {
   done <<<"$1"
 }
 
-# --- 1. BARA's own declaration (the source of truth — never a restated version) ------
+# --- 1. BARA's own declaration (the source of truth: never a restated version) ------
 locked="$(sed -nE "s/.*\"$APP\": [{]:hex, :$APP, \"([^\"]+)\".*/\1/p" "$REPO/mix.lock" | head -1)"
 requirement="$(sed -nE "s/.*[{:]$APP, \"([^\"]+)\".*/\1/p" "$REPO/mix.exs" | head -1)"
 
 if [ -z "$locked" ] || [ -z "$requirement" ]; then
-  say "FAIL: could not parse the lock/resolution from $REPO — run from the repo or fix the format"
+  say "FAIL: could not parse the lock/resolution from $REPO: run from the repo or fix the format"
   exit 1
 fi
 
@@ -66,18 +66,18 @@ print(latest, " ".join(vs))
     say "hex.pm:  latest stable $hex_latest (published: $hex_releases)"
   else
     hex_latest=""
-    say "hex.pm:  WITHHELD (malformed API response) — release verdicts withheld"
+    say "hex.pm:  WITHHELD (malformed API response): release verdicts withheld"
   fi
 else
   hex_latest=""
-  say "hex.pm:  SKIP (offline or API unreachable) — release verdicts withheld"
+  say "hex.pm:  SKIP (offline or API unreachable): release verdicts withheld"
 fi
 
 # --- 3/4. the protocol remote, read-only (ls-remote: no fetch, no tag clobber) -------
 remote_refs="$(git ls-remote "$BAP_REMOTE" 2>/dev/null || true)"
 
 if [ -z "$remote_refs" ]; then
-  say "BAP:     SKIP (remote unreachable) — main/tag verdicts withheld"
+  say "BAP:     SKIP (remote unreachable): main/tag verdicts withheld"
 fi
 
 bap_main="$(printf '%s\n' "$remote_refs" | awk '$2 == "refs/heads/main" {print $1}')"
@@ -94,12 +94,12 @@ if [ -n "$bap_main" ]; then
   if [ -n "$locked_commit" ]; then
     say "         v$locked tag commit ${locked_commit:0:12}"
   else
-    say "         v$locked tag commit unknown on the remote (peeled ref absent — is $locked a real release tag?)"
+    say "         v$locked tag commit unknown on the remote (peeled ref absent: is $locked a real release tag?)"
   fi
 fi
 
 if [ ! -d "$BAP_SIBLING" ]; then
-  say "BAP:     SKIP (sibling $BAP_SIBLING absent) — lib/-span verdicts limited to locally verifiable pairs"
+  say "BAP:     SKIP (sibling $BAP_SIBLING absent): lib/-span verdicts limited to locally verifiable pairs"
 fi
 
 # --- verdicts (only from verified inputs) ---------------------------------------------
@@ -142,14 +142,14 @@ if [ -n "$hex_latest" ] && [ "$hex_latest" != "?" ] && [ "$hex_latest" != "$lock
           "the consumed surfaces in BARA's suite."
     fi
   else
-    say "  Span UNVERIFIED (remote tags or local objects unavailable) — verify first-hand" \
+    say "  Span UNVERIFIED (remote tags or local objects unavailable): verify first-hand" \
         "in the protocol repo before any bump decision."
   fi
 elif [ -n "$hex_latest" ]; then
-  say "RELEASES: locked $locked is the latest stable — no bump decision pending."
+  say "RELEASES: locked $locked is the latest stable: no bump decision pending."
 fi
 
-# Main drift: what protocol main carries past our locked version — the
+# Main drift: what protocol main carries past our locked version: the
 # eligibility question for the NEXT bump (cross-vendor note: the header
 # promised this and the script never computed it).
 if [ -n "$bap_main" ] && [ -n "$locked_commit" ]; then
@@ -164,9 +164,9 @@ if [ -n "$bap_main" ] && [ -n "$locked_commit" ]; then
       say "  A bump to a release from this span classifies these changes."
     fi
   else
-    say "MAIN DRIFT: WITHHELD (span not locally verifiable) — locked ${locked_commit:0:12} vs main ${bap_main:0:12}."
+    say "MAIN DRIFT: WITHHELD (span not locally verifiable): locked ${locked_commit:0:12} vs main ${bap_main:0:12}."
   fi
 fi
 
 say "-------------------------------------------------------------------------"
-say "Probe only — not a gate. Verdicts above came only from inputs actually verified."
+say "Probe only: not a gate. Verdicts above came only from inputs actually verified."

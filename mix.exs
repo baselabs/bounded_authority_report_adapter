@@ -11,7 +11,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # Supported Elixir line: the range admits the supported
       # minors (1.18/1.19/1.20) and Mix refuses anything outside it at
       # compile. The supported OTP-major set ({27..29}) is enforced by
-      # config/config.exs — 25/26 are excluded: the protocol package's
+      # config/config.exs: 25/26 are excluded: the protocol package's
       # codecs decode through :json, which enters stdlib in OTP 27.
       # LOCKSTEP: this range, that set, .tool-versions, and the CI matrix
       # lanes move together in ONE commit.
@@ -20,10 +20,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       start_permanent: Mix.env() == :prod,
       # The coverage floor is the MEASURED total, re-pinned at every change
       # that moves it (never aspirational; pinned just under the measured
-      # number — Mix compares the RAW ratio, whose hidden decimals round up
+      # number: Mix compares the RAW ratio, whose hidden decimals round up
       # for display, so an exact display-value pin can flake).
       test_coverage: [summary: [threshold: 77.5]],
-      # PLT lives under _build (gitignored, cache-friendly) — the BAP sibling's shape.
+      # PLT lives under _build (gitignored, cache-friendly): the BAP sibling's shape.
       dialyzer: [
         plt_core_path: "_build/plts",
         plt_local_path: "_build/plts",
@@ -53,10 +53,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
     ]
   end
 
-  # `mix ci` — local CI parity: reproduces .github/workflows/ci.yml step-for-
+  # `mix ci`: local CI parity: reproduces .github/workflows/ci.yml step-for-
   # step on the pinned dev lane (every library-job step + the example job's
   # steps) with zero GitHub Actions spend.
-  # NO env(1) re-exec — the FIRST step is an env guard that refuses any boot
+  # NO env(1) re-exec: the FIRST step is an env guard that refuses any boot
   # other than MIX_ENV=test (a :dev compile skips test/support and its warnings)
   # with the invocation in its message; every later step is a plain task
   # name. The example job runs through scripts/ci_example.exs, preserving the
@@ -97,15 +97,15 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   end
 
   # test/support/ holds the reference key-handle impl (Keys.RawKey) + test-only
-  # keypair fixtures — compiled ONLY in :test so the {pub, priv} reference impl
+  # keypair fixtures: compiled ONLY in :test so the {pub, priv} reference impl
   # does not ship in the artifact: a key-in-process-memory handle in lib/ would
   # invite exactly the key custody this library exists to keep out of process.
   defp elixirc_paths(:test), do: ["lib/", "test/support/"]
   defp elixirc_paths(_env), do: ["lib/"]
 
-  # The adapter depends ONLY on the public bounded_authority_protocol package on
-  # the edge path — no private runtime dependency (the dependency-direction wall).
-  # The protocol is consumed from its Hex release.
+  # Required runtime dependencies are the public protocol package and telemetry.
+  # Igniter is optional installer support; authority-runtime and transport
+  # dependencies are excluded by the dependency-direction test.
   defp deps do
     [
       # Runtime: the telemetry event surface (:telemetry.execute). Zero transitive
@@ -127,7 +127,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # The install task (lib/mix/tasks) uses Igniter when present; the file
       # compiles to a Mix.raise fallback without it.
-      # No `only:` — the optional edge must order igniter BEFORE this package
+      # No `only:`: the optional edge must order igniter BEFORE this package
       # in consumer builds, or lib/mix/tasks compiles its no-igniter fallback.
       {:igniter, "~> 0.8", optional: true},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

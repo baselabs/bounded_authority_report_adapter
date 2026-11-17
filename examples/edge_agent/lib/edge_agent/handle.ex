@@ -6,15 +6,15 @@ defmodule EdgeAgent.Handle do
   keys. This mirrors the adapter's test-only `BoundedAuthorityReportAdapter.Keys.RawKey`
   reference implementation, but lives in THIS example app (not the library) and
   implements ONLY the proof-required callbacks (`sign/2`, `public_key/1`,
-  `thumbprint/1`) — it never needs `key_identity/1` (anchor) or
+  `thumbprint/1`): it never needs `key_identity/1` (anchor) or
   `signing_identity/1` (grant), because the edge agent calls `sign_report/3`.
 
   ## Why this is demo-only
 
   A `{pub, priv}` tuple puts the private key in process memory as a recoverable
   BEAM binary. That posture is fine for a runnable example, but a PRODUCTION
-  edge agent must implement these callbacks against proper key custody — an HSM,
-  the OS keychain, or a key server — so the private key is never extractable as a
+  edge agent must implement these callbacks against proper key custody: an HSM,
+  the OS keychain, or a key server: so the private key is never extractable as a
   BEAM binary (the adapter's `docs/strategy.md` §4: once the signing key is in the
   app, extracting it is a re-architecture, not a refactor). The whole point of the
   `{module(), term()}` handle contract is that THIS module is the only place a real

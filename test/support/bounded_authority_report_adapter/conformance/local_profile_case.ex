@@ -3,7 +3,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.LocalProfileCase do
   TEST-ONLY loader for BAP's packaged local-loopback profile corpus (0.3.0).
 
   The profile corpus ships in the DEPENDENCY at
-  `priv/conformance/application-profiles/local-loopback-http/v1/` — a DIFFERENT
+  `priv/conformance/application-profiles/local-loopback-http/v1/`: a DIFFERENT
   tree and schema from the standard V1 corpus (`priv/conformance/v1/`): an
   `index.json` (identity + per-file sha256s + counts), a `profile.json` (the
   certified context: issuer, grant, both proofs, request, and the 36 URI
@@ -42,7 +42,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.LocalProfileCase do
   @profile File.read!(@profile_path) |> :json.decode()
   @cases File.read!(@cases_path) |> :json.decode()
 
-  # Verify the index's self-declared sha256 over each content file at load —
+  # Verify the index's self-declared sha256 over each content file at load
   # a corpus that does not hash to its certified index is not the certified
   # corpus. Compile-time, so a patched dependency reds at COMPILE, before any
   # case executes.
@@ -81,7 +81,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.LocalProfileCase do
   Builds the `%ExpectedRequest{}` the verifier-side surface consumes: the
   certified context's bound fields, the IPv4 proof's target/nonce as the
   baseline, and per-case `expected_overrides` applied (the wrong-* cases carry
-  their poison in-corpus — the derivation mirrors BAP's own profile corpus
+  their poison in-corpus: the derivation mirrors BAP's own profile corpus
   runner, read first-hand at
   test/bounded_authority_protocol/application_profile/local_loopback_http/v1_test.exs).
   """
@@ -105,8 +105,8 @@ defmodule BoundedAuthorityReportAdapter.Conformance.LocalProfileCase do
   end
 
   @doc """
-  The baseline `%ExpectedRequest{}` from the certified context (no overrides)
-  — the shared base `expected_request/1` derives every case from.
+  Returns the baseline `%ExpectedRequest{}` from the certified context without overrides.
+  `expected_request/1` derives every case from this shared base.
   """
   def base_expected_request do
     %ExpectedRequest{

@@ -1,13 +1,13 @@
 defmodule BoundedAuthorityReportAdapter.V3SignTest do
   @moduledoc """
-  The contract-major-3 signing suite — ADR-0021's failure-modes-and-proofs
+  The contract-major-3 signing suite: ADR-0021's failure-modes-and-proofs
   matrix, RED-first against the unimplemented surface.
 
   Legs (each names the ADR decision it proves):
     * round-trips for all four objects through BAP's v3 façade (D1, D6);
-    * the cross-type matrix — every operation × both directions (D2);
+    * the cross-type matrix: every operation × both directions (D2);
     * point validation incl. the grant path and `next_public_key` (D2);
-    * scalar ordering and boundaries — range check BEFORE normalization (D4);
+    * scalar ordering and boundaries: range check BEFORE normalization (D4);
     * high-S normalization + low-S pass-through (D4);
     * DER rejection (D3);
     * wrong-key rotation race + right-width wrong-suite (D5);
@@ -118,7 +118,7 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
   end
 
   # A genuinely signed v2 grant (EdDSA header like v1; payload v: 2 and a
-  # range selector) — the discriminator leg for the payload-major gate.
+  # range selector): the discriminator leg for the payload-major gate.
   defp mismatched_major_grant_compact(holder_thumbprint) do
     alias BoundedAuthorityProtocol.V2
 
@@ -625,7 +625,7 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
 
       # Pass-through, stated precisely: the signature segment the compact
       # carries EQUALS the bytes the handle returned (the return was already
-      # low-S, so normalization is a no-op — not a re-sign, not a re-spell).
+      # low-S, so normalization is a no-op: not a re-sign, not a re-spell).
       # ECDSA's per-signature nonce means this cannot be asserted by signing
       # twice; it is asserted against the handle's own captured return.
       returned = CapturingECKeyHandle.captured_signature()
@@ -966,9 +966,9 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
 
     test "a v2 grant fails both report gates as :invalid_report (the payload names the major)" do
       # v1 and v2 grants share the EdDSA header, so a header-only gate cannot
-      # separate them — the payload's v claim does (review finding 2). The
-      # fixture grant is GENUINELY valid first — proven green through the V2
-      # facade — so the gate's rejection is a major rejection, not a
+      # separate them: the payload's v claim does (review finding 2). The
+      # fixture grant is GENUINELY valid first: proven green through the V2
+      # facade: so the gate's rejection is a major rejection, not a
       # malformed-input rejection.
       {ed_pub, ed_priv} = TestKeys.holder_keypair()
       ed_thumb = TestKeys.holder_thumbprint_raw(ed_pub)

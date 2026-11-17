@@ -8,7 +8,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                           "BoundedAuthorityProtocol.V1"},
                          {"docs/consumer-integration.md", :wire_scheme, "ba_protocol_v1"},
                          # ADR-0021 (2026-09-22): the contract-major-3 signing surface's
-                         # enumerated identities — the adapter-owned V3 module, its test
+                         # enumerated identities: the adapter-owned V3 module, its test
                          # suite and handles wrapper.
                          {"lib/bounded_authority_report_adapter/v3.ex", :path, "v3"},
                          {"lib/bounded_authority_report_adapter/v3.ex", :module,

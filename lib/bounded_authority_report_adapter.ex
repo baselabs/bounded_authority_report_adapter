@@ -8,7 +8,7 @@ defmodule BoundedAuthorityReportAdapter do
   it takes a key handle and the object's fields, asks the protocol package for the signing
   input, signs its `message` through the handle, verifies the signature against the
   handle's public key, and assembles the compact form through the protocol package. Every
-  entry point shares that path.
+  signing entry point shares that path.
 
   ## Entry points
 
@@ -23,8 +23,8 @@ defmodule BoundedAuthorityReportAdapter do
 
   `BoundedAuthorityReportAdapter.V3` is the ES256 sibling (contract-major 3, P-256 keys)
   of `sign_report/3`, `sign_grant/3`, `sign_anchor/3` and `sign_key_transition/3`. Both
-  modules use the same key-handle behavior. This module's entry points accept Ed25519 keys
-  only, and `V3`'s accept P-256 keys only.
+  modules use the same key-handle behavior. This module's signing entry points accept
+  Ed25519 keys only, and `V3`'s accept P-256 keys only.
 
   The examples in each function's documentation continue the README's quick start: they
   use its development key handle, `MyApp.DevKey`, with handle terms `{role, name}`, its
@@ -48,20 +48,20 @@ defmodule BoundedAuthorityReportAdapter do
   `key_identity/1` and `signing_identity/1` optional. Which callbacks each entry point
   calls (the same on `BoundedAuthorityReportAdapter.V3`, for its four entry points):
 
-    * `sign/2` — every entry point: `sign_report/3`, `sign_local_loopback_report/3`,
+    * `sign/2`: every signing entry point: `sign_report/3`, `sign_local_loopback_report/3`,
       `sign_grant/3`, `sign_anchor/3`, `sign_key_transition/3` and
       `sign_content_assertion/3`.
-    * `public_key/1` — only `sign_report/3` and `sign_local_loopback_report/3`, for the
+    * `public_key/1`: only `sign_report/3` and `sign_local_loopback_report/3`, for the
       holder key. The other entry points read the public key from the identity callback
       below.
-    * `key_identity/1` — `sign_anchor/3`, `sign_key_transition/3` and
+    * `key_identity/1`: `sign_anchor/3`, `sign_key_transition/3` and
       `sign_content_assertion/3`. They read the key id and the public key in one call, so a
       handle over a rotating key store cannot return the id of one key version and the
       public key of another. A handle without it is refused by these three.
-    * `signing_identity/1` — `sign_grant/3`. It reads the declared role, the key id and the
+    * `signing_identity/1`: `sign_grant/3`. It reads the declared role, the key id and the
       public key in one call, and signs only when the role is `:issuer`. A handle without
       it is refused.
-    * `thumbprint/1` — no entry point calls it. It returns the RFC 7638 thumbprint the
+    * `thumbprint/1`: no entry point calls it. It returns the RFC 7638 thumbprint the
       issuer puts in a grant's `cnf.jkt`, so callers can check a handle against a grant.
       `public_key_thumbprint/1` computes it from the public key in one call.
 
@@ -78,9 +78,9 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Options
 
-  Every entry point takes its options as a map or as a keyword list, and the two are the
+  Every signing entry point takes its options as a map or as a keyword list, and the two are the
   same call: `sign_report(report, handle, issued_at: t)` is
-  `sign_report(report, handle, %{issued_at: t})`. Each entry point accepts only the option
+  `sign_report(report, handle, %{issued_at: t})`. Each signing entry point accepts only the option
   keys its documentation lists, and checks each value's kind. These are refused with the
   entry point's input error (`:invalid_report`, `:invalid_grant` and so on) before any
   callback is called:
@@ -99,10 +99,13 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Errors
 
-  Every entry point returns `{:ok, map}` or `{:error, reason}`, where `reason` is a closed
+  Every signing entry point returns `{:ok, map}` or `{:error, reason}`, where `reason` is a closed
   atom or the tuple `{:producer_error, :invalid}`. Errors never carry key material,
   message bytes or input values. Each function's documentation lists its set, and the
   `*_sign_error` types name them. The errors guide explains each one.
+  `public_key_thumbprint/1` instead returns `{:ok, <<_::256>>}` or `{:error, :invalid}`.
+  Verification is never authorization; execution depends on the verifying service's
+  authorization policy.
 
   ## What this library does not do
 
@@ -122,8 +125,30 @@ defmodule BoundedAuthorityReportAdapter do
   alias BoundedAuthorityReportAdapter.Options
   alias BoundedAuthorityReportAdapter.Telemetry
 
+  @typedoc """
+  Caller-owned `{module, reference}` implementing this module's key-handle behavior.
+  The reference is opaque to the adapter and should name a custodian key without
+  containing private key bytes. Contract-major 1 uses an acceptable raw 32-byte Ed25519
+  public key and a 64-byte signature. See the module's "The key-handle behavior" section
+  for callbacks, atomic identity snapshots and timeouts.
+  """
   @type key_handle :: {module(), term()}
 
+  @typedoc """
+  One request bound to an issuer-signed contract-major-1 grant.
+
+  * `:grant_compact` is the grant's compact JWS string, passed through unchanged.
+  * `:operation` names a granted operation; `:method` is the HTTP method.
+  * `:target_uri` is the canonical HTTPS request URI, without a fragment.
+  * `:invocation_id` is a canonical lowercase UUID, unique per invocation.
+  * `:cast_arguments` is the tagged `t:BoundedAuthorityProtocol.V1.Json.value/0` obtained
+    by decoding the exact raw request body, rather than an ordinary Elixir map.
+  * `:nonce` is the verifying service's nonce string, or `nil` when none is required.
+
+  The protocol checks canonical values and bounds; the adapter checks field shapes.
+  Verification is never authorization: the verifying service's authorization policy,
+  trusted keys, identity binding, replay reservation and revocation state govern execution.
+  """
   @type report :: %{
           grant_compact: binary(),
           operation: binary(),
@@ -135,9 +160,11 @@ defmodule BoundedAuthorityReportAdapter do
         }
 
   @typedoc """
-  The report shape `sign_local_loopback_report/3` consumes — the same field set
-  as `report()`, except the nonce is REQUIRED (a non-empty binary; enforced at
-  runtime — a typespec cannot express non-emptiness).
+  The fields and request-binding semantics of `t:report/0`, for
+  `sign_local_loopback_report/3`. Here `:nonce` must be a non-empty string obtained from
+  the listener's challenge. `:target_uri` is a canonical literal-loopback HTTP URI
+  (`127.0.0.1` or `[::1]`), rather than HTTPS. This is the explicit
+  `bap-application-proof/local-loopback-http/1` profile, not standard DPoP.
   """
   @type local_loopback_report :: %{
           grant_compact: binary(),
@@ -149,8 +176,25 @@ defmodule BoundedAuthorityReportAdapter do
           nonce: binary()
         }
 
+  @typedoc """
+  Signed request envelope: `:grant` is the input compact JWS string, unchanged;
+  `:proof` is the new holder-signed compact JWS binding that grant and request.
+  These are encoded credentials, not verified facts or authorization decisions.
+  """
   @type envelope :: %{grant: binary(), proof: binary()}
 
+  @typedoc """
+  Checkpoint fields for `sign_anchor/3`.
+
+  * `:anchor_id` uniquely identifies the anchor; `:chain_id` identifies its chain.
+    Both are protocol identifier strings.
+  * `:sequence` is the non-negative count of chain entries committed by the checkpoint.
+  * `:chain_hash` is the raw 32-byte SHA-256 chain hash, not hex or base64url.
+    Sequence zero uses the all-zero hash; a later sequence requires a nonzero hash.
+
+  The key id and fingerprint come from the handle's atomic `c:key_identity/1` snapshot;
+  the timestamp comes from `t:anchor_opts/0`.
+  """
   @type anchor_input :: %{
           anchor_id: binary(),
           chain_id: binary(),
@@ -158,31 +202,83 @@ defmodule BoundedAuthorityReportAdapter do
           chain_hash: binary()
         }
 
+  @typedoc """
+  Signed checkpoint result. `:anchor` is the compact JWS string produced by
+  `sign_anchor/3`, with the handle-resolved key identity and the supplied chain fields.
+  """
   @type anchor_compact :: %{anchor: binary()}
 
+  @typedoc """
+  Options schema for both holder-proof signing functions. All keys are optional.
+
+  * `:bounds` supplies `BoundedAuthorityProtocol.V1.Bounds` or a map of limit overrides
+    to the producer and assembler. Default `%{}` uses protocol maximums. Bound names,
+    units and maximum values are defined by `BoundedAuthorityProtocol.V1.Bounds`.
+  * `:issued_at` sets proof `iat` in integer Unix seconds; default: current system time.
+  * `:proof_id` sets proof `jti` to a protocol identifier string; default: fresh UUID v4.
+
+  Every options type describes a map schema. Functions also accept the same keys as
+  keyword lists with unique atom keys, including nested options. Unknown keys, structs
+  and invalid values are refused, never silently replaced with defaults.
+  """
   @type opts :: %{
           optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map(),
           optional(:issued_at) => integer(),
           optional(:proof_id) => binary()
         }
 
+  @typedoc """
+  Checkpoint options. Optional `:bounds` has the semantics in `t:opts/0`.
+  Optional `:anchored_at` sets the checkpoint timestamp in integer Unix seconds,
+  defaulting to current system time. Also accepted as a keyword list.
+  """
   @type anchor_opts :: %{
           optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map(),
           optional(:anchored_at) => integer()
         }
 
+  @typedoc """
+  Closed holder-proof error union. `:invalid_report` means malformed report fields,
+  a mismatched grant major, an invalid nonce shape or invalid options.
+  `:invalid_key_handle` means a missing, failed or malformed key callback/identity.
+  `:signing_failed` means a failed signing callback, a non-64-byte signature or failure
+  of the wrong-key signature self-check. `{:producer_error, :invalid}` means a protocol
+  producer or assembler refused a canonical value or resource limit. These errors carry
+  no input values; the Errors guide expands the shared meanings.
+  """
   @type sign_error ::
           :invalid_report
           | :invalid_key_handle
           | :signing_failed
           | {:producer_error, :invalid}
 
+  @typedoc """
+  Closed checkpoint error union. `:invalid_anchor` means malformed fields or options.
+  `:invalid_key_handle`, `:signing_failed` and `{:producer_error, :invalid}` have the
+  shared meanings in `t:sign_error/0`. Protocol refusals include a chain hash of the
+  wrong width and an invalid sequence/hash relationship.
+  """
   @type anchor_sign_error ::
           :invalid_anchor
           | :invalid_key_handle
           | :signing_failed
           | {:producer_error, :invalid}
 
+  @typedoc """
+  Issuer-side grant fields for `sign_grant/3`.
+
+  * `:issuer` identifies the issuer; `:grant_id` uniquely identifies the grant.
+  * `:audiences` is a non-empty list of verifying-service audience strings.
+  * `:issued_at`, `:not_before` and `:expires_at` are integer Unix seconds (`iat`, `nbf`,
+    `exp`); the protocol checks ordering and uses exclusive expiry.
+  * `:holder_thumbprint` is the raw 32-byte RFC 7638 SHA-256 thumbprint of the holder key,
+    not the public key or its hex/base64url encoding.
+  * `:operations` is a non-empty list of `BoundedAuthorityProtocol.V1.Operation` structs
+    with unique names and major-1 selectors (`:all`, `:equals`, `:one_of`).
+
+  The issuer key id comes from `c:signing_identity/1`, never from input fields.
+  Selector values use tagged JSON; whole numbers must use `{:integer, n}`.
+  """
   @type grant_input :: %{
           issuer: binary(),
           grant_id: binary(),
@@ -194,6 +290,20 @@ defmodule BoundedAuthorityReportAdapter do
           operations: [BoundedAuthorityProtocol.V1.Operation.t()]
         }
 
+  @typedoc """
+  Issuer-side options. Optional `:bounds` has the semantics in `t:opts/0`.
+  Optional `:role_attestation` enables the Ed25519 issuer-role gate and contains:
+
+  * `:compact`, the role-attestation compact JWS string;
+  * `:attestor`, an already-trusted `BoundedAuthorityProtocol.V1.HistoricalPublicKey`
+    with its key id, raw 32-byte Ed25519 public key and validity interval in Unix seconds;
+  * optional `:now`, the evaluation time in integer Unix seconds, defaulting to current
+    system time. This is a trust input, not a grant timestamp.
+
+  The attestation must name the handle-resolved subject key and the `"issuer"` role.
+  Both levels accept maps or keyword lists. Unknown nested keys and explicit `nil`
+  are refused with `:invalid_role_attestation`.
+  """
   @type grant_opts :: %{
           optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map(),
           optional(:role_attestation) => %{
@@ -203,8 +313,21 @@ defmodule BoundedAuthorityReportAdapter do
           }
         }
 
+  @typedoc """
+  Signed grant result. `:grant` is the issuer-signed compact JWS string, ready for a
+  holder report's `:grant_compact`. Signing does not select trusted issuer keys or
+  implement the verifying service's authorization policy.
+  """
   @type grant_compact :: %{grant: binary()}
 
+  @typedoc """
+  Closed issuer-side error union. `:invalid_grant` means malformed fields or options.
+  `:invalid_role_attestation` means a malformed or refused attestation, including wrong
+  subject, role, trusted attestor or validity interval. `:invalid_key_handle` also covers
+  a missing `c:signing_identity/1` or a declared role other than `:issuer`.
+  `:signing_failed` and `{:producer_error, :invalid}` have the meanings in `t:sign_error/0`;
+  protocol refusals include invalid windows, digests and selectors.
+  """
   @type grant_sign_error ::
           :invalid_grant
           | :invalid_key_handle
@@ -212,6 +335,17 @@ defmodule BoundedAuthorityReportAdapter do
           | :signing_failed
           | {:producer_error, :invalid}
 
+  @typedoc """
+  Successor-key fields for `sign_key_transition/3`.
+
+  * `:transition_id` uniquely identifies this transition; `:chain_id` identifies the chain.
+  * `:effective_at` is the transition time in integer Unix seconds.
+  * `:next_key_id` is the successor's identifier string.
+  * `:next_public_key` is its raw 32-byte Ed25519 public key, not a JWK or encoded string.
+
+  The current key id and public key come from `c:key_identity/1`; that key signs.
+  The protocol requires a valid successor distinct from the current key.
+  """
   @type transition_input :: %{
           transition_id: binary(),
           chain_id: binary(),
@@ -220,18 +354,48 @@ defmodule BoundedAuthorityReportAdapter do
           next_public_key: binary()
         }
 
+  @typedoc """
+  Transition options. Optional `:bounds` has the semantics in `t:opts/0`.
+  No clock or identity override is accepted. Also accepted as a keyword list.
+  """
   @type transition_opts :: %{
           optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map()
         }
 
+  @typedoc """
+  Signed rotation result. `:key_transition` is the compact JWS string signed by the
+  retiring key and naming its successor; it does not rotate the custodian's keys.
+  """
   @type transition_compact :: %{key_transition: binary()}
 
+  @typedoc """
+  Closed transition error union. `:invalid_transition` means malformed fields,
+  a successor key of the wrong width or invalid options. `:invalid_key_handle`,
+  `:signing_failed` and `{:producer_error, :invalid}` have the meanings in `t:sign_error/0`;
+  the protocol also refuses a successor equal to the current key.
+  """
   @type transition_sign_error ::
           :invalid_transition
           | :invalid_key_handle
           | :signing_failed
           | {:producer_error, :invalid}
 
+  @typedoc """
+  Standalone content-assertion payload for `sign_content_assertion/3`.
+
+  * `:jti` uniquely identifies the assertion; `:iss` identifies the issuer; `:aud` names
+    its audience; `:sub` identifies the lineage subject; `:profile` identifies the semantic
+    profile. These are protocol identifier strings, not content bytes.
+  * `:profile_digest` is the raw 32-byte SHA-256 digest committing the semantic profile;
+    `:content_digest` is the raw 32-byte SHA-256 digest of the exact content bytes.
+  * `:gen` is the positive lineage generation, starting at 1. `:prev` is the raw 32-byte
+    predecessor assertion digest, or 32 zero bytes at generation 1.
+  * `:iat`, `:nbf` and `:exp` are integer Unix seconds: issued-at, not-before and exclusive
+    expiry. The protocol checks the interval and first-generation predecessor rule.
+
+  The signing key id comes from `c:key_identity/1`. The adapter does not read content,
+  interpret profiles, verify lineage or authorize execution.
+  """
   @type content_assertion_input :: %{
           jti: binary(),
           iss: binary(),
@@ -247,12 +411,26 @@ defmodule BoundedAuthorityReportAdapter do
           exp: integer()
         }
 
+  @typedoc """
+  Content-assertion options. Optional `:bounds` has the semantics in `t:opts/0`;
+  no other key is accepted. Also accepted as a keyword list.
+  """
   @type content_assertion_opts :: %{
           optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map()
         }
 
+  @typedoc """
+  Signed assertion result. `:content_assertion` is a compact JWS string for the
+  standalone Ed25519 content-assertion profile, not a grant or request envelope.
+  """
   @type content_assertion_compact :: %{content_assertion: binary()}
 
+  @typedoc """
+  Closed content-assertion error union. `:invalid_content_assertion` means malformed
+  payload fields or options. `:invalid_key_handle`, `:signing_failed` and
+  `{:producer_error, :invalid}` have the meanings in `t:sign_error/0`; protocol refusals
+  include wrong digest widths, predecessor rules and invalid windows.
+  """
   @type content_assertion_sign_error ::
           :invalid_content_assertion
           | :invalid_key_handle
@@ -270,38 +448,38 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Parameters
 
-    * `report` — a map with:
-      * `:grant_compact` — the issuer-signed contract-major-1 grant, as a compact string.
+    * `report`: a map with:
+      * `:grant_compact`: the issuer-signed contract-major-1 grant, as a compact string.
         A grant of another major is refused.
-      * `:operation` — the operation name the grant authorizes.
-      * `:method` — the HTTP method, for example `"POST"`.
-      * `:target_uri` — the canonical HTTPS URI of the request.
-      * `:invocation_id` — a canonical lowercase UUID, unique per request.
-      * `:cast_arguments` — the request body in the protocol's tagged form, from
+      * `:operation`: the operation name the grant authorizes.
+      * `:method`: the HTTP method, for example `"POST"`.
+      * `:target_uri`: the canonical HTTPS URI of the request.
+      * `:invocation_id`: a canonical lowercase UUID, unique per request.
+      * `:cast_arguments`: the request body in the protocol's tagged form, from
         `BoundedAuthorityProtocol.V1.Json.decode/2` of the raw body bytes. Not `nil`.
-      * `:nonce` — the request nonce as a string, or `nil` when the verifier does not
+      * `:nonce`: the request nonce as a string, or `nil` when the verifier does not
         require one.
-    * `key_handle` — the holder's `{module, term}` handle; calls `public_key/1` and `sign/2`.
-    * `opts` — a map or a keyword list (see "Options" in the module documentation):
-      * `:bounds` — resource limits passed unchanged to the protocol package's producer
+    * `key_handle`: the holder's `{module, term}` handle; calls `public_key/1` and `sign/2`.
+    * `opts`: a map or a keyword list (see "Options" in the module documentation):
+      * `:bounds`: resource limits passed unchanged to the protocol package's producer
         and assembler; default `%{}`, the protocol's maximums.
-      * `:issued_at` — the proof's `iat` in Unix seconds; default
+      * `:issued_at`: the proof's `iat` in Unix seconds; default
         `System.system_time(:second)`. Set it when the verifier's evaluation time is far
         from the wall clock (tests, offline flows).
-      * `:proof_id` — the proof's `jti`; default a fresh UUID v4.
+      * `:proof_id`: the proof's `jti`; default a fresh UUID v4.
 
   ## Errors
 
-    * `:invalid_report` — `report` is not a map, a required field is missing or not a
+    * `:invalid_report`: `report` is not a map, a required field is missing or not a
       string, `cast_arguments` is `nil`, the nonce is neither `nil` nor a string,
       `grant_compact` is not a contract-major-1 grant, or `opts` is invalid (see "Options"
       in the module documentation).
-    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, or `public_key/1`
+    * `:invalid_key_handle`: the handle is not a `{module, term}` pair, or `public_key/1`
       failed or returned something other than an acceptable 32-byte Ed25519 key.
-    * `:signing_failed` — `sign/2` failed, returned something other than
+    * `:signing_failed`: `sign/2` failed, returned something other than
       `{:ok, <<_::512>>}`, or returned a signature that does not verify against the
       handle's public key.
-    * `{:producer_error, :invalid}` — the protocol package refused the proof, for example
+    * `{:producer_error, :invalid}`: the protocol package refused the proof, for example
       a target URI that is not canonical HTTPS, an invocation id that is not a canonical
       UUID, or a value over the bounds.
 
@@ -391,10 +569,10 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Errors
 
-    * `:invalid_report` — as for `sign_report/3`, or the nonce is missing, empty or not a
+    * `:invalid_report`: as for `sign_report/3`, or the nonce is missing, empty or not a
       string.
-    * `:invalid_key_handle` and `:signing_failed` — as for `sign_report/3`.
-    * `{:producer_error, :invalid}` — the protocol package refused the proof: a target
+    * `:invalid_key_handle` and `:signing_failed`: as for `sign_report/3`.
+    * `{:producer_error, :invalid}`: the protocol package refused the proof: a target
       URI that is not a canonical literal-loopback HTTP URI, a nonce over the bounds or
       not valid UTF-8, or another value over the bounds.
 
@@ -483,26 +661,26 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Parameters
 
-    * `anchor_input` — a map with `:anchor_id` (string), `:chain_id` (string),
+    * `anchor_input`: a map with `:anchor_id` (string), `:chain_id` (string),
       `:sequence` (a non-negative integer) and `:chain_hash` (the raw 32-byte chain hash;
       all zeros only at sequence 0).
-    * `key_handle` — the chain key's handle; calls `key_identity/1` and `sign/2`.
-    * `opts` — a map or a keyword list (see "Options" in the module documentation):
-      * `:anchored_at` — the anchor's timestamp in Unix seconds; default
+    * `key_handle`: the chain key's handle; calls `key_identity/1` and `sign/2`.
+    * `opts`: a map or a keyword list (see "Options" in the module documentation):
+      * `:anchored_at`: the anchor's timestamp in Unix seconds; default
         `System.system_time(:second)`. It must fall inside the key's validity window at
         verification.
-      * `:bounds` — resource limits passed unchanged to the protocol package; default
+      * `:bounds`: resource limits passed unchanged to the protocol package; default
         `%{}`.
 
   ## Errors
 
-    * `:invalid_anchor` — `anchor_input` is not a map, a field is missing or of the
+    * `:invalid_anchor`: `anchor_input` is not a map, a field is missing or of the
       wrong basic type, or `opts` is invalid (see "Options" above).
-    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
+    * `:invalid_key_handle`: the handle is not a `{module, term}` pair, has no
       `key_identity/1`, or returned an empty key id or a public key that is not an
       acceptable 32-byte Ed25519 key.
-    * `:signing_failed` — as for `sign_report/3`.
-    * `{:producer_error, :invalid}` — the protocol package refused the anchor, for
+    * `:signing_failed`: as for `sign_report/3`.
+    * `{:producer_error, :invalid}`: the protocol package refused the anchor, for
       example a `chain_hash` that is not 32 bytes or an all-zero hash at a nonzero
       sequence.
 
@@ -591,17 +769,17 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Parameters
 
-    * `grant_input` — a map with `:issuer` (string), `:grant_id` (string), `:audiences`
+    * `grant_input`: a map with `:issuer` (string), `:grant_id` (string), `:audiences`
       (a non-empty list of strings), `:issued_at`, `:not_before` and `:expires_at`
       (integers, Unix seconds), `:holder_thumbprint` (the holder key's raw 32-byte
       RFC 7638 thumbprint) and `:operations` (a non-empty list of
       `BoundedAuthorityProtocol.V1.Operation` structs). The protocol package checks the
       values: identifier grammar, a coherent time window, unique operation names.
-    * `key_handle` — the issuer's handle; calls `signing_identity/1` and `sign/2`.
-    * `opts` — a map or a keyword list (see "Options" in the module documentation):
-      * `:bounds` — resource limits passed unchanged to the protocol package; default
+    * `key_handle`: the issuer's handle; calls `signing_identity/1` and `sign/2`.
+    * `opts`: a map or a keyword list (see "Options" in the module documentation):
+      * `:bounds`: resource limits passed unchanged to the protocol package; default
         `%{}`, the protocol's maximums.
-      * `:role_attestation` — `%{compact: binary(), attestor:
+      * `:role_attestation`: `%{compact: binary(), attestor:
         BoundedAuthorityProtocol.V1.HistoricalPublicKey.t(), now: integer()}`: the
         attestation compact, the trusted attestor key with its validity window, and the
         evaluation time in Unix seconds (default `System.system_time(:second)`). `:now`
@@ -613,19 +791,19 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Errors
 
-    * `:invalid_grant` — `grant_input` is not a map, a field is missing or of the wrong
+    * `:invalid_grant`: `grant_input` is not a map, a field is missing or of the wrong
       basic type (including an empty or improper `:audiences` list or an empty
       `:operations` list), or `opts` is invalid (see "Options" above).
-    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
+    * `:invalid_key_handle`: the handle is not a `{module, term}` pair, has no
       `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
       snapshot or a public key the strict Ed25519 rule refuses.
-    * `:invalid_role_attestation` — the option is malformed (including an explicit
+    * `:invalid_role_attestation`: the option is malformed (including an explicit
       `nil`; refused before any callback), the protocol package rejected the attestation, or the attested role is not
       `"issuer"`.
-    * `:signing_failed` — `sign/2` failed, returned something other than a 64-byte
+    * `:signing_failed`: `sign/2` failed, returned something other than a 64-byte
       signature, or returned a signature that does not verify against the snapshot's
       public key.
-    * `{:producer_error, :invalid}` — the protocol package refused the grant, for example
+    * `{:producer_error, :invalid}`: the protocol package refused the grant, for example
       an inverted time window or a `holder_thumbprint` that is not 32 bytes. With protocol
       1.0 (erratum 6), it also refuses a selector value that holds a float-tagged whole
       number at any depth, such as `{:equals, ["quantity"], {:float, 2.0}}` or a `one_of`
@@ -764,21 +942,21 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Parameters
 
-    * `transition_input` — a map with `:transition_id` (string), `:chain_id` (string),
+    * `transition_input`: a map with `:transition_id` (string), `:chain_id` (string),
       `:effective_at` (integer, Unix seconds), `:next_key_id` (string) and
       `:next_public_key` (the successor's raw 32-byte Ed25519 public key).
-    * `key_handle` — the current key's handle; calls `key_identity/1` and `sign/2`.
-    * `opts` — a map or a keyword list (see "Options" in the module documentation) with
+    * `key_handle`: the current key's handle; calls `key_identity/1` and `sign/2`.
+    * `opts`: a map or a keyword list (see "Options" in the module documentation) with
       `:bounds`, passed unchanged to the protocol package; default `%{}`.
 
   ## Errors
 
-    * `:invalid_transition` — `transition_input` is not a map, a field is missing or of
+    * `:invalid_transition`: `transition_input` is not a map, a field is missing or of
       the wrong basic type, `:next_public_key` is not 32 bytes, or `opts` is invalid (see
       "Options" in the module documentation).
-    * `:invalid_key_handle` — as for `sign_anchor/3`.
-    * `:signing_failed` — as for `sign_report/3`.
-    * `{:producer_error, :invalid}` — the protocol package refused the transition, for
+    * `:invalid_key_handle`: as for `sign_anchor/3`.
+    * `:signing_failed`: as for `sign_report/3`.
+    * `{:producer_error, :invalid}`: the protocol package refused the transition, for
       example a successor key equal to the current key.
 
   ## Example
@@ -853,26 +1031,26 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## Parameters
 
-    * `assertion_input` — a map with `:jti`, `:iss`, `:aud`, `:sub` and `:profile`
+    * `assertion_input`: a map with `:jti`, `:iss`, `:aud`, `:sub` and `:profile`
       (strings), `:profile_digest` and `:content_digest` (raw 32-byte SHA-256 digests;
       compute the content digest with
       `BoundedAuthorityProtocol.ContentAssertion.V1.content_digest/2`), `:gen` (the
       position in the lineage, 1 for the first), `:prev` (the previous assertion's
       digest, or 32 zero bytes when `gen` is 1), and `:iat`, `:nbf` and `:exp`
       (integers, Unix seconds).
-    * `key_handle` — the signer's handle; calls `key_identity/1` and `sign/2`.
-    * `opts` — a map or a keyword list with `:bounds`, passed unchanged to the protocol
-      package; default `%{}`. Unlike the other entry points, any other `opts` value
+    * `key_handle`: the signer's handle; calls `key_identity/1` and `sign/2`.
+    * `opts`: a map or a keyword list with `:bounds`, passed unchanged to the protocol
+      package; default `%{}`. As with every signing entry point, any other `opts` value
       (including a struct) is an error.
 
   ## Errors
 
-    * `:invalid_content_assertion` — `opts` is invalid (see "Options" in the module
+    * `:invalid_content_assertion`: `opts` is invalid (see "Options" in the module
       documentation), or `assertion_input` is not a map or has a field that is missing or of
       the wrong basic type.
-    * `:invalid_key_handle` — as for `sign_anchor/3`.
-    * `:signing_failed` — as for `sign_report/3`.
-    * `{:producer_error, :invalid}` — the protocol package refused the assertion, for
+    * `:invalid_key_handle`: as for `sign_anchor/3`.
+    * `:signing_failed`: as for `sign_report/3`.
+    * `{:producer_error, :invalid}`: the protocol package refused the assertion, for
       example a digest that is not 32 bytes, a nonzero `prev` at `gen: 1`, or an
       inverted window.
 
@@ -995,7 +1173,7 @@ defmodule BoundedAuthorityReportAdapter do
   # the resolved public key is :signing_failed, never a silent false-success.
   #
   # The assembler parameter selects BAP's compact assembler for the signing
-  # input's profile — the standard kind goes to V1.assemble_compact/3, the
+  # input's profile: the standard kind goes to V1.assemble_compact/3, the
   # local-loopback kind to the profile's assemble_compact/3. BAP enforces the
   # pairing structurally (each assembler accepts exactly its own input kinds),
   # so a mis-wired pair fails closed as {:producer_error, :invalid} rather than
@@ -1031,7 +1209,7 @@ defmodule BoundedAuthorityReportAdapter do
   # A review finding from the first release: the adapter validated only the
   # signature's 64-byte length, never that it verifies against the resolved
   # holder public key. A callback signing with the wrong key (a rotation/
-  # misconfiguration race — the handle's public_key/1 returns key A, but sign/2
+  # misconfiguration race: the handle's public_key/1 returns key A, but sign/2
   # uses key B) produced a {pub_A, sig_B} envelope that the adapter returned as
   # {:ok, envelope}, deferring the failure to check_envelope downstream. Verify
   # the signature against the public key HERE so a wrong-key sign is :signing_failed,
@@ -1078,7 +1256,7 @@ defmodule BoundedAuthorityReportAdapter do
 
   # The mixed-major fail-fast, v1 direction: a v1
   # proof pairs with a v1 grant, and BAP's proof producer only hashes
-  # grant_compact — without this gate a v2 or v3 grant would pass through
+  # grant_compact: without this gate a v2 or v3 grant would pass through
   # into an envelope no verifier accepts. The gate is the major's own
   # bounded DECODER, not the header walk: v1 and v2 grants share the EdDSA
   # header, so the major is only distinguishable in the payload's `v` claim,
@@ -1095,8 +1273,8 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   # The local-loopback report: the SAME field checks as validate_report/1 (the
-  # shared helpers carry every invariant), plus the profile's ONE divergence —
-  # the nonce is REQUIRED (nil is fine on the standard profile, which treats it
+  # shared helpers carry every invariant). The profile requires the nonce
+  # to be present (nil is fine on the standard profile, which treats it
   # as optional; the loopback profile's replay defense assumes it). Presence +
   # shape here; profile semantics + bounds stay BAP's at produce time.
   defp validate_local_loopback_report(report) when is_map(report) do
@@ -1133,7 +1311,7 @@ defmodule BoundedAuthorityReportAdapter do
     # The callback is caller-supplied; a missing module, a function-clause
     # raise inside it, or any other fault must map to the closed-atom error
     # rather than escape sign_report/3 (mirrors BAP's fixed/1 wrapper). The
-    # public key must be a 32-byte Ed25519 key — a short/malformed key fails
+    # public key must be a 32-byte Ed25519 key: a short/malformed key fails
     # HERE as :invalid_key_handle, not downstream as a producer error.
     case safe_callback(module, :public_key, [handle]) do
       {:ok, public_key} when is_binary(public_key) and byte_size(public_key) == 32 ->
@@ -1146,12 +1324,12 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp resolve_public_key(_handle), do: {:error, :invalid_key_handle}
 
-  # The anchor's key identity — the signed-header `kid` AND the 32-byte public
-  # key — resolved as ONE atomic snapshot. This is defense-in-depth at sign time:
+  # Resolve the anchor's signed-header `kid` and 32-byte public key as one
+  # atomic snapshot. This is defense in depth at sign time:
   # a single key_identity/1 call cannot split key_id from public_key across a
   # rotation race (a separate-callback design was shown to allow exactly that).
-  # The remaining surface — sign/2 signing with a key different from
-  # the snapshot's public_key — is caught by verify_signature in the shared tail.
+  # If sign/2 uses a key different from the snapshot's public_key,
+  # verify_signature in the shared tail catches the mismatch.
   # key_identity/1 is an OPTIONAL callback (@optional_callbacks); a proof-only
   # handle does not implement it, so sign_anchor on such a handle fails HERE as
   # :invalid_key_handle (the UndefinedFunctionError from apply/3 is caught by
@@ -1171,9 +1349,9 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp resolve_key_identity(_handle), do: {:error, :invalid_key_handle}
 
-  # The grant's atomic signing identity — the role (:issuer | :holder) AND the key's
-  # registry id AND its 32-byte public key — resolved as ONE snapshot, with the role
-  # gate folded into the match. This is the issuer-role gate (the grant-signing
+  # Resolve the grant's role (:issuer | :holder), registry id and 32-byte public
+  # key as one atomic signing-identity snapshot, with the role gate folded into
+  # the match. This is the issuer-role gate (the grant-signing
   # pre-commitment): ONLY a snapshot whose role is :issuer passes; a :holder snapshot,
   # a malformed snapshot, a callback failure, or a missing signing_identity/1 (the
   # UndefinedFunctionError from apply/3 caught by safe_callback) all collapse to
@@ -1181,7 +1359,7 @@ defmodule BoundedAuthorityReportAdapter do
   #
   # Resolving role + key identity in a SINGLE call (vs. separate role/1 + key_identity/1
   # callbacks) is load-bearing: a stateful handle cannot return :issuer then rotate to a
-  # holder key between role resolution and signing — the snapshot is one observation, and
+  # holder key between role resolution and signing: the snapshot is one observation, and
   # the verify_signature guard in the shared tail catches any sign/2-vs-snapshot drift.
   # (A separate-callback design was rejected in design review for the race it opened.)
   defp resolve_signing_identity({module, handle}) when is_atom(module) do
@@ -1217,7 +1395,7 @@ defmodule BoundedAuthorityReportAdapter do
     _error -> {:error, :callback_failed}
   catch
     # A production key-handle callback (HSM / key server) that times out does
-    # so via exit/1 (e.g. a GenServer.call timeout) — rescue catches exceptions
+    # so via exit/1 (e.g. a GenServer.call timeout): rescue catches exceptions
     # only, so :exit/:throw would escape sign_report/3 and crash the caller.
     # Map them to the same callback-failure shape the rescue uses. This is the
     # production path the moduledoc steers real holders toward.
@@ -1247,9 +1425,9 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  # The local-loopback profile's producer — the same fold, through the profile
+  # The local-loopback profile's producer: the same fold, through the profile
   # facade. Admission (canonical literal-loopback URI) and the profile's
-  # mandatory-nonce semantics are enforced HERE, in BAP, by delegation — this
+  # mandatory-nonce semantics are enforced HERE, in BAP, by delegation: this
   # library passes the caller's target_uri through unchanged.
   defp produce_local_loopback_signing_input(proof, bounds) do
     case LocalLoopbackHttp.proof_signing_input(proof, bounds) do
@@ -1303,7 +1481,7 @@ defmodule BoundedAuthorityReportAdapter do
   # The grant's content is validated for presence + shape HERE (clean :invalid_grant on a
   # missing/malformed field); BAP's producer validates SEMANTICS (identifier grammar, time
   # coherence, the 32-byte holder_thumbprint, operation shape) and a semantic violation
-  # surfaces as {:producer_error, :invalid}. key_id is NEVER read from grant_input — it
+  # surfaces as {:producer_error, :invalid}. key_id is NEVER read from grant_input: it
   # comes from the handle's signing_identity/1 snapshot (the _key_id param), so a caller
   # :key_id smuggled into the map is silently ignored.
   defp build_grant(grant_input, key_id) when is_map(grant_input) do
@@ -1348,7 +1526,7 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp required_grant_audiences(grant_input) do
     # An IMPROPER list (["a" | :tail]) passes is_list/1 but raises inside
-    # Enum.all?/2 — the closed-error contract requires rejecting it as data
+    # Enum.all?/2: the closed-error contract requires rejecting it as data
     # (a review finding; the same defect existed on the v1 path).
     case Map.fetch(grant_input, :audiences) do
       {:ok, audiences} when is_list(audiences) and audiences != [] ->
@@ -1384,10 +1562,10 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   # The transition's content is validated for presence + shape HERE (clean :invalid_transition
-  # on a missing/malformed field; next_public_key is pre-checked for 32 bytes — the
+  # on a missing/malformed field; next_public_key is pre-checked for 32 bytes: the
   # adapter pre-checks PUBLIC KEYS for 32 bytes, the way resolve_public_key/1 +
   # resolve_key_identity/1 do; digests like grant's holder_thumbprint defer to BAP). BAP's
-  # producer validates SEMANTICS — identifier grammar, time bounds, and distinct_fingerprints
+  # producer validates SEMANTICS: identifier grammar, time bounds, and distinct_fingerprints
   # (a self-transition where next_public_key == current_public_key surfaces here as
   # {:producer_error, :invalid}). current_{key_id, public_key} come from the handle's atomic
   # key_identity/1 snapshot (the _current_* params), so a caller :current_key_id /
@@ -1430,7 +1608,7 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   # next_public_key is a raw 32-byte Ed25519 public key (the successor). Pre-checked HERE
-  # (fail-fast :invalid_transition) rather than deferred to BAP's producer — public keys get
+  # (fail-fast :invalid_transition) rather than deferred to BAP's producer: public keys get
   # the adapter's 32-byte guard (the same rule as the key resolvers).
   defp required_transition_public_key(transition_input) do
     case Map.fetch(transition_input, :next_public_key) do
@@ -1518,7 +1696,7 @@ defmodule BoundedAuthorityReportAdapter do
     # (10). The proof's `jti` (proof_id) is gated by BAP's `valid_identifier?`
     # → `StringOrUri.valid?` (a looser URI-safe-string check, not UUID-only), so
     # a UUID is chosen by convention (DPoP `jti` is conventionally a UUID), not
-    # because BAP requires it — but the canonical UUID shape also satisfies the
+    # because BAP requires it. The canonical UUID shape also satisfies the
     # `valid_uuid?` gate that the caller's `invocation_id` must pass.
     import Bitwise
 

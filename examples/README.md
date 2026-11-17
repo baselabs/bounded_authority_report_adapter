@@ -1,12 +1,12 @@
 # Examples
 
-Self-contained, runnable demos of the adapter — **no database, no Docker, no other project
-running.** The adapter is pure crypto (it signs; it does not persist), so neither demo needs a
-backing store.
+Self-contained, runnable demos of the adapter: **no database, no Docker, no other project
+running.** Signing needs no persistent store, so neither demo needs a backing store.
+Each demo uses real cryptography with keys generated for that run.
 
-## `edge_agent/` — a runnable end-to-end app
+## `edge_agent/`: a runnable end-to-end app
 
-A minimal mix app that adds the piece the Livebook does not — **real HTTP transport** between
+A minimal mix app that adds the piece the Livebook does not: **real HTTP transport** between
 an edge signer and a consumer. An **edge agent** calls `sign_report/3` and POSTs the envelope
 via Req to a **receiver** (a Plug on Bandit) that verifies via `check_envelope/2`, binds the
 holder to the configured identity (`docs/consumer-integration.md` §8), and dedupes nonces on a
@@ -15,20 +15,20 @@ zero external services. CI-covered (`test/edge_agent_test.exs`).
 
 See [`edge_agent/README.md`](edge_agent/README.md) for how to run both sides.
 
-## `report_envelope_roundtrip.livemd` — a Livebook
+## `report_envelope_roundtrip.livemd`: a Livebook
 
 Runs every signing entry point the adapter exposes, in-process, and verifies each result with the
 public `bounded_authority_protocol` package. It plays all three roles so you can see exactly what
 the adapter does and does not do:
 
-1. **Issuer** — `sign_grant/3` signs a grant through an issuer-role handle, with and without the
+1. **Issuer**: `sign_grant/3` signs a grant through an issuer-role handle, with and without the
    role-attestation gate. Grant issuance normally belongs to the authority runtime; the adapter
    signs one only for an issuer that keeps its key behind a handle.
-2. **Holder** — `sign_report/3` signs the proof that binds the grant to one request. **This is the
-   adapter's one job.** Development listeners on literal loopback use
+2. **Holder**: `sign_report/3` signs the proof that binds the grant to one request. **This is the
+   adapter's holder-side flow.** Development listeners on literal loopback use
    `sign_local_loopback_report/3`, the byte-distinct `ba+loopback-proof` profile (also exercised
    over real HTTP by `EdgeAgent.run_local_loopback/1`).
-3. **Verifier** — the public `check_envelope/2`, `verify_grant/3` and the other verify functions
+3. **Verifier**: the public `check_envelope/2`, `verify_grant/3` and the other verify functions
    accept what the adapter signed.
 
 It also signs a boundary anchor, a key transition and a content assertion
@@ -70,3 +70,8 @@ requirement is released disagrees with `mix.exs` and the CHANGELOG. It runs in `
   adapter's.
 - **Not an issuer runtime.** The adapter can sign a grant for an issuer's key handle, but issuing,
   revoking and keeping track of grants belongs to the authority runtime.
+
+The source walkthrough test runs the notebook against this checkout. To check its public
+Hex install cell and every pinned output outside a Mix project, run
+`elixir scripts/check_livebook.exs` from the repository root. The runner removes its
+temporary install cache when it finishes.

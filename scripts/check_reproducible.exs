@@ -3,13 +3,13 @@
 #
 # Builds the unpublished candidate archive TWICE, each in a fresh COPY of the
 # source tree under a temp dir, and asserts the two archives are byte-identical
-# (SHA-256 equal). Two independently-built archives — never a shared-cache
+# (SHA-256 equal). Two independently-built archives: never a shared-cache
 # self-comparison. Cache isolation: each copy gets its own deps.get +
 # hex.build; the developer's _build/deps are never mutated (copies removed in
 # after).
 #
 # Honest scope: hex.build packages SOURCE files (the files: list), not
-# compiled BEAMs, and Hex normalizes tar mtimes to epoch — the gate's value is
+# compiled BEAMs, and Hex normalizes tar mtimes to epoch: the gate's value is
 # REGRESSION DETECTION: it catches the moment a change introduces a
 # non-deterministic packaged input (a generated file embedding a path or
 # timestamp, a dep writing into a packaged dir, a per-build metadata field).
@@ -104,7 +104,7 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
     end
   end
 
-  # What a reproducible build starts from: source only — no build artifacts,
+  # What a reproducible build starts from: source only: no build artifacts,
   # fetched deps, tool/state dirs, or generated output. `.env` and friends are
   # CREDENTIALS (never copied into temp trees); `examples/` is a separate mix
   # project the root archive build does not touch (and its nested deps/_build

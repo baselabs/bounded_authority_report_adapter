@@ -1,6 +1,19 @@
 # Changelog
 
-## [1.0.0] — 2026-11-10
+## [Unreleased]
+
+### Documentation
+
+- Correct the released 1.0 stability policy and dependency graph throughout the guides.
+- Describe every public signing result and the thumbprint helper's distinct binary result.
+- Document all public types on both suites, including field units and representation widths.
+- Distinguish pure verification facts from the verifying service's authorization policy.
+- Keep tracked public prose focused on the technical contract and use plain US English.
+- Check type documentation, result contracts and public-text hygiene automatically.
+- Compile custodian-specific recipe fragments without substituting local signers for remote
+  services; run the P-256 selector example with an explicit development-only key handle.
+
+## [1.0.0]: 2026-11-10
 
 The 1.0 stability contract takes effect (see the upgrading guide).
 
@@ -16,11 +29,10 @@ The 1.0 stability contract takes effect (see the upgrading guide).
   and `shape_report/3` (report keys and fatal/advisory classification, not message text),
   and the naming conventions the 1.0 surface keeps.
 
-- New recipes, each run by the test suite with its `#=>` values checked: an ES256 handle
-  over a KMS or HSM that returns DER (through `BoundedAuthorityProtocol.Es256.der_to_raw/1`
-  and `normalize_low_s/1`), grants with `equals`, `one_of` and (contract-major 3) range
-  selectors, an attested issuer role, key rotation with `sign_key_transition/3`, and
-  error handling with a telemetry custody alarm.
+- New recipes cover an ES256 custodian handle returning DER, grants with `equals`,
+  `one_of` and major-3 range selectors, attested issuer roles, key rotation and a telemetry
+  custody alarm. Custodian handles require application-provided clients; the other examples
+  run locally with development keys and checked `#=>` values.
 - Consumer integration §4's verifier binds a P-256 identity too: it selects the
   contract-major from its configuration and the RFC 7638 preimage from the key type. The
   test suite runs it on contract-major-3 envelopes.
@@ -41,7 +53,7 @@ The 1.0 stability contract takes effect (see the upgrading guide).
   longer documented: they are internal from 1.0. Their only callers are the signing entry
   points. The event names, measurements, closed metadata, `Telemetry.objects/0` and
   `Telemetry.classes/0` are the contract. If you called an emitter, attach a handler to the
-  events instead. Hiding them is surface minimisation, not a security boundary: any code
+  events instead. Hiding them is surface minimization, not a security boundary: any code
   can call `:telemetry.execute/3`.
 - The doctor's findings no longer cite internal decision records; their classification is
   unchanged.
@@ -62,20 +74,18 @@ The 1.0 stability contract takes effect (see the upgrading guide).
   client, because Hex writes its own version into the archive metadata and a different client
   builds different archive bytes. The release runbook builds and publishes on that client.
 
-## [0.12.0] — 2026-10-31
+## [0.12.0]: 2026-10-31
 
 ### Changed
 
-- The public protocol dependency moves from `~> 0.8.0` to `~> 0.9.1`, excluding ADRs and
+- The public protocol dependency moves from `~> 0.8.0` to `~> 0.9.1`,
   adopting the producer-canonicality refusals introduced in 0.9.0. Signing APIs and wire
   formats are unchanged; consumers constraining the protocol to 0.8.x must update that constraint.
-- Architecture decision records remain local and ignored. Public packages and documentation
-  exclude their files and links.
 - The signer Livebook installs from public Hex and ships in both the package and HexDocs, with
   a rendered role diagram and a direct documentation entry.
 - The content-assertion tests supervise their real-key handle process, avoiding a teardown race.
 
-## [0.11.0] — 2026-10-29
+## [0.11.0]: 2026-10-29
 
 A minor release: options that were silently ignored now apply or are refused.
 
@@ -198,7 +208,7 @@ A minor release: options that were silently ignored now apply or are refused.
   `:eexist`. A new test requires every script or test that runs such a git command to set
   both values. Test only; no API, wire, or signing change.
 - Dev-dependency advisory sweep: `hex_core` 0.20.0 → 0.20.1 in the library lock
-  (EEF-CVE-2026-96596, MEDIUM — `erl_tar:extract/2` loops forever on a GNU sparse member with
+  (EEF-CVE-2026-96596, MEDIUM: `erl_tar:extract/2` loops forever on a GNU sparse member with
   a trailing hole; dev/test-only through the `sbom` tool under the existing `~> 0.20.0`
   override, not shipped; the example app's lock carries no hex_core). `mix hex.audit` and
   `mix deps.audit` both clean.
@@ -206,7 +216,7 @@ A minor release: options that were silently ignored now apply or are refused.
   `spitfire` 0.4.3 transitives, in the library lock (the optional install-task edge; not
   shipped). The currency meter found the drift before the release gate did.
 - The example app's lock moves `bandit` 1.12.5 → 1.14.1 (EEF-CVE-2026-108529, -110314,
-  -110499, -111101, -111103, -113436, -114213 and -115269 — HTTP/2 and WebSocket
+  -110499, -111101, -111103, -113436, -114213 and -115269: HTTP/2 and WebSocket
   request-amplification and limit-bypass fixes, several HIGH), with `thousand_island`
   1.6.0 and `plug_crypto` 2.2.1 (EEF-CVE-2026-105963). Example-only, within the `~> 1.0`
   pin; not shipped with the library.
@@ -267,7 +277,7 @@ A minor release: options that were silently ignored now apply or are refused.
 - The doctor tests pin its expected thumbprint to a hand-built RFC 7638 digest for both suites,
   and an Ed25519 handle with a wrong-preimage thumbprint must trip the match fatal.
 
-## [0.10.0] — 2026-10-13
+## [0.10.0]: 2026-10-13
 
 Strict Ed25519 key acceptance and signature self-check, over BAP 0.8.0. Security advisory:
 [GHSA-q9hh-mwwh-6cg6](https://github.com/baselabs/bounded_authority_report_adapter/security/advisories/GHSA-q9hh-mwwh-6cg6).
@@ -292,19 +302,10 @@ Strict Ed25519 key acceptance and signature self-check, over BAP 0.8.0. Security
   both locks; locked checksum
   `b5598cc5ba25f6ff4a2b55dab619bc2419b1d90cce9be3b1d4330d55a6da0bdb`). BAP 0.8.0 adds the
   public `BoundedAuthorityProtocol.Ed25519` module this release calls. No new error atom: the
-  existing `:invalid_key_handle` and `:signing_failed` carry the new refusals. Span evidence
-  from the protocol repository over `v0.7.0..v0.8.0`:
-  - full span: 288 files changed, 12,713 insertions, 1,125 deletions (docs, ADRs, CI,
-    the strict-Ed25519 corpus, scripts, the cross-language SDKs, tests);
-  - `lib/`: 15 files, 668 insertions, 46 deletions — the new public
-    `BoundedAuthorityProtocol.Ed25519` module (additive), the strict rule wired into every
-    Ed25519 verify site and key-acceptance point (verdicts change only from accept to reject,
-    on weak keys and points), and the strict-corpus conformance loader and runner (additive);
-    `mix.exs` changes no runtime dependency;
-  - corpus sweep: the new `strict-ed25519` corpus is additive; the consumed vector
-    `v1/vectors/grant-holder-proof.json` is unchanged.
+  existing `:invalid_key_handle` and `:signing_failed` carry the new refusals. The protocol's
+  strict-Ed25519 corpus is additive; the `v1/vectors/grant-holder-proof.json` vector is unchanged.
 
-## [0.9.1] — 2026-09-28
+## [0.9.1]: 2026-09-28
 
 Documentation-truth release: the 0.9.0 package shipped the pre-rewrite README.
 The library-user README rewrite landed on master minutes after the 0.9.0
@@ -335,7 +336,7 @@ This release's own checksum is read back after publish and added by the
 docs-currency commit that follows it. No code, API, or dependency changes; the
 protocol pin stays `== 0.7.0`.
 
-## [0.9.0] — 2026-09-28
+## [0.9.0]: 2026-09-28
 
 The content-assertion release: `sign_content_assertion/3` over BAP 0.7.0.
 
@@ -355,26 +356,17 @@ The content-assertion release: `sign_content_assertion/3` over BAP 0.7.0.
 
 - The exact protocol pin moves `== 0.6.0` → `== 0.7.0` (requirement, both wall
   attributes, both locks; locked checksum
-  `777c606660727781ba03b742e7a7785f2655814048fe365f415b3a0c7253e0a8`). Span evidence from the protocol repository over `v0.6.0..v0.7.0`:
-  - full span: 101 files changed, 9,287 insertions, 238 deletions (docs, ADRs, CI,
-    the content-assertion corpus, scripts, the cross-language SDKs, tests);
-  - `lib/`: 10 files, 627 insertions, 13 deletions — the new
-    `content_assertion/v1` tree (six files, additive), the `content_bytes` bound in
-    `v1/bounds.ex` (additive; `%Bounds{}` enforces the key), the `:content_assertion`
-    signing-input kind in `v1/signing_input.ex` and its header admission in
-    `v1/compact_jws.ex` (additive), and the 0.6.2 role-attestation codec rewrite
-    (compiled-purity repair, no verdict change); `mix.exs` changes no dependency;
-  - corpus sweep: the nine new `attestation-profiles/content-assertion/v1` files and
-    BAP's corpus test; the consumed vector `v1/vectors/grant-holder-proof.json` is
-    unchanged, and the conformance round-trip is green at the new pin.
+  `777c606660727781ba03b742e7a7785f2655814048fe365f415b3a0c7253e0a8`). The protocol adds
+  the content-assertion producers, profile and conformance corpus without changing the
+  existing `v1/vectors/grant-holder-proof.json` vector.
 - CI runs on Linux only; macOS and Windows jobs are removed. Developer portability is
   unchanged. The CI-parity test pins the Linux lanes and rejects macOS and Windows
   runners.
 
-## [0.8.2] — 2026-09-24
+## [0.8.2]: 2026-09-24
 
 Documentation-truth patch: the 0.8.1 package SHIPPED README.md still showing the
-`~> 0.6.0` install pin — three minors stale, the same defect class 0.8.1 was cut to
+`~> 0.6.0` install pin: three minors stale, the same defect class 0.8.1 was cut to
 fix for getting-started, missed because the docs-currency tripwire gated only
 getting-started (the tripwire now covers the README's install block too). A fresh
 consumer following the shipped README resolved 0.6.x. Beyond the pin, this patch
@@ -391,10 +383,10 @@ registry checksums were re-verified against the published tarballs. One
 moduledoc article fix in lib/ (documentation-only). No code, API, or
 dependency-requirement changes.
 
-## [0.8.1] — 2026-09-23
+## [0.8.1]: 2026-09-23
 
 Documentation-truth patch: the 0.8.0 package SHIPPED docs/getting-started.md still
-showing the `~> 0.7.0` install pin (the version-literal sweep for 0.8.0 missed it —
+showing the `~> 0.7.0` install pin (the version-literal sweep for 0.8.0 missed it.
 its grep died on a non-matching glob and reported nothing; the tag's supply-chain
 evidence lane caught the drift at `docs_currency_test`'s getting-started pin check,
 and the packaged copy was confirmed stale by unpacking the published tarball). A
@@ -402,23 +394,23 @@ fresh consumer following the shipped getting-started would have resolved 0.7.0.
 No code changes: the pin reads `~> 0.8.0`, the gate battery is green on the patched
 tree, and this patch re-runs the release-package evidence lane on a fresh tag.
 
-## [0.8.0] — 2026-09-23
+## [0.8.0]: 2026-09-23
 
 The role-attestation release: the first adapter release whose
 `sign_grant/3` can gate on a role binding signed by the authority, over BAP 0.6.0. The
-gate is optional and additive — absent `:role_attestation` the declared-role gate and
+gate is optional and additive: absent `:role_attestation` the declared-role gate and
 every existing verdict are unchanged. V3's
 `sign_grant/3` fails closed on the option (the profile is Ed25519-bound at schema 1).
 
-### Added — the role-attestation gate on `sign_grant/3` (BAP 0.6.0)
+### Added: the role-attestation gate on `sign_grant/3` (BAP 0.6.0)
 
 - `sign_grant/3` gains the optional `:role_attestation` option: when supplied with a
   `bap-role-attestation/1` compact signed by the authority and the caller-trusted attestor
   context (a
   `BoundedAuthorityProtocol.V1.HistoricalPublicKey` trust-root), the gate calls
   `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` with the expected
-  subject binding taken from the handle's atomic `signing_identity/1` snapshot — never
-  caller input — and requires the attested role to be `"issuer"`. The gate fires before
+  subject binding taken from the handle's atomic `signing_identity/1` snapshot rather
+  than caller input. It requires the attested role to be `"issuer"`. The gate fires before
   `sign/2` and before any producer call; any failure (malformed option, attestor signature,
   subject binding, self-attestation, window containment, now-window, non-issuer role) is the
   single closed `{:error, :invalid_role_attestation}`. Absent the option, the
@@ -427,27 +419,27 @@ every existing verdict are unchanged. V3's
 - The BAP pin moves `== 0.5.1` -> `== 0.6.0` (the role-attestation release) in the one-commit
   discipline: the mix.exs requirement, both wall attributes, and both locks. The full
   0.5.1..0.6.0 span, enumerated and classified (reviewer-verified against the two Hex
-  packages): `lib/` — the new `role_attestation/` tree (the feature this release consumes),
+  packages): `lib/`: the new `role_attestation/` tree (the feature this release consumes),
   the labeled `compact_jws`/`signing_input` kind touches, and the v1/v2
   wrong-width-signature closed-error-shape fix (error shape only, verdicts unchanged);
-  `priv/conformance/attestation-profiles/role-attestation/v1/` — the certified 40-case
+  `priv/conformance/attestation-profiles/role-attestation/v1/`: the certified 40-case
   profile corpus (executed through the dependency by `RoleAttestationCorpusTest`);
-  `spec/` + `docs/` — the profile specification and the REQ-RA1 requirement map.
+  `spec/` + `docs/`: the profile specification and the REQ-RA1 requirement map.
   The adapter adopts this release ahead of the authority runtime, superseding the previous alignment policy.
 
-## [0.7.0] — 2026-09-22
+## [0.7.0]: 2026-09-22
 
-### Added — the ES256 signing surface
+### Added: the ES256 signing surface
 
 - `BoundedAuthorityReportAdapter.V3`: the contract-major-3 sibling of the
-  major-1 surface — `sign_report/3`, `sign_grant/3`, `sign_anchor/3`, and
+  major-1 surface: `sign_report/3`, `sign_grant/3`, `sign_anchor/3`, and
   `sign_key_transition/3` over BAP's `BAP3-ES256-SHA256` suite (BAP 0.5.1,
   the ES256 contract-major-3 specification: EC P-256 keys, RFC 7518 §3.4 raw `r || s` signatures,
   `ES256` headers, `BAP3-*` separators). Major selection is the module name.
 - The key-type discriminator: each major's resolvers accept exactly their
-  suite's key shape — 32-byte Ed25519 on the major-1 entry points, the
+  suite's key shape: 32-byte Ed25519 on the major-1 entry points, the
   65-byte on-curve uncompressed-SEC1 P-256 point on `V3` (validated through
-  the protocol package's certified arithmetic) — and reject the other
+  the protocol package's certified arithmetic), and reject the other
   direction with `:invalid_key_handle` before `sign/2` is reached.
 - Producer-owned low-S normalization in the `V3` tail, with the order
   pinned (raw scalar range check before the conditional subtraction): a
@@ -467,7 +459,7 @@ every existing verdict are unchanged. V3's
   loader and runner, with each corpus's index SHA-256 pinned independently
   instead of checking only one vector.
 
-### Changed — dependencies and one deliberate major-1 tightening
+### Changed: dependencies and one deliberate major-1 tightening
 
 - The protocol pin moves `== 0.4.1` → `== 0.5.1` (release-span
   evidence in the bump commit; the ES256 activation is deliberate
@@ -481,11 +473,11 @@ every existing verdict are unchanged. V3's
   suite captured before the change). See `docs/upgrading.md`.
 
 
-## [0.6.3] — 2026-09-17
+## [0.6.3]: 2026-09-17
 
 ### Dependencies
 
-- The protocol pin moves to `== 0.4.1` (the 2026-09-17 protocol release — a
+- The protocol pin moves to `== 0.4.1` (the 2026-09-17 protocol release: a
   wire-identical tooling/docs patch). Root and edge-agent
   locks follow; the dependency-direction wall and upgrading guide carry the new
   version. Lock moved to the resolvable latest: spitfire 0.4.2 (a transitive of sourceror; 0.4.2
@@ -495,21 +487,21 @@ every existing verdict are unchanged. V3's
 ### Documentation
 
 - README: the protocol-package pointers now carry both the hex.pm package and its GitHub
-  repository, and state the one-directional dependency — this adapter depends on the protocol
+  repository, and state the one-directional dependency: this adapter depends on the protocol
   package (never the reverse), and the protocol package's README describes this adapter as its
   holder-side companion.
 
-## [0.6.2] — 2026-09-17
+## [0.6.2]: 2026-09-17
 
-### Added — Windows CI lane + cross-platform developer surface (owner standard, 2026-09-16)
+### Added: Windows CI lane and cross-platform developer surface
 
 - The CI matrix gains a `windows-latest` lane on the pinned versions (Elixir 1.20.2 /
   OTP 29.0.3) in both jobs, proving clone → build → test holds on Windows (the parity test pins the OS dimension with its
-  existing mutation proofs). The library itself gains no platform-specific code —
+  existing mutation proofs). The library itself gains no platform-specific code.
   nothing about the shipped package changes.
 - The first Windows run red exactly where the cross-platform rule predicts, so the
   developer surface is ported, not just the lane: `.gitattributes` (`* text=auto
-  eol=lf` — a CRLF Windows checkout failed `mix format --check-formatted`); the
+  eol=lf`: a CRLF Windows checkout failed `mix format --check-formatted`); the
   currency gate moves from a bash script to `scripts/check_deps_currency.exs` (same
   caller-cwd contract and rendered-table classification); the `mix ci` alias drops
   its POSIX `env(1)` re-execs for an env-guard first step (`scripts/ci_env_guard.exs`,
@@ -521,13 +513,13 @@ every existing verdict are unchanged. V3's
   (now `:memory` + `File.write!`), `Path.wildcard`'s `:filelib` underpinnings split
   only on `/` so a backslashed temp base matched nothing (the census is now a
   recursive `File.ls!` walk), and `File.rm_rf!` hit a delete race on still-open
-  handles (cleanup now retries and warns — an ephemeral temp dir never reds a
-  verdict). `DriftProbeTest` skips on Windows via a compile-time `@moduletag` —
+  handles (cleanup now retries and warns: an ephemeral temp dir never reds a
+  verdict). `DriftProbeTest` skips on Windows via a compile-time `@moduletag`.
   its stub harness intercepts git/curl through POSIX shebang exec, which Git Bash
   bypasses (the probe itself runs on Windows); the exclusion is named in the
   workflow's gate-job comment, never silent.
 
-### Changed — documentation currency
+### Changed: documentation currency
 
 - Docs sweep for this release: `getting-started`'s install floor moves `~> 0.5` →
   `~> 0.6.0` (matching the README, which it had drifted behind); `strategy.md` drops
@@ -536,22 +528,22 @@ every existing verdict are unchanged. V3's
   Livebook was swept for version claims (none present) and its setup comment already
   corrected in 0.6.1 (BAP resolves from public hex.pm).
 
-## [0.6.1] — 2026-09-16
+## [0.6.1]: 2026-09-16
 
-### Changed — repository toolchain hygiene (no library-code or runtime-dep change)
+### Changed: repository toolchain hygiene (no library-code or runtime-dep change)
 
 - The repository now enforces its own toolchain: `config/config.exs` in both
   mix projects refuses to build on an Erlang/OTP major outside the supported set {27–29}
-  at config load — before compilation and before dependency resolution. The set is
+  at config load: before compilation and before dependency resolution. The set is
   probe-discovered, not hand-picked: OTP 25/26 have official images but are excluded
   because `bounded_authority_protocol` 0.4.0's codecs decode through `:json`, which
   enters stdlib in OTP 27 (probe-proven: the test battery fails compile on both, and
   `code:ensure_loaded(json)` is `{error,nofile}` there). The assert is NOT part of the
   published package (the `files:` allowlist excludes `config/`; the package census gate
-  proves it) — consumers are unaffected. The CI matrix's three lanes (1.18/27, 1.19/28,
+  proves it): consumers are unaffected. The CI matrix's three lanes (1.18/27, 1.19/28,
   1.20/29) are now lockstep-bound to the enforced set: mix range, config set,
   `.tool-versions`, and lanes move in ONE commit.
-- Dependency-currency gate: `scripts/check-deps-currency.sh` — caller-cwd,
+- Dependency-currency gate: `scripts/check-deps-currency.sh`: caller-cwd,
   classifies the RENDERED `mix hex.outdated` tables (direct + `--all`; whitespace-anchored
   status matches), fails on resolvable drift and on an unrendered (unverified) state,
   reports resolver-rejected pins with their requirement chains. Runs in both CI jobs
@@ -562,47 +554,39 @@ every existing verdict are unchanged. V3's
   caught it on its first battery run and blocked the release until resolved); example
   app `req` 0.7.2 → 0.7.4 (the example's lock had drifted behind the library's).
   `mix hex.audit` / `mix deps.audit` clean on both projects.
-- Docs re-trued to the enforced-set story (README, getting-started, upgrading — which
+- Docs re-trued to the enforced-set story (README, getting-started, upgrading: which
   also gains the missing 0.6.0 section and drops a stale Unreleased block that
   duplicated shipped 0.3.0 content); the Livebook setup comment's claim that BAP is
   fetched from a "private git remote" is corrected (it resolves from public hex.pm);
   the notebook's cells were executed end-to-end (8 cells, all pinned verdicts).
-- The retired local-harness artifact tree — still tracked at tip in this
-  repository — is removed from the working tree and from the entire git history
-  (owner-executed rewrite, 2026-09-14; the surviving content differs from pre-rewrite tips by
-  exactly those five paths). Live documentation references to the tree are neutralized.
 
-All notable changes to this project are documented here. The format is based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0, `0.x` minor bumps may carry
-breaking changes (SemVer §4).
-
-## [0.6.0] — 2026-09-14
+## [0.6.0]: 2026-09-14
 
 ### Changed
 
 - Track the protocol's 0.4.0 release: the `bounded_authority_protocol` pin moves `== 0.3.0` →
   `== 0.4.0` together with the dependency-wall attributes and the lock (one deliberate commit,
-  as the wall's gate demands). 0.4.0 is additive — the v2 contract-major lands beside the
+  as the wall's gate demands). 0.4.0 is additive: the v2 contract-major lands beside the
   byte-frozen v1 profile; the adapter consumes v1 producers and the local-loopback profile,
-  both unchanged — so this is a dependency-track release with zero adapter behavior change:
+  both unchanged. This release updates the dependency without changing adapter behavior:
   the full battery (coverage, dialyzer, package census, two-build reproducibility, the
   edge-agent example) runs green against the resolved 0.4.0.
 - Dev-dependency advisory sweep: `mint` 1.9.3 → 1.10.0 (EEF-CVE-2026-82728 HIGH,
-  EEF-CVE-2026-82729 MEDIUM — dev-only req/finch path, not shipped) and `igniter` 0.8.3 →
+  EEF-CVE-2026-82729 MEDIUM: dev-only req/finch path, not shipped) and `igniter` 0.8.3 →
   0.8.4 (EEF-CVE-2026-82584 LOW). `mix hex.audit` and `mix deps.audit` both clean.
 
-## [0.5.0] — 2026-08-31
+## [0.5.0]: 2026-08-31
 
-### Added — explicit local-loopback application-proof signer
+### Added: explicit local-loopback application-proof signer
 
-- Add `sign_local_loopback_report/3` — the holder-side signer for BAP's
+- Add `sign_local_loopback_report/3`: the holder-side signer for BAP's
   byte-distinct `bap-application-proof/local-loopback-http/1` profile
   (`typ: "ba+loopback-proof"`, the local-loopback profile introduced in BAP 0.3.0). Same report shape,
   key-handle callbacks, `%{grant, proof}` envelope, and closed error set as
   `sign_report/3`; two profile divergences: the nonce is required (non-empty
   binary), and only canonical literal-loopback HTTP targets
   (`http://127.0.0.1[:port]/path`, `http://[::1][:port]/path`) sign. Admission
-  is delegated to BAP's local-profile producer — this library adds no URI logic
+  is delegated to BAP's local-profile producer: this library adds no URI logic
   and never rewrites a caller-supplied target; `localhost`, other `127/8`
   spellings, integer/hex/octal IPv4, mapped/expanded IPv6, userinfo, trailing
   dots, percent-encoded hosts, uppercase schemes, explicit `:80`,
@@ -621,7 +605,7 @@ breaking changes (SemVer §4).
 - Select `bounded_authority_protocol == 0.3.0` exactly (from `== 0.2.0`).
   Root/example locks and the dependency wall move together in one commit. The
   span is `lib/`-non-empty (the profile surface), so the bump rides an
-  explicit supersession of the former alignment default —
+  explicit supersession of the former alignment default.
   with re-alignment expected at the authority runtime's next dependency pass.
 - `sign_report/3` and all standard `dpop+jwt` behavior are unchanged; the
   shared signing tail is parameterized by the BAP assembler (standard vs
@@ -647,7 +631,7 @@ breaking changes (SemVer §4).
   consumer smoke, two-build reproducibility, and the supply-chain workflow on
   the tag.
 
-## [0.4.0] — 2026-08-27
+## [0.4.0]: 2026-08-27
 
 ### Changed
 
@@ -678,15 +662,15 @@ breaking changes (SemVer §4).
   run the full library/example, static-analysis, dependency-audit, package,
   reproducibility, installation/doctor, and supply-chain batteries.
 
-## [0.3.0] — 2026-08-26
+## [0.3.0]: 2026-08-26
 
-Pre-1.0 feature release. The 1.0 cut is deliberately deferred until the release sees
+This historical pre-1.0 feature release preceded the stable contract. At the time it required
 real consumer use and the surface settles;
 the stability contract in [upgrading.md](docs/upgrading.md) stands as the
 PROPOSED freeze that 1.0 will publish, not an operative one. Everything the
 contract enumerates is in this release and pinned by the doc-currency tripwire:
-the four signing functions, the closed error sets, the key-handle behaviour, the
-value-free telemetry surface, the dependency posture — plus the gate battery,
+the four signing functions, the closed error sets, the key-handle behavior, the
+value-free telemetry surface, the dependency posture: plus the gate battery,
 the package-boundary and reproducibility gates, the CI matrix, the guide set,
 the Igniter installer, the doctor preflight, and the supply-chain workflow.
 
@@ -704,7 +688,7 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
 
 - Supply-chain parity: a tag-push supply-chain workflow (exact archive built through
   the full gate battery, SHA256SUMS, SLSA provenance + CycloneDX SBOM attestations via
-  actions/attest, in the SLSA build/attest split — the build job holds NO signing
+  actions/attest, in the SLSA build/attest split: the build job holds NO signing
   permissions (it runs third-party code); the attest job is minimal-permission and
   runs no project code; artifact names derived from
   mix.exs @version, never hardcoded) and the release-candidate reproducibility gate
@@ -715,7 +699,7 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   consumer verification procedure (SHA256SUMS, gh attestation verify, hex.pm
   cross-check).
 - `mix bounded_authority_report_adapter.doctor --handle MyApp.HolderKey [--ref term]
-  [--live]` — the handle-contract preflight (read/probe only, no side effects):
+  [--live]`: the handle-contract preflight (read/probe only, no side effects):
   FATAL on an unloaded module, a missing required callback (`sign/2`,
   `public_key/1`, `thumbprint/1`), or a `public_key/1` that does not return a
   32-byte key for the ref; ADVISORY on the operation-blocking optional callbacks
@@ -727,8 +711,8 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   section in getting-started (the UUID grammar gate and the
   fails-far-from-the-cause trap).
 - Igniter installer: `mix bounded_authority_report_adapter.install --module MyApp.HolderKey`
-  scaffolds a starter key-handle (all five callbacks present so the behaviour compiles
-  clean; every body raises until you wire your custody store — nothing key-shaped is
+  scaffolds a starter key-handle (all five callbacks present so the behavior compiles
+  clean; every body raises until you wire your custody store: nothing key-shaped is
   ever uncommented FOR you), imports the dep into the consumer's `.formatter.exs`, and
   carries the which-callback-matters-for-which-operation contract as comments.
   `:igniter` (~> 0.8) is an OPTIONAL dependency (unscoped, so consumer builds order it
@@ -740,9 +724,9 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   policy pointer), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) (Contributor Covenant v2.1,
   the canonical text with the reporting contact substituted),
   [docs/upgrading.md](docs/upgrading.md) (per-version notes newest-first + the **1.0
-  stability contract**: the public surface enumerated — the four signing functions and
-  their return shapes, the four closed error sets, the key-handle behaviour, the
-  telemetry surface, the dependency posture — with reserved break-rights and the
+  stability contract**: the public surface enumerated: the four signing functions and
+  their return shapes, the four closed error sets, the key-handle behavior, the
+  telemetry surface, the dependency posture: with reserved break-rights and the
   frozen-wire-formats statement), and an enriched
   [SECURITY.md](SECURITY.md) (security invariants restated from the charter for
   reporting, a report-content checklist, acknowledgment ≤7 days + weekly status as a
@@ -753,27 +737,27 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   (with the timeout-to-safe_callback exit-catch posture), a KMS handle (why
   `key_identity/1` must be ONE atomic version snapshot), and a condensed Plug consumer;
   plus the porting note for non-Elixir holders (the spec's signing-input and compact
-  sections by durable identity, the conformance corpus as the oracle — closes the
+  sections by durable identity, the conformance corpus as the oracle: closes the
   "signing beyond Elixir" residual as documentation, not a second-language SDK). The
   security doc's named misuses each state the consequence: caller-supplied key ids,
   skipped identity binding, no nonce ledger, trusting the declared issuer role as role
   separation, value-carrying telemetry, and shipping the test-support handle.
 - Doc-currency tripwires (`test/docs_currency_test.exs`) + the regression-pinned
   Livebook: the round-trip notebook now commits its expected cell outputs
-  (`persist_outputs`; verdicts and counts pinned — volatile bytes like thumbprints
+  (`persist_outputs`; verdicts and counts pinned: volatile bytes like thumbprints
   and sizes deliberately excluded and annotated). The tripwire suite diffs
   docs/errors.md's atoms against the lib's error `@type`s both directions (generic
-  scans — a future atom the docs don't cover reds), resolves every backticked
-  `fun/arity` in usage-rules.md against the adapter's exports and behaviour callbacks
+  scans: a future atom the docs don't cover reds), resolves every backticked
+  `fun/arity` in usage-rules.md against the adapter's exports and behavior callbacks
   (arity-exact), checks the README Documentation index against the ex_doc extras both
   directions, and pins the getting-started dep requirement to the current version.
   Mutation-proven: a deleted atom row, a renamed function, a novel lib atom, a
   callback-arity drift, and an index-only link each red the suite. On landing, the
   identifier pass surfaced a doc inconsistency (usage-rules said
-  `V1.Json.decode/1`; the shipped call shape is /2) — fixed in both guides.
+  `V1.Json.decode/1`; the shipped call shape is /2): fixed in both guides.
 - Core DX guides, shipped in the package and indexed from the README:
   [usage-rules.md](usage-rules.md) (12 flat rules, exact identifiers, reasons folded
-  in — the rule that the issuer-role gate only rejects declarations leads),
+  in: the rule that the issuer-role gate only rejects declarations leads),
   [docs/errors.md](docs/errors.md)
   (all four closed-atom error sets as atom → meaning → what to check → recovery, authored
   to be mechanically checkable against the `@type`s), and
@@ -783,9 +767,9 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   surface (`[:bounded_authority_report_adapter, :sign, :start|:stop]`) with monotonic
   duration and atoms-only metadata (`object` in `[:report, :anchor, :grant,
   :key_transition]`; `result_class` in `[:ok, :invalid_input, :invalid_key_handle,
-  :signing_failed, :producer_error]` — never key ids, message bytes, report content, or
+  :signing_failed, :producer_error]`: never key ids, message bytes, report content, or
   error values). The emitters are shape-validated (off-shape emissions are refused with
-  `{:error, :telemetry_invalid}` instead of emitted — the mechanical value-free
+  `{:error, :telemetry_invalid}` instead of emitted: the mechanical value-free
   guarantee, tripwire-proven by planting a key id into the metadata and watching the
   stop event vanish), telemetry never alters a signer's return, and a raise inside the
   signer still propagates. `docs/telemetry.md` documents the event/class tables, the
@@ -794,28 +778,28 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   as the first runtime dependency besides the protocol package itself.
 - Library gate battery, parity-pinned between `mix ci` and the CI workflow's gate job:
   a coverage floor (`mix test --cover`, threshold pinned one display-hundredth under the
-  measured 76.79% — Mix compares the raw ratio, so 76.78 is the tightest flake-free pin), dialyzer
+  measured 76.79%: Mix compares the raw ratio, so 76.78 is the tightest flake-free pin), dialyzer
   (PLT + analysis under `:test` so `test/support/` is analyzed), doc warnings
   (`mix docs --warnings-as-errors`), and the library's own dependency audits
   (`mix hex.audit` + `mix deps.audit` via mix_audit, both dev/test-only). Each gate is
   mutation-proven red-capable, and the CI advisory parity test now pins the full battery
-  step order in both orchestration surfaces — dropping any one battery step reds parity.
+  step order in both orchestration surfaces: dropping any one battery step reds parity.
 - CI compatibility matrix: both workflow jobs now run a three-cell Elixir/OTP matrix
-  (1.18.4/27.3.4.14, 1.19.5/28.5.0.3, 1.20.2/29.0.3 — the protocol sibling's proven
+  (1.18.4/27.3.4.14, 1.19.5/28.5.0.3, 1.20.2/29.0.3: the protocol sibling's proven
   lanes, `fail-fast: false`), with every cell running the identical battery. `mix ci`
   stays pinned to the local asdf lane and is documented as such in the workflow. The
   parity test pins the exact cells per job and that setup-beam consumes the matrix
-  variables — a dropped lane reds (a lane that never runs looks green by absence).
+  variables: a dropped lane reds (a lane that never runs looks green by absence).
   Validated with actionlint only (Actions billing-blocked; the limitation is stated in
   the commit). The dead git-pin-era "configure git for private deps" steps were already
   removed with the gate battery.
-- `scripts/check_package.exs` — the shipped-artifact gate (pattern: the protocol sibling's
+- `scripts/check_package.exs`: the shipped-artifact gate (pattern: the protocol sibling's
   package check, adapted): builds the exact Hex archive, unpacks it, asserts the payload
   census against the expected file set exactly in BOTH directions (a stale `files:`
   allowlist and an accidental inclusion both red), pins the outer metadata (version and
   requirement read from the live project config, so the pin never drifts on a bump),
   compiles the unpacked package in :prod, and compiles + smoke-runs a minimal consumer
-  against the UNPACKED artifact — a self-implemented key handle, a
+  against the UNPACKED artifact: a self-implemented key handle, a
   sign_report → check_envelope positive, and a tampered-request negative. Mutation-proven:
   dropping a shipped file from the allowlist reds the census; a corrupted consumer reds
   its compile. Runs as a `mix ci` + workflow gate step; scratch-cleaned per run.
@@ -825,17 +809,17 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   attribute, and the edge-agent example asserts its lock resolves the protocol at the
   same version as the library's (a split between them would put the two CI jobs on
   different protocol spans).
-- `scripts/check-bap-drift.sh` — a read-only, one-command ecosystem drift check (locked
+- `scripts/check-bap-drift.sh`: a read-only, one-command ecosystem drift check (locked
   version vs hex.pm releases vs the authority runtime's pin vs protocol main, with the
   release span's `lib/` delta classified). A probe for audit and bump sessions, not a
   gate.
 
 ### Changed
 
-- Fixed every Ed25519 signing call site to `:crypto.sign/4`'s documented contract —
+- Fixed every Ed25519 signing call site to `:crypto.sign/4`'s documented contract.
   `:eddsa` with digest `:none` and the curve in the key list. The previous form passed
   the curve (`:ed25519`) in the digest slot, which the runtime tolerates but OTP 29's
-  typespec rejects — the new dialyzer gate surfaced it as 35 findings across the
+  typespec rejects: the new dialyzer gate surfaced it as 35 findings across the
   test-support fixtures and the edge example (zero in `lib/`). Signatures are
   byte-identical under both forms (probed first: both verify), and the full suite is
   green after the sweep. The one intentional contract-violating fixture keeps its
@@ -846,7 +830,7 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
 - Re-align the protocol dependency to `bounded_authority_protocol` 0.1.2 (`~> 0.1.2`),
   the authority runtime's pin.
   The release span's `lib/` delta is conformance tooling only
-  (`conformance/{cli,report}.ex` — zero `V1.*` change to the consumed surface),
+  (`conformance/{cli,report}.ex`: zero `V1.*` change to the consumed surface),
   `priv/conformance` is unchanged, and the protocol package's own `mix.exs` carries a
   version-line-only change. The wall's requirement + locked-version attributes, both
   project locks, and the drift-guard mutation fixtures (plain drift `0.1.3`, prefix
@@ -868,15 +852,15 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   `GHSA-xj8g-532w-jv94` and MEDIUM `GHSA-x3gh-xhj4-3vq8`. The two orchestration
   commands are independently mutation-proven by the parity test.
 
-## [0.2.1] — 2026-08-20
+## [0.2.1]: 2026-08-20
 
 ### Fixed
 
 - Reference the repository's `examples/` (Livebook demo and edge-agent app) in prose rather than by
-  relative link, since `examples/` is not shipped in the package — removes the dangling
+  relative link, since `examples/` is not shipped in the package: removes the dangling
   documentation links from the published README and consumer-integration guide.
 
-## [0.2.0] — 2026-08-20
+## [0.2.0]: 2026-08-20
 
 First public release on Hex.
 

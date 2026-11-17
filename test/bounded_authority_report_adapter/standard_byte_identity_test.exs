@@ -8,7 +8,7 @@ defmodule BoundedAuthorityReportAdapter.StandardByteIdentityTest do
   round-trips) cannot see a byte-level regression hiding behind a still-valid
   signature. These fixtures were captured from the pre-v3 code (2026-09-22,
   deterministic by construction: a fixed seeded keypair, fixed ids and
-  timestamps — Ed25519 is deterministic, so each compact is fully determined)
+  timestamps: Ed25519 is deterministic, so each compact is fully determined)
   and must stay byte-identical. Each fixture ALSO verifies green through the
   dependency, so the pinned bytes are valid credentials, not merely
   yesterday's output.
@@ -31,7 +31,7 @@ defmodule BoundedAuthorityReportAdapter.StandardByteIdentityTest do
   alias BoundedAuthorityReportAdapter.Keys.RawKey
 
   # The fixed seeded fixture keypair (seed <<7::256>>) and the fixed successor
-  # keypair (seed <<8::256>>) — derived, not embedded, so the test pins the
+  # keypair (seed <<8::256>>): derived, not embedded, so the test pins the
   # DERIVATION and the compacts, not opaque key literals.
   @holder_pub :crypto.generate_key(:eddsa, :ed25519, <<7::256>>) |> elem(0)
   @holder_priv :crypto.generate_key(:eddsa, :ed25519, <<7::256>>) |> elem(1)
@@ -39,7 +39,7 @@ defmodule BoundedAuthorityReportAdapter.StandardByteIdentityTest do
 
   # Captured 2026-09-22 against the pin-bump commit 8910b26 (the v1 signing
   # path there is byte-identical to 0.6.3's). Do NOT regenerate to "fix" a red
-  # here — a red means the major-1 surface changed bytes.
+  # here: a red means the major-1 surface changed bytes.
   @proof_compact "eyJhbGciOiJFZERTQSIsImp3ayI6eyJjcnYiOiJFZDI1NTE5Iiwia3R5IjoiT0tQIiwieCI6IlB1S29weWc4c3YxeWlVUGFvU2Z2Q2VTREJ4cUxTOGFadWtVaThKc1V6OTQifSwidHlwIjoiZHBvcCtqd3QifQ.eyJhdGgiOiJoem4tODk4ZDlqX1d6azB5TW9lVjBmWElfU0NJcmxfTlItcVF0NmJBZG9vIiwiYmFfaW52IjoiMTIzZTQ1NjctZTg5Yi00MmQzLWE0NTYtNDI2NjE0MTc0MDAwIiwiYmFfb3AiOiJyZXBvcnRfZXh0ZXJuYWxfbWF0ZXJpYWxpemF0aW9uIiwiYmFfcmVxIjoiT19uTlBSVXNPYzRRUmhRRFg2bmRQQWpFYkh5SmpWRHlyRk9jUzNYaHdvdyIsImh0bSI6IlBPU1QiLCJodHUiOiJodHRwczovL2FwaS5leGFtcGxlLnRlc3QvaW52b2tlIiwiaWF0IjoxNTAwLCJqdGkiOiJieXRlLWlkZW50aXR5LXYxLXByb29mLTAwMSIsInYiOjF9.UfI4cxtWEi7zKY2XS1rHt0QxrO0CymS2PSjRzP92f8PojEIP_zQeh5JLkvEsJhHZQ5Jd-n77YdPPSWlAFYLYCg"
   @grant_compact "eyJhbGciOiJFZERTQSIsImtpZCI6Imlzc3Vlci0yMDI2LTA3IiwidHlwIjoiYmErY2FwIn0.eyJhdWQiOlsiaHR0cHM6Ly92ZXJpZmllci5leGFtcGxlLnRlc3QiXSwiY25mIjp7ImprdCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBS3MifSwiZXhwIjoyMDAwLCJpYXQiOjEwMDAsImlzcyI6Imh0dHBzOi8vaXNzdWVyLmV4YW1wbGUudGVzdCIsImp0aSI6InVybjpleGFtcGxlOmdyYW50OmJ5dGUtaWRlbnRpdHktdjEiLCJuYmYiOjEwMDAsIm9wZXJhdGlvbnMiOlt7Im5hbWUiOiJyZXBvcnRfZXh0ZXJuYWxfbWF0ZXJpYWxpemF0aW9uIiwic2VsZWN0b3JzIjpbeyJraW5kIjoiYWxsIn1dfV0sInYiOjF9.xHaOAyLoTp4oVNSl8X8cQfATDbzsQc6WD7w5WyuzJwUdUlOzxKt12VFl2AOamc4h4mbGh5TFsLX-pIy71rHrDg"
   @anchor_compact "eyJhbGciOiJFZERTQSIsImtpZCI6InRlc3QtYW5jaG9yLWtleS0wMDEiLCJ0eXAiOiJiYStjaGFpbi1hbmNob3IifQ.eyJhbmNob3JfaWQiOiJ1cm46ZXhhbXBsZTphbmNob3I6Ynl0ZS1pZGVudGl0eS12MSIsImFuY2hvcmVkX2F0IjoxNTAwLCJjaGFpbl9oYXNoIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFNMCIsImNoYWluX2lkIjoidXJuOmV4YW1wbGU6Y2hhaW46Ynl0ZS1pZGVudGl0eS12MSIsImtleV9maW5nZXJwcmludCI6InRzMWVUSV9vWllYZWNxWEJVTGJpenJVbTlfdnRMMzJXalJoMi1sSGVPWjgiLCJzZXF1ZW5jZSI6NywidiI6MX0.UsekgP8KGQ7EUmtyMbbq5r0QIWHZuSimFMAGAX6hq9rqPHVdONF3sfKUFp40IkykZsZFj9i0Yr05yHQy9aclCw"

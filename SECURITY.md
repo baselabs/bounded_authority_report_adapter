@@ -2,31 +2,30 @@
 
 ## Supported versions
 
-Security fixes land in the latest published release. Before 1.0.0 that is the latest
-`0.x` release. From 1.0.0 it is the latest release of the current major, and the
-[stability contract](docs/upgrading.md#stability-contract) defines what a release within
-that major may change.
-Wire compatibility is governed by the protocol package's contract-major discipline — this
-library's releases track it.
+Security fixes land in the latest release of the current major. Version 1.0.0 is released;
+the [stability contract](docs/upgrading.md#stability-contract) has applied since that release.
+Wire compatibility follows the protocol package's contract-major discipline.
 
 ## Security invariants (what a report is measured against)
 
 The properties a report is measured against (the long form is the
 [security model](docs/security.md)):
 
-- The library never solicits, processes, or retains private key material — custody lives
+- The library never solicits, processes, or retains private key material: custody lives
   entirely behind the caller's key-handle callbacks (the contract; a handle that embeds
-  key bytes in its term has chosen that posture itself — see
+  key bytes in its term has chosen that posture itself: see
   [security.md](docs/security.md) § Trust boundaries).
-- Every signature is verified against the handle-resolved public key before success — a
+- Every signature is verified against the handle-resolved public key before success: a
   wrong-key sign is `:signing_failed`, never a false success.
-- Errors are closed atoms and telemetry metadata is value-free: neither channel can carry
-  key material, message bytes, or report content. A defect that leaks values into either
+- Errors use closed atoms or the fixed tuple `{:producer_error, :invalid}`. Telemetry
+  metadata is value-free. Neither channel can carry key material, message bytes or report
+  content. A defect that leaks values into either
   channel is a security defect, not a cosmetic one.
 - Key identity (`key_id` and `public_key`) comes from one handle call for grants, anchors,
   key transitions and content assertions; caller-supplied key ids are ignored.
-- The library depends only on the public protocol package — never the authority runtime,
-  never a transport, never an HTTP client/server (enforced by the dependency-direction
+- Required runtime dependencies are the public protocol package and telemetry; Igniter
+  is optional installer support. The library excludes the authority runtime, transport
+  libraries and HTTP clients or servers (enforced by the dependency-direction
   wall).
 
 ## Reporting a vulnerability
@@ -63,7 +62,7 @@ sha256sum -c SHA256SUMS
 gh attestation verify <tarball> --repo baselabs/bounded_authority_report_adapter
 
 # 3. Cross-check against hex.pm's published checksum for the release
-#    (hex.pm shows the archive checksum on the version page — it must
+#    (hex.pm shows the archive checksum on the version page: it must
 #    equal the SHA-256 in SHA256SUMS for the same bytes).
 ```
 
@@ -75,5 +74,5 @@ for byte.
 
 We will acknowledge reports within 7 days and send status updates at least weekly until
 resolution, coordinating disclosure through the private advisory. This is a best-effort
-cadence from a small maintainer team, not a contractual SLA — urgent disclosures are
+cadence from a small maintainer team, not a contractual SLA: urgent disclosures are
 handled faster when marked as such.

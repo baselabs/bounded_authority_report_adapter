@@ -2,7 +2,8 @@
 
 1. Treat `sign_report/3` output as a cryptographic artifact, not an authorization decision.
    The envelope proves the holder signed this request under that grant; whether the action
-   is allowed is the verifier's decision ([consumer integration
+   is allowed depends on the verifying service's authorization policy. Pure verification
+   returns facts; verification is never authorization ([consumer integration
    §8](docs/consumer-integration.md)).
 2. The private key never enters this library. Keep it behind a `{module, term}` key handle
    implementing the `BoundedAuthorityReportAdapter` behavior (`sign/2`, `public_key/1`,
@@ -32,12 +33,12 @@
    raw map is refused (`{:producer_error, :invalid}`). Decoding different bytes on the two
    sides, or a re-encoding instead of the bytes sent, is the mismatch this rule prevents
    ([consumer integration §3 and §4](docs/consumer-integration.md)).
-7. Identity binding and a nonce ledger are verifier obligations, not options. This library
-   signs; the verifier must bind the holder thumbprint to the identity it authenticated
+7. Identity binding and a nonce ledger are verifying-service obligations. This library
+   signs; the service must bind the holder thumbprint to the identity it authenticated
    and reject a nonce it has seen ([consumer integration §8 and
    §9](docs/consumer-integration.md)).
-8. Errors are closed atoms with no values. `{:producer_error, :invalid}` is exactly that
-   tuple; key ids, message bytes and report content never appear in an error. Do not add
+8. Signing errors use closed atoms or the fixed tuple `{:producer_error, :invalid}`,
+   with no input values; key ids, message bytes and report content never appear in an error. Do not add
    them back by logging the inputs on failure ([Errors](docs/errors.md)).
 9. A signature that does not verify against the handle's public key is `:signing_failed`;
    the check runs on every object. If your handle signs with a different key than

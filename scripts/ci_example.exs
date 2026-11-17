@@ -1,8 +1,8 @@
-# `mix ci`'s example-job section — reproduces the workflow's example job
+# `mix ci`'s example-job section: reproduces the workflow's example job
 # step-for-step (deps · advisory audit · the four build steps)
 # from examples/edge_agent, aborting at the first red step like a failed CI
 # job. Runs as one .exs, replacing the old `mix cmd --cd ... env
-# MIX_ENV=test mix ...` shape — this runner keeps every step individually
+# MIX_ENV=test mix ...` shape: this runner keeps every step individually
 # spawned, in the workflow's order.
 
 defmodule BoundedAuthorityReportAdapter.CiExample do
@@ -24,7 +24,7 @@ defmodule BoundedAuthorityReportAdapter.CiExample do
     edge = Path.expand(@edge_dir, File.cwd!())
 
     # File.exists?, NOT File.dir?: mix.exs is a FILE, and File.dir?/1 on a
-    # file is false — the old check raised unconditionally and was unreachable
+    # file is false: the old check raised unconditionally and was unreachable
     # only because the currency script's System.halt ended the alias before
     # this runner ever executed locally (found in the B2 release battery).
     unless File.exists?(Path.join(edge, "mix.exs")) do

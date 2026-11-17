@@ -5,7 +5,7 @@ defmodule BoundedAuthorityReportAdapter.TestKeys do
   TEST-ONLY keypair fixtures + an issuer-side grant-signing helper for RA1's
   round-trip test.
 
-  The adapter is the HOLDER — it never signs a grant. But RA1's round-trip test
+  The adapter is the HOLDER: it never signs a grant. But RA1's round-trip test
   needs an **issuer-signed** grant compact to feed `sign_report/3`, so the TEST
   plays the issuer here (mirrors BAP's own `corpus_test.exs:signed_grant_compact/1`).
   This is test-only code: the adapter's `lib/` never calls `grant_signing_input`
@@ -78,12 +78,12 @@ defmodule BoundedAuthorityReportAdapter.TestKeys do
   end
 
   # ------------------------------------------------------------------
-  # v3 (BAP3-ES256-SHA256) fixtures — EC P-256 keys and the issuer-side
+  # v3 (BAP3-ES256-SHA256) fixtures: EC P-256 keys and the issuer-side
   # v3 grant builder (ADR-0021). The adapter's lib/ never calls
   # `grant_signing_input`; these mirror BAP's own corpus minting.
   # ------------------------------------------------------------------
 
-  # NIST P-256 group order (RFC 6090 / SEC 2) — the low-S normalization
+  # NIST P-256 group order (RFC 6090 / SEC 2): the low-S normalization
   # boundary for the producing-side fixtures.
   @ec_n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
   @ec_half_n div(@ec_n, 2)
@@ -105,7 +105,7 @@ defmodule BoundedAuthorityReportAdapter.TestKeys do
 
   @doc """
   The raw RFC 7638 EC thumbprint (32 bytes) for a 65-byte uncompressed-SEC1
-  P-256 public key — the v3 `cnf.jkt` digest over
+  P-256 public key: the v3 `cnf.jkt` digest over
   `{"crv":"P-256","kty":"EC","x":X,"y":Y}` (spec/bap-v3.md §3.1): the test tree's
   one route to a P-256 thumbprint, through BAP's documented `V3.EcJwk.encode_public/2`
   and `V3.EcJwk.thumbprint/2` (base64url-decoded).
@@ -118,7 +118,7 @@ defmodule BoundedAuthorityReportAdapter.TestKeys do
 
   @doc """
   Signs `message` with a P-256 private key in the v3 wire form: RFC 7518 §3.4
-  raw `r || s` (exactly 64 bytes) with low-S normalization — the producing
+  raw `r || s` (exactly 64 bytes) with low-S normalization: the producing
   posture ADR-0021 Decision 4 pins. OTP `:crypto.sign/5` emits DER; this
   converts and normalizes (test-only issuer/reference path).
   """

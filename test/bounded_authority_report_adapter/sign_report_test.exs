@@ -1,6 +1,6 @@
 defmodule BoundedAuthorityReportAdapter.SignReportTest do
   @moduledoc """
-  The RA1 envelope-sign test suite — the enforcement for the C1 (proof-only-
+  The RA1 envelope-sign test suite: the enforcement for the C1 (proof-only-
   signing), key-never-leaves, and no-canonical-bytes-fork invariants, plus the
   round-trip acceptance proof.
 
@@ -11,7 +11,7 @@ defmodule BoundedAuthorityReportAdapter.SignReportTest do
       Elixir map. `RequestDigest.typed/1` rejects raw maps. A caller passing
       `%{"record" => ...}` gets `{:error, {:producer_error, :invalid}}`.
     * The proof's `operation` MUST match a `name` in the grant's `operations`
-      list — `verify_proof_parsed` checks the operation is authorized by the
+      list: `verify_proof_parsed` checks the operation is authorized by the
       grant (`unique_operation` + `Selector.match_all`).
     * The grant's time window (`nbf`/`exp`) and the proof's `iat` must overlap
       the verifier's `evaluation_time` (plan-review Finding 1).
@@ -220,8 +220,8 @@ defmodule BoundedAuthorityReportAdapter.SignReportTest do
                BoundedAuthorityReportAdapter.sign_report(incomplete_report, holder_handle(), %{})
     end
 
-    # Cross-vendor closeout finding (Codex + Claude): sign_via_handle/2's case
-    # was non-total — a sign/2 returning :ok / nil / a bare binary (not {:ok,_}/
+    # Regression: sign_via_handle/2's case
+    # was non-total: a sign/2 returning :ok / nil / a bare binary (not {:ok,_}/
     # {:error,_}) raised CaseClauseError out of sign_report/3. The catch-all
     # clause now maps it to :signing_failed (no raise escapes).
     test "sign/2 returning a non-tuple (e.g. :ok) yields {:error, :signing_failed}, not a raise" do
@@ -234,7 +234,7 @@ defmodule BoundedAuthorityReportAdapter.SignReportTest do
                })
     end
 
-    # Cross-vendor closeout finding: a short public key passed the is_binary
+    # Regression: a short public key passed the is_binary
     # guard then failed downstream as {:producer_error, :invalid} instead of the
     # documented :invalid_key_handle. The guard now requires 32 bytes.
     test "a handle returning a short public key yields {:error, :invalid_key_handle}" do
@@ -248,7 +248,7 @@ defmodule BoundedAuthorityReportAdapter.SignReportTest do
     end
 
     # Cross-vendor round 2 (blocking): safe_callback rescued exceptions but not
-    # exit/throw — a production HSM/key-server callback that times out (a
+    # exit/throw: a production HSM/key-server callback that times out (a
     # GenServer.call timeout = an :exit) crashed the caller instead of returning
     # {:error, _}. The catch clauses now contain exits + throws.
     test "a callback that exit/1s yields {:error, :invalid_key_handle}, not a crash" do
@@ -262,7 +262,7 @@ defmodule BoundedAuthorityReportAdapter.SignReportTest do
     # Cross-vendor round 2 (should-fix): sign_via_handle validated only 64-byte
     # length, never that the signature verifies against the resolved public key.
     # A wrong-key sign (public_key/1 returns key A, sign/2 uses key B) produced
-    # a {pub_A, sig_B} envelope returned as {:ok, _} — false success. The
+    # a {pub_A, sig_B} envelope returned as {:ok, _}: false success. The
     # adapter now verifies the signature against the public key before accepting.
     test "a signature signed with the wrong key yields {:error, :signing_failed}" do
       report = build_report()

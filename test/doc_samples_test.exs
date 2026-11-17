@@ -1,69 +1,3 @@
-defmodule MyApp.HsmClient do
-  @moduledoc false
-  # A real local signer in place of the network HSM the HSM recipe calls: each key reference
-  # names a real Ed25519 key derived from it. :sign_timeout and :unreachable exit like a
-  # GenServer.call timeout, in sign/2 or in every call.
-  def sign_ed25519(ref, _message) when ref in [:sign_timeout, :unreachable], do: exit(:timeout)
-
-  def sign_ed25519(ref, message),
-    do: {:ok, :crypto.sign(:eddsa, :none, message, [private_key(ref), :ed25519])}
-
-  def public_key(:unreachable), do: exit(:timeout)
-  def public_key(ref), do: {:ok, public_key_of(ref)}
-
-  def key_identity(:unreachable), do: exit(:timeout)
-  def key_identity(ref), do: {:ok, {"hsm-#{ref}", public_key_of(ref)}}
-
-  def signing_identity(:unreachable), do: exit(:timeout)
-  def signing_identity(:issuer), do: {:ok, {:issuer, "hsm-issuer", public_key_of(:issuer)}}
-  def signing_identity(ref), do: {:ok, {:holder, "hsm-#{ref}", public_key_of(ref)}}
-
-  defp private_key(ref), do: :crypto.hash(:sha256, "hsm:#{ref}")
-
-  defp public_key_of(ref) do
-    {public_key, _private} = :crypto.generate_key(:eddsa, :ed25519, private_key(ref))
-    public_key
-  end
-end
-
-defmodule MyApp.KmsClient do
-  @moduledoc false
-  # A real local signer in place of the KMS the KMS recipe calls: one current key version
-  # per key reference, a real Ed25519 key derived from it.
-  def current_version(ref), do: {:ok, {"kms-#{ref}-v1", public_key_of(ref)}}
-
-  def sign_current_version(ref, message),
-    do: {:ok, :crypto.sign(:eddsa, :none, message, [private_key(ref), :ed25519])}
-
-  defp private_key(ref), do: :crypto.hash(:sha256, "kms:#{ref}:v1")
-
-  defp public_key_of(ref) do
-    {public_key, _private} = :crypto.generate_key(:eddsa, :ed25519, private_key(ref))
-    public_key
-  end
-end
-
-defmodule MyApp.EcKmsClient do
-  @moduledoc false
-  # A real local signer in place of the KMS the ES256 recipe calls: one current P-256 key
-  # version per key reference, derived from it. Like a cloud KMS or a PKCS#11 HSM, sign_es256/2
-  # returns the signature DER-encoded.
-  def current_version(ref), do: {:ok, {"kms-p256-#{ref}-v1", public_key_of(ref)}}
-
-  def role(:issuer), do: :issuer
-  def role(_ref), do: :holder
-
-  def sign_es256(ref, message),
-    do: {:ok, :crypto.sign(:ecdsa, :sha256, message, [private_key(ref), :prime256v1])}
-
-  defp private_key(ref), do: :crypto.hash(:sha256, "kms-p256:#{ref}:v1")
-
-  defp public_key_of(ref) do
-    {public_key, _private} = :crypto.generate_key(:ecdh, :prime256v1, private_key(ref))
-    public_key
-  end
-end
-
 defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
   @moduledoc """
   Runs the Elixir code samples in the guides and the API reference, so a sample a reader
@@ -73,7 +7,7 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
   with one shared binding per file, the way a reader pastes them into one `iex -S mix`
   session. A block may be marked with the line `<!-- doc-sample: fragment -->` directly
   above it; a fragment (an excerpt whose variables come from the reader's application) is
-  compiled with its free variables bound as stub parameters, not evaluated, and the guide
+  compiled with its free variables bound as parameters, not evaluated, and the guide
   must say in prose that it is a fragment. When the last
   line of a block is `#=> value`, the block's value, formatted with `inspect/1`, must equal
   it.
@@ -93,7 +27,6 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
 
   import ExUnit.CaptureLog
 
-  alias BoundedAuthorityProtocol.V1
   alias BoundedAuthorityProtocol.V1.Json
 
   @root Path.expand("../", __DIR__)
@@ -176,7 +109,7 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
     end
   end
 
-  test "every fragment compiles, with its free variables bound as stub parameters" do
+  test "every fragment compiles, with its free variables bound as parameters" do
     fragments =
       for path <- @guides ++ @fragment_only,
           block <- blocks_of(path),
@@ -372,95 +305,6 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
              :invalid
   end
 
-  test "the HSM recipe's handle signs through a real local signer, and the results verify" do
-    hsm = doc_module("HsmHandle")
-    now = System.system_time(:second)
-    {:ok, holder_thumbprint} = hsm.thumbprint(:holder)
-
-    {:ok, %{grant: grant}} =
-      BoundedAuthorityReportAdapter.sign_grant(
-        recipe_grant(holder_thumbprint, now),
-        {hsm, :issuer}
-      )
-
-    {:ok, %{proof: proof}} =
-      BoundedAuthorityReportAdapter.sign_report(recipe_report(grant), {hsm, :holder}, %{
-        issued_at: now
-      })
-
-    {:ok, issuer_public_key} = MyApp.HsmClient.public_key(:issuer)
-
-    assert {:ok, %{operation: "rotate_logs"}} =
-             V1.check_envelope(
-               %V1.Credentials{grant: grant, proof: proof},
-               recipe_expected(issuer_public_key, "hsm-issuer", now)
-             )
-
-    # The recipe's claim: a client timeout never crashes the caller.
-    assert BoundedAuthorityReportAdapter.sign_report(recipe_report(grant), {hsm, :sign_timeout}) ==
-             {:error, :signing_failed}
-
-    assert BoundedAuthorityReportAdapter.sign_report(recipe_report(grant), {hsm, :unreachable}) ==
-             {:error, :invalid_key_handle}
-  end
-
-  test "the KMS recipe's handle signs through a real local signer, and the results verify" do
-    kms = doc_module("KmsHandle")
-    now = System.system_time(:second)
-    {:ok, {key_id, public_key}} = MyApp.KmsClient.current_version(:audit_log)
-    {:ok, fingerprint} = kms.thumbprint(:audit_log)
-    chain_hash = :crypto.hash(:sha256, "log entries 1 through 9")
-
-    anchor_input = %{
-      anchor_id: "urn:example:anchor:log-9",
-      chain_id: "urn:example:chain:log",
-      sequence: 9,
-      chain_hash: chain_hash
-    }
-
-    {:ok, %{anchor: anchor}} =
-      BoundedAuthorityReportAdapter.sign_anchor(anchor_input, {kms, :audit_log}, %{
-        anchored_at: now
-      })
-
-    assert {:ok, _anchor_facts} =
-             V1.verify_historical_anchor(
-               anchor,
-               %V1.HistoricalPublicKey{
-                 key_id: key_id,
-                 public_key: public_key,
-                 valid_from: now - 60,
-                 valid_before: now + 60
-               },
-               %V1.ExpectedAnchor{
-                 anchor_id: anchor_input.anchor_id,
-                 anchored_at: now,
-                 chain_id: anchor_input.chain_id,
-                 sequence: 9,
-                 chain_hash: chain_hash,
-                 key_id: key_id,
-                 key_fingerprint: fingerprint,
-                 bounds: V1.Bounds.maximum()
-               }
-             )
-
-    {:ok, %{grant: grant}} =
-      BoundedAuthorityReportAdapter.sign_grant(recipe_grant(fingerprint, now), {kms, :audit_log})
-
-    assert {:ok, _grant_facts} =
-             V1.verify_grant(
-               grant,
-               %V1.TrustedIssuer{key_id: key_id, public_key: public_key},
-               %V1.ExpectedGrant{
-                 issuer: "https://issuer.example",
-                 audience: "https://ops.example",
-                 evaluation_time: now,
-                 clock_skew: 60,
-                 bounds: V1.Bounds.maximum()
-               }
-             )
-  end
-
   test "the telemetry guide's handler logs a signing call and stays attached" do
     doc_module("SignTelemetry").attach()
 
@@ -483,52 +327,9 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
 
   defp doc_module(name), do: Module.concat(["MyApp", name])
 
-  defp recipe_grant(holder_thumbprint, now) do
-    %{
-      issuer: "https://issuer.example",
-      grant_id: "urn:example:grant:ops-1",
-      audiences: ["https://ops.example"],
-      issued_at: now,
-      not_before: now,
-      expires_at: now + 600,
-      holder_thumbprint: holder_thumbprint,
-      operations: [%V1.Operation{name: "rotate_logs", selectors: [:all]}]
-    }
-  end
-
-  defp recipe_report(grant) do
-    %{
-      grant_compact: grant,
-      operation: "rotate_logs",
-      method: "POST",
-      target_uri: "https://ops.example/logs/rotate",
-      invocation_id: "8e9f0a1b-2c3d-4e5f-8a6b-7c8d9e0f1a2b",
-      cast_arguments: {:object, [{"service", {:string, "ingest"}}]},
-      nonce: "nonce-ops-1"
-    }
-  end
-
-  defp recipe_expected(issuer_public_key, issuer_key_id, now) do
-    %V1.ExpectedRequest{
-      trusted_issuer: %V1.TrustedIssuer{key_id: issuer_key_id, public_key: issuer_public_key},
-      issuer: "https://issuer.example",
-      audience: "https://ops.example",
-      method: "POST",
-      target_uri: "https://ops.example/logs/rotate",
-      invocation_id: "8e9f0a1b-2c3d-4e5f-8a6b-7c8d9e0f1a2b",
-      operation: "rotate_logs",
-      cast_arguments: {:object, [{"service", {:string, "ingest"}}]},
-      evaluation_time: now,
-      clock_skew: 60,
-      proof_max_age: 300,
-      nonce: {:required, "nonce-ops-1"},
-      bounds: V1.Bounds.maximum()
-    }
-  end
-
   # A fragment that defines functions (a mix.exs excerpt) becomes a module body; any other
   # fragment becomes the body of a function whose parameters are the fragment's variables,
-  # so a variable the reader's application supplies is bound to a stub.
+  # so a variable the reader's application supplies is bound as a parameter.
   defp fragment_module(module, quoted) do
     body = if defines_functions?(quoted), do: quoted, else: function_wrapping(quoted)
 

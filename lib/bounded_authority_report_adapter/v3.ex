@@ -118,8 +118,19 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   import Bitwise
 
+  @typedoc """
+  The behavior and opaque-reference contract of `t:BoundedAuthorityReportAdapter.key_handle/0`,
+  using P-256 keys: public keys are 65-byte uncompressed SEC1 points (`0x04 || x || y`)
+  on the curve. Signatures are raw 64-byte `r || s`, two 32-byte big-endian integers;
+  DER is refused, and the adapter normalizes high-S to low-S.
+  """
   @type key_handle :: {module(), term()}
 
+  @typedoc """
+  The request fields and binding semantics of `t:BoundedAuthorityReportAdapter.report/0`,
+  with a contract-major-3 grant and a P-256 holder. The canonical HTTPS URI, UUID,
+  tagged JSON arguments and optional nonce rules are unchanged.
+  """
   @type report :: %{
           grant_compact: binary(),
           operation: binary(),
@@ -130,8 +141,17 @@ defmodule BoundedAuthorityReportAdapter.V3 do
           nonce: nil | binary()
         }
 
+  @typedoc """
+  Contract-major-3 envelope: unchanged input `:grant` compact JWS string plus a new
+  ES256 `:proof` compact JWS string. See `t:BoundedAuthorityReportAdapter.envelope/0`.
+  """
   @type envelope :: %{grant: binary(), proof: binary()}
 
+  @typedoc """
+  The checkpoint identifiers, non-negative sequence and raw 32-byte chain hash of
+  `t:BoundedAuthorityReportAdapter.anchor_input/0`. The handle supplies a P-256 key;
+  sequence zero and nonzero hash rules are unchanged.
+  """
   @type anchor_input :: %{
           anchor_id: binary(),
           chain_id: binary(),
@@ -139,31 +159,60 @@ defmodule BoundedAuthorityReportAdapter.V3 do
           chain_hash: binary()
         }
 
+  @typedoc """
+  Contract-major-3 signed checkpoint. `:anchor` is an ES256 compact JWS string;
+  its field role matches `t:BoundedAuthorityReportAdapter.anchor_compact/0`.
+  """
   @type anchor_compact :: %{anchor: binary()}
 
+  @typedoc """
+  The optional `:bounds`, `:issued_at` (integer Unix seconds) and `:proof_id` (protocol
+  identifier string) keys, defaults and keyword-list rules of `t:BoundedAuthorityReportAdapter.opts/0`.
+  The shared `BoundedAuthorityProtocol.V1.Bounds` limits also apply to this suite.
+  """
   @type opts :: %{
           optional(:bounds) => V1.Bounds.t() | map(),
           optional(:issued_at) => integer(),
           optional(:proof_id) => binary()
         }
 
+  @typedoc """
+  The optional `:bounds` and `:anchored_at` (integer Unix seconds) keys and defaults of
+  `t:BoundedAuthorityReportAdapter.anchor_opts/0`, also accepted as a keyword list.
+  """
   @type anchor_opts :: %{
           optional(:bounds) => V1.Bounds.t() | map(),
           optional(:anchored_at) => integer()
         }
 
+  @typedoc """
+  The closed errors and meanings of `t:BoundedAuthorityReportAdapter.sign_error/0`.
+  Here `:invalid_report` includes a grant not of major 3; `:invalid_key_handle` includes
+  a public key other than an on-curve 65-byte P-256 point. `:signing_failed` also covers
+  DER signatures and out-of-range `r` or `s`. High-S is normalized, not refused.
+  """
   @type sign_error ::
           :invalid_report
           | :invalid_key_handle
           | :signing_failed
           | {:producer_error, :invalid}
 
+  @typedoc """
+  The closed errors and meanings of `t:BoundedAuthorityReportAdapter.anchor_sign_error/0`.
+  The P-256 key and raw-signature differences in `t:sign_error/0` apply.
+  """
   @type anchor_sign_error ::
           :invalid_anchor
           | :invalid_key_handle
           | :signing_failed
           | {:producer_error, :invalid}
 
+  @typedoc """
+  The identifiers, audience list, integer Unix-second times and raw 32-byte holder
+  thumbprint of `t:BoundedAuthorityReportAdapter.grant_input/0`, with P-256 issuer/holder
+  keys and `BoundedAuthorityProtocol.V3.Operation` structs. Selectors also support
+  inclusive `:lte` and `:gte` bounds. Whole numbers still use `{:integer, n}`.
+  """
   @type grant_input :: %{
           issuer: binary(),
           grant_id: binary(),
@@ -175,16 +224,26 @@ defmodule BoundedAuthorityReportAdapter.V3 do
           operations: [V3.Operation.t()]
         }
 
+  @typedoc """
+  Issuer-side options with optional `:bounds`, using the shared limits and keyword-list
+  rules of `t:BoundedAuthorityReportAdapter.opts/0`. This suite has no role-attestation
+  gate; any `:role_attestation` option returns `:invalid_role_attestation`.
+  """
   @type grant_opts :: %{
           optional(:bounds) => V1.Bounds.t() | map()
         }
 
+  @typedoc """
+  Issuer-signed contract-major-3 grant. `:grant` is an ES256 compact JWS string for a
+  P-256 holder; its role matches `t:BoundedAuthorityReportAdapter.grant_compact/0`.
+  """
   @type grant_compact :: %{grant: binary()}
 
   @typedoc """
-  The errors of `sign_grant/3`. `:invalid_role_attestation` is returned whenever the
-  options carry `:role_attestation`: this surface has no role-attestation gate and refuses
-  the option rather than ignore it.
+  The closed errors and meanings of `t:BoundedAuthorityReportAdapter.grant_sign_error/0`,
+  with the P-256 key and raw-signature differences in `t:sign_error/0`.
+  `:invalid_role_attestation` means the option was present: this suite has no
+  role-attestation gate and refuses it instead of ignoring it.
   """
   @type grant_sign_error ::
           :invalid_grant
@@ -193,6 +252,12 @@ defmodule BoundedAuthorityReportAdapter.V3 do
           | :signing_failed
           | {:producer_error, :invalid}
 
+  @typedoc """
+  The identifiers and integer Unix-second `:effective_at` of
+  `t:BoundedAuthorityReportAdapter.transition_input/0`, except `:next_public_key` is an
+  on-curve 65-byte uncompressed SEC1 P-256 point, not a 32-byte Ed25519 key.
+  The retiring handle must also use P-256; the successor must be distinct.
+  """
   @type transition_input :: %{
           transition_id: binary(),
           chain_id: binary(),
@@ -201,19 +266,33 @@ defmodule BoundedAuthorityReportAdapter.V3 do
           next_public_key: binary()
         }
 
+  @typedoc """
+  The optional `:bounds` key and keyword-list rules of
+  `t:BoundedAuthorityReportAdapter.transition_opts/0`, with the same shared limits.
+  """
   @type transition_opts :: %{
           optional(:bounds) => V1.Bounds.t() | map()
         }
 
+  @typedoc """
+  Contract-major-3 signed rotation. `:key_transition` is an ES256 compact JWS string;
+  its role matches `t:BoundedAuthorityReportAdapter.transition_compact/0`.
+  """
   @type transition_compact :: %{key_transition: binary()}
 
+  @typedoc """
+  The closed errors and meanings of
+  `t:BoundedAuthorityReportAdapter.transition_sign_error/0`, with the P-256 key and
+  raw-signature differences in `t:sign_error/0`. `:invalid_transition` also covers a
+  successor that is not an on-curve 65-byte uncompressed P-256 point.
+  """
   @type transition_sign_error ::
           :invalid_transition
           | :invalid_key_handle
           | :signing_failed
           | {:producer_error, :invalid}
 
-  # NIST P-256 (secp256r1) group order and the integer-floor half — the
+  # NIST P-256 (secp256r1) group order and the integer-floor half: the
   # low-S normalization boundary (`n` is odd, so
   # `s = ⌊n/2⌋` stays untouched and `s = ⌊n/2⌋ + 1` maps to exactly `⌊n/2⌋`).
   @ec_n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
@@ -237,14 +316,14 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   ## Errors
 
-    * `:invalid_report` — as for `BoundedAuthorityReportAdapter.sign_report/3`, or
+    * `:invalid_report`: as for `BoundedAuthorityReportAdapter.sign_report/3`, or
       `grant_compact` is not a contract-major-3 grant.
-    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, or `public_key/1`
+    * `:invalid_key_handle`: the handle is not a `{module, term}` pair, or `public_key/1`
       failed or returned something other than a 65-byte P-256 point on the curve.
-    * `:signing_failed` — `sign/2` failed, returned something other than 64 bytes
+    * `:signing_failed`: `sign/2` failed, returned something other than 64 bytes
       (a DER signature, for example), returned `r` or `s` out of range, or returned a
       signature that does not verify against the public key.
-    * `{:producer_error, :invalid}` — the protocol package refused the proof.
+    * `{:producer_error, :invalid}`: the protocol package refused the proof.
 
   ## Example
 
@@ -332,26 +411,26 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   ## Parameters
 
-    * `grant_input` — as for `BoundedAuthorityReportAdapter.sign_grant/3`, with
+    * `grant_input`: as for `BoundedAuthorityReportAdapter.sign_grant/3`, with
       `:operations` a non-empty list of `BoundedAuthorityProtocol.V3.Operation` structs and
       `:holder_thumbprint` the holder's raw 32-byte RFC 7638 thumbprint (over the EC
       members for a P-256 holder key).
-    * `key_handle` — the issuer's P-256 handle; calls `signing_identity/1` and `sign/2`.
-    * `opts` — a map or a keyword list with `:bounds`, passed unchanged to the protocol
+    * `key_handle`: the issuer's P-256 handle; calls `signing_identity/1` and `sign/2`.
+    * `opts`: a map or a keyword list with `:bounds`, passed unchanged to the protocol
       package; default `%{}`. Options follow the rules in
       `BoundedAuthorityReportAdapter`'s "Options" section.
 
   ## Errors
 
-    * `:invalid_grant` — as for `BoundedAuthorityReportAdapter.sign_grant/3`, including
+    * `:invalid_grant`: as for `BoundedAuthorityReportAdapter.sign_grant/3`, including
       invalid options (see "Options" in `BoundedAuthorityReportAdapter`).
-    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
+    * `:invalid_key_handle`: the handle is not a `{module, term}` pair, has no
       `signing_identity/1`, declares a role other than `:issuer`, or returned a malformed
       snapshot or a key that is not a 65-byte P-256 point on the curve.
-    * `:invalid_role_attestation` — `opts` contains `:role_attestation` (as a map key or a
+    * `:invalid_role_attestation`: `opts` contains `:role_attestation` (as a map key or a
       keyword), whatever its value. The option is refused here, not ignored.
-    * `:signing_failed` — as for `sign_report/3` on this surface.
-    * `{:producer_error, :invalid}` — the protocol package refused the grant. With protocol
+    * `:signing_failed`: as for `sign_report/3` on this surface.
+    * `{:producer_error, :invalid}`: the protocol package refused the grant. With protocol
       1.0 this includes a selector value or range bound (`lte`, `gte`) that holds a
       float-tagged whole number, as in `BoundedAuthorityReportAdapter.sign_grant/3`.
 
@@ -390,7 +469,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
     # The role-attestation gate option is the v1 surface's; the bap-role-attestation/1
     # profile is Ed25519-bound at schema 1, so no P-256 subject key can be attested under it.
     # A supplied option FAILS CLOSED rather than being silently ignored (a review finding:
-    # silent acceptance is the wrong failure mode for an unsupportable security option) —
+    # silent acceptance is the wrong failure mode for an unsupportable security option)
     # checked on the normalized options, so a keyword list carries it exactly as a map does.
     if Map.has_key?(opts, :role_attestation) do
       {:error, :invalid_role_attestation}
@@ -420,12 +499,12 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   ## Errors
 
-    * `:invalid_anchor` — as for `BoundedAuthorityReportAdapter.sign_anchor/3`.
-    * `:invalid_key_handle` — the handle is not a `{module, term}` pair, has no
+    * `:invalid_anchor`: as for `BoundedAuthorityReportAdapter.sign_anchor/3`.
+    * `:invalid_key_handle`: the handle is not a `{module, term}` pair, has no
       `key_identity/1`, or returned an empty key id or a key that is not a 65-byte P-256
       point on the curve.
-    * `:signing_failed` — as for `sign_report/3` on this surface.
-    * `{:producer_error, :invalid}` — the protocol package refused the anchor.
+    * `:signing_failed`: as for `sign_report/3` on this surface.
+    * `{:producer_error, :invalid}`: the protocol package refused the anchor.
 
   ## Example
 
@@ -483,12 +562,12 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   ## Errors
 
-    * `:invalid_transition` — `transition_input` is not a map, a field is missing or of
+    * `:invalid_transition`: `transition_input` is not a map, a field is missing or of
       the wrong basic type, or `:next_public_key` is not a 65-byte P-256 point on the
       curve.
-    * `:invalid_key_handle` — as for `sign_anchor/3` on this surface.
-    * `:signing_failed` — as for `sign_report/3` on this surface.
-    * `{:producer_error, :invalid}` — the protocol package refused the transition, for
+    * `:invalid_key_handle`: as for `sign_anchor/3` on this surface.
+    * `:signing_failed`: as for `sign_report/3` on this surface.
+    * `{:producer_error, :invalid}`: the protocol package refused the transition, for
       example a successor equal to the current key.
 
   ## Example
@@ -542,7 +621,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   # V3.Es256 (which stays verify-side): equivalence is carried by the
   # differential-agreement test, and the whole call is rescue/catch-contained
   # so a raising backend returns the closed error value
-  # (REQ3-SIGNING-backend-reject) — including an off-curve key that slipped
+  # (REQ3-SIGNING-backend-reject): including an off-curve key that slipped
   # past the resolver arithmetic on a stricter backend.
   # ---------------------------------------------------------------------------
 
@@ -559,8 +638,8 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   defp sign_via_handle({module, handle}, message) do
     # The 64-byte width guard admits both suites' signatures (Ed25519 and
-    # raw r || s are each exactly 64 bytes) — which is WHY the per-suite
-    # verify below is the real discriminator, and why a DER return (71
+    # raw r || s are each exactly 64 bytes). The per-suite verification
+    # below is the real discriminator. A DER return (71
     # bytes, 0x30-led; a 64-byte DER is also constructible) can only be
     # closed by the scalar checks + verify, never by width alone.
     case safe_callback(module, :sign, [message, handle]) do
@@ -576,7 +655,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   # check runs BEFORE any arithmetic on `s`: on `s ≥ n` the subtraction
   # `n − s` goes negative, whose re-encoding is primitive-dependent
   # (`:binary.encode_unsigned/1` raises; a bit-syntax re-encode silently
-  # wraps) — the ordering is what keeps the "never a raise" contract.
+  # wraps): the ordering is what keeps the "never a raise" contract.
   defp canonicalize_low_s(<<r::binary-@scalar_bytes, s::binary-@scalar_bytes>>) do
     ri = :binary.decode_unsigned(r)
     si = :binary.decode_unsigned(s)
@@ -616,7 +695,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   # Minimal DER ECDSA-Sig-Value (an internal backend spelling only): SEQUENCE
   # over minimal-octet INTEGERs, a leading 0x00 sign guard when a scalar's
-  # high bit is set (≈50% of scalars — omitting it fails valid signatures
+  # high bit is set (≈50% of scalars: omitting it fails valid signatures
   # against their own key), short-form lengths only (each INTEGER content is
   # at most 33 bytes, so the long form is unreachable by construction).
   defp der_signature(r, s) do
@@ -652,13 +731,13 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   end
 
   # ---------------------------------------------------------------------------
-  # The v3 resolvers — the key-type discriminator. The
+  # The v3 resolvers: the key-type discriminator. The
   # accepted shape is EXACTLY the 65-byte uncompressed-SEC1 point, and the
   # point must be valid: width alone does not discriminate (a secp256k1 point
   # is also 65 bytes with an 0x04 prefix), so validation routes through the
   # protocol package's certified arithmetic (V3.EcJwk.encode_public/2:
   # prefix + coordinate range + on-curve). On the GRANT path this is the
-  # key's first consumer — the v3 grant bytes carry only kid and
+  # key's first consumer: the v3 grant bytes carry only kid and
   # holder_thumbprint, so BAP's own producer never touches the issuer key.
   # ---------------------------------------------------------------------------
 
@@ -687,7 +766,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   defp resolve_key_identity(_handle), do: {:error, :invalid_key_handle}
 
-  # The grant's atomic signing identity — the issuer-role gate (the :issuer
+  # The grant's atomic signing identity: the issuer-role gate (the :issuer
   # match) and the P-256 key validation applied to the SAME atomic snapshot.
   # The role and width literals share this clause head: a wrong-width
   # :issuer snapshot is rejected exactly like a :holder one, before sign/2.
@@ -728,7 +807,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
     _error -> {:error, :callback_failed}
   catch
     # A production key-handle callback (HSM / key server) that times out
-    # does so via exit/1 — contain it to the closed callback-failure shape.
+    # does so via exit/1: contain it to the closed callback-failure shape.
     :exit, _reason -> {:error, :callback_failed}
     :throw, _reason -> {:error, :callback_failed}
   end
@@ -766,7 +845,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   defp validate_report(_report), do: {:error, :invalid_report}
 
   # The mixed-major fail-fast: a v3 proof pairs with a
-  # v3 grant, and BAP's proof producer only HASHES grant_compact — without
+  # v3 grant, and BAP's proof producer only HASHES grant_compact: without
   # this gate a v1 (or v2) grant would sail through into a credential no
   # verifier accepts. The gate is the major's own bounded DECODER, not the
   # header walk: v1 and v2 grants share the EdDSA header, so the major is
@@ -857,7 +936,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
   defp required_grant_audiences(grant_input) do
     # An IMPROPER list (["a" | :tail]) passes is_list/1 but raises inside
-    # Enum.all?/2 — the closed-error contract requires rejecting it as data
+    # Enum.all?/2: the closed-error contract requires rejecting it as data
     # (a review finding; the same defect existed on the v1 path).
     case Map.fetch(grant_input, :audiences) do
       {:ok, audiences} when is_list(audiences) and audiences != [] ->

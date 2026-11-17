@@ -174,8 +174,9 @@ suite (contract-major 3) with P-256 keys. The key's shape selects the suite: a 3
 Ed25519 public key for the functions above, a 65-byte uncompressed P-256 point for `V3`.
 Verify functions are in the protocol package (`BoundedAuthorityProtocol.*`).
 
-Every function returns `{:ok, map}` or `{:error, reason}` with a closed set of reasons and
-no values in errors. See [Errors](docs/errors.md).
+Every signing function returns `{:ok, map}` or `{:error, reason}` with a closed set of
+reasons and no values in errors. The `public_key_thumbprint/1` helper returns
+`{:ok, <<_::256>>}` or `{:error, :invalid}`. See [Errors](docs/errors.md).
 
 ## Safety properties
 
@@ -187,8 +188,9 @@ no values in errors. See [Errors](docs/errors.md).
   attestation signed by the authority.
 - **Explicit profiles.** The local-loopback and content-assertion profiles are selected by
   calling their functions; nothing is inferred from URIs, headers or the environment.
-- **Signing is not authorization.** The verifier decides what a signature proves;
-  trusted keys, replay protection and policy stay with the verifying host.
+- **Signing and verification are never authorization.** Pure verification returns facts.
+  Execution depends on the verifying service's authorization policy, including trusted
+  keys, identity binding, replay reservation and revocation.
 
 ## Content assertions
 

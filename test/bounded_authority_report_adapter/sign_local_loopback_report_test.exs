@@ -1,22 +1,22 @@
 defmodule BoundedAuthorityReportAdapter.SignLocalLoopbackReportTest do
   @moduledoc """
-  `sign_local_loopback_report/3` — the explicit holder-side signer for the
+  `sign_local_loopback_report/3`: the explicit holder-side signer for the
   byte-distinct local-loopback HTTP application proof
   (`bap-application-proof/local-loopback-http/1`, BAP 0.3.0 / BAP ADR-0027).
 
-  The contract under test (design note 2026-08-31, .kimosabe/intents/):
+  The local-loopback profile contract under test:
 
     * same `report()` field set as `sign_report/3`, but the nonce is REQUIRED
       (non-empty binary) and `target_uri` must be a CANONICAL
-      `http://127.0.0.1`/`http://[::1]` target — admission is DELEGATED to
+      `http://127.0.0.1`/`http://[::1]` target: admission is DELEGATED to
       BAP's producer (BARA adds no URI logic; every deceptive form fails
       closed as `{:producer_error, :invalid}`);
-    * profile selection is the FUNCTION NAME — never inferred, never an
+    * profile selection is the FUNCTION NAME: never inferred, never an
       option on `sign_report/3`;
     * the produced bytes are profile-distinct (`ba+loopback-proof`, kind
       `:local_loopback_http_proof`) and mutually rejected with the standard
       `dpop+jwt` profile in BOTH directions;
-    * errors are the closed `sign_error()` set — no key material, nonce
+    * errors are the closed `sign_error()` set: no key material, nonce
       values, proof bytes, or report content ever ride an error or a
       telemetry event;
     * the message handed to `sign/2` is EXACTLY BAP's local-profile signing
@@ -174,7 +174,7 @@ defmodule BoundedAuthorityReportAdapter.SignLocalLoopbackReportTest do
 
     test "a non-UTF8 nonce fails closed at BAP's producer (the BARA/BAP duty split)" do
       # BARA checks presence + binary shape; BAP's valid_nonce? requires a
-      # valid UTF-8 string — a binary that is not a string is the producer's
+      # valid UTF-8 string: a binary that is not a string is the producer's
       # to reject (the same split every other field uses).
       report = loopback_report(nonce: <<0xFF, 0xFE>>)
 
@@ -318,7 +318,7 @@ defmodule BoundedAuthorityReportAdapter.SignLocalLoopbackReportTest do
       # ADR-0021 Decision 8 moved this rejection upstream: the report
       # validators route grant_compact through the major's bounded header
       # walk, so a non-JWS (and any wrong-major) grant is :invalid_report
-      # HERE — previously it surfaced downstream as
+      # HERE: previously it surfaced downstream as
       # {:producer_error, :invalid} at BAP's ath hashing. Fail-fast per the
       # repo's own principle; the malformed grant still reds, earlier.
       report = loopback_report(grant_compact: "not-a-jws")
@@ -460,7 +460,7 @@ defmodule BoundedAuthorityReportAdapter.SignLocalLoopbackReportTest do
 
       assert {:ok, signing_input} = Loopback.proof_signing_input(bap_proof, %{})
 
-      # The profile kind is BAP's loopback kind — the standard producer's
+      # The profile kind is BAP's loopback kind: the standard producer's
       # :proof can never appear here.
       assert signing_input.kind == :local_loopback_http_proof
 

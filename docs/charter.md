@@ -1,126 +1,87 @@
-# Charter — Bounded Authority Report Adapter
+# Charter: Bounded Authority Report Adapter
 
-**Status:** Governing · **Authority:** the public
-`bounded_authority_protocol` API, protocol corpus, and verifier contract.
+The public `bounded_authority_protocol` API, specifications and conformance corpus define
+the wire contract. This adapter supplies signing through caller-owned key handles.
 
 ## 1. The problem
 
-An untrusted caller presents a request to a verifier. The verifier must answer two
-distinct questions:
+A verifying service receives a grant and holder proof bound to a request. The pure
+protocol verifier checks signatures, signed scope and exact request binding against
+caller-supplied trusted keys and expected context. It returns facts, not permission.
+Verification is never authorization.
 
-1. **Is the caller who the transport says it is?** Transport authentication answers this.
-2. **Is that caller authorized for these exact request bytes?** A capability grant,
-   bound to the request by a holder proof, answers this.
+The verifying service's authorization policy decides whether those facts permit execution.
+That policy also requires authenticated identity binding, trusted-key selection, live
+revocation checks and atomic replay reservation. Transport authentication identifies the
+presenter; it does not supply those policy decisions.
 
-The request carries a **grant + proof envelope** proving that the caller holds a
-capability the authority issued, bound to the specific request bytes. A captured
-transport credential alone cannot forge authority or re-purpose a proof.
+A captured transport credential alone cannot create a valid holder signature or bind an
+existing proof to different request bytes. A captured complete envelope still requires
+the service's replay protection.
 
 ## 2. What this adapter does
 
-This library is BAP's universal companion signer: it signs BAP
-protocol objects via a local key-handle: proof signing (`sign_report/3`, this
-section), boundary-anchor signing (`sign_anchor/3`, §5), grant signing
-(`sign_grant/3`, the issuer-role instantiation), key-transition signing
-(`sign_key_transition/3`), local-loopback proof signing
-(`sign_local_loopback_report/3`, the byte-distinct development-listener profile)
-and content-assertion signing (below). `BoundedAuthorityReportAdapter.V3`
-signs the four standard objects under ES256. This section describes the
-proof/envelope flow; each extension's function documentation describes its own.
+The root module signs holder proofs, local-loopback proofs, grants, boundary anchors,
+key transitions and content assertions with Ed25519 keys. `BoundedAuthorityReportAdapter.V3`
+signs the four standard objects with P-256 keys and ES256. Each function documents its
+fields, options, key-handle callbacks, result and closed errors.
 
-The content-assertion extension (`sign_content_assertion/3`, since 0.9.0)
-adds a role-agnostic, digest-bound assertion through the same signing tail. It
-uses BAP's explicit standalone profile and atomic key identity; it does not add
-content interpretation, schema validation, trust resolution, or authorization.
+For a request envelope, `sign_report/3`:
 
-**In the envelope, the adapter signs the holder proof — and only the holder
-proof.** Concretely, a holder calls this adapter with an issuer-signed grant and
-an application request, and the adapter returns the grant + proof envelope:
+1. Receives an issuer-signed grant and request fields from the caller.
+2. Builds the holder proof binding the grant, method, target URI, invocation id,
+   operation, tagged arguments and nonce.
+3. Calls the protocol's signing-input producer for the exact bytes to sign.
+4. Signs through the holder's key handle, then checks the signature against that
+   handle's public key.
+5. Assembles the compact proof through the protocol package with the same bounds.
+6. Returns the unchanged grant and the new proof.
 
-1. Receive the issuer-signed `grant_compact` as an INPUT. The grant was signed
-   out of band by the authority runtime (the issuer) — in THIS flow
-   the adapter never signs the grant (grant signing is the separate
-   issuer-role instantiation `sign_grant/3`, gated on the handle's
-   `signing_identity/1` resolving `:issuer`).
-2. Build the holder proof struct binding that grant to the report's request
-   fields (`method`, `target_uri`, `invocation_id`, `operation`,
-   `cast_arguments`).
-3. Produce the deterministic proof signing input via
-   `BoundedAuthorityProtocol.V1.proof_signing_input/2`.
-4. Sign the input's message with the holder's private key — Ed25519 on the major-1
-   surface, EC P-256 (`ES256`) on the `V3` surface (held locally
-   on the edge — never in the verifier; the adapter holds a
-   `{module(), term()}` key-handle callback, never the key bytes).
-5. Assemble the compact proof via
-   `BoundedAuthorityProtocol.V1.assemble_compact/3`, using the same caller bounds
-   as the signing-input producer.
-6. Return `{grant: grant_compact, proof: proof_compact}` — the grant passes
-   through untouched.
+Grant signing is a separate issuer-side operation, `sign_grant/3`, whose handle must
+declare the `:issuer` role through `signing_identity/1`. It can additionally require an
+Ed25519 role attestation. Content assertions bind content digests and context without
+granting authority or interpreting the content.
 
-The verifier then verifies the envelope with
-`BoundedAuthorityProtocol.V1.check_envelope/2`, which checks the grant signature
-against the issuer's public key and the proof signature against the holder's
-public key. The adapter produces what the verifier checks.
+## 3. Component boundaries
 
-Signing the grant with the holder key would produce an envelope no
-correctly-configured verifier accepts — `sign_report/3`'s one signing artifact
-is the proof, which is why grant signing lives in its own issuer-role-gated
-instantiation (see §4 for the three-role split).
+The adapter signs; the pure protocol package verifies. The adapter's signature self-check
+and optional role-attestation gate protect signing output. They do not implement the
+verifying service's authorization policy.
 
-## 3. What this adapter does NOT do
-
-These negatives are load-bearing — each maps to a different repo's job:
-
-- **It does not verify (content).** Verification is embedded in every party via the
-  protocol package. The verifier verifies; this adapter signs. Conflating
-  the two puts the signer in the verifier's trust boundary. *(Nuance — the
-  adapter DOES run sign-time gating verifies: the wrong-key guard on every sign
-  path, and the optional role-attestation gate on grants; those gate
-  the SIGNING so a mis-signed artifact fails loudly at the signing boundary;
-  they never verify the artifact's content, which stays the verifier's job via
-  BAP.)*
-- **It is not the runtime.** Grant *issuance*, key custody/rotation, and live
-  revocation are the authority runtime's job. This
-  adapter uses a caller-owned holder key and signs on invocation; it does not
-  mint capabilities.
-- **It is not a transport.** Transport remains outside the library. This adapter
-  envelopes a request before it is sent; how the envelope crosses a process or
-  network boundary is the caller's concern.
-- **Publication does not widen its role.** The package is public on Hex,
-  and its source is public. It is still only a signer and gains no verifier,
-  runtime, transport, persistence, or custody authority from publication.
+Grant issuance, trusted-key discovery, live revocation, replay reservation and execution
+belong to stateful applications. Key custody and rotation belong to the caller's
+custodian. The adapter does not contact an authority service, transport requests or
+persist results.
 
 ## 4. The authority model
 
-| Role | Repo | Keys it holds | Signs? | Verifies? |
-|---|---|---|---|---|
-| **Authority / issuer** | the authority runtime (a separate service) | issuer key | grants at issuance | revocation-sensitive decisions |
-| **Holder / prover** (the edge agent) | **this adapter** | holder (private key: Ed25519 major-1, P-256 `ES256` via `.V3`) | every BAP object kind — proofs (holder role, plus the local-loopback profile sibling), anchors + key transitions (role-agnostic), grants (issuer-role instantiation, gated on the declared issuer role), content assertions | — |
-| **Verifier** (the verifier + any third party) | `bounded_authority_protocol` (public package) | none (verifies against published keys) | — | grants, proofs, envelopes, boundary anchors, key transitions |
+| Role | Component | Key access | Responsibility |
+|---|---|---|---|
+| Issuer | Authority service | Issuer custody | Issues and revokes grants; can call this adapter to sign them. |
+| Holder | Calling agent and this signer | Holder custody through a key handle | Signs request proofs without exposing its private key. |
+| Pure verifier | Public protocol package | Caller-supplied trusted public keys | Returns cryptographic and contextual facts about signed objects. |
+| Verifying service | Consuming application | Trusted public keys and live policy state | Binds identity, reserves replay, checks revocation and applies authorization policy. |
 
-This is the DPoP-shaped split (RFC 9449): the holder proves possession of a key
-bound to the request, without exposing the key. The adapter is the holder-side
-glue — and, for issuer-side callers, the grant-signing SDK; the
-protocol package is the shared verifier; the runtime is the issuer.
+The holder proof follows the proof-of-possession model of
+[RFC 9449](https://www.rfc-editor.org/rfc/rfc9449). The protocol supplies canonical bytes
+and verification; this adapter supplies signing; services supply operational authority.
 
 ## 5. Boundary anchors (`sign_anchor/3`)
 
-A durable confirmation MAY be a signed **boundary anchor**
-(`BoundedAuthorityProtocol.V1.BoundaryAnchor`) that a holder verifies before
-advancing local state. The library provides `sign_anchor/3`; the protocol package
-provides `boundary_anchor_signing_input` and `verify_historical_anchor`. Whether a
-deployment uses anchors is a consumer decision, not this library's scope.
+A boundary anchor is a signed checkpoint naming a chain, sequence and hash. A holder
+may verify it before advancing local state. The adapter signs it through `sign_anchor/3`;
+the protocol provides the signing-input producer and `verify_historical_anchor/3`.
+Choosing whether to use anchors and trusting a historical key are application decisions.
 
-## 6. Invariants this adapter must preserve
+## 6. Invariants
 
-- **The holder key never leaves the edge.** The verifier, the transport,
-  and the protocol package never see the private key. The adapter signs locally;
-  only the public key + the signatures cross the boundary.
-- **The envelope is byte-compatible with the protocol package's verifiers +
-  conformance vectors.** The adapter does not invent envelope shapes; it calls
-  BAP's signing-input producers and assembles with BAP's `assemble_compact`.
-  Round-trip against the published vectors is the acceptance bar.
-- **The adapter depends only on the public protocol package.** No runtime-service
-  dependency (the dependency-direction wall). A test proves this.
-- **Transports stay protocol-free.** This adapter is called BY the edge agent; it
-  is not embedded in the transport libraries.
+- Private keys remain in caller custody. The adapter receives public keys and signatures
+  through callbacks; production handle terms identify keys rather than containing them.
+- Canonical bytes come from the protocol's producers and assembler. Independent
+  conformance vectors, including exact-byte comparisons, qualify the output.
+- Required runtime dependencies are the public protocol package and telemetry. Igniter
+  is optional installer support. The dependency-direction test rejects authority-runtime
+  and transport dependencies in the library.
+- Transport remains a separate application concern. The edge-agent example has its own
+  Mix project and transport dependencies.
+- The [stability contract](upgrading.md#stability-contract) has applied since 1.0.0.

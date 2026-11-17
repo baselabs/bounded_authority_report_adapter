@@ -1,13 +1,13 @@
 if Code.ensure_loaded?(Igniter) do
   defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Install do
     @moduledoc """
-    Scaffolds a starter key-handle module — the holder-side integration point.
+    Scaffolds a starter key-handle module: the holder-side integration point.
 
         mix bounded_authority_report_adapter.install --module MyApp.HolderKey
 
     Everything key-shaped is deliberately UNWIRED: every callback body raises until
     you replace it with your real custody integration, so the scaffold signs nothing
-    by accident — there is no road to a working key-in-process default (the same
+    by accident: there is no road to a working key-in-process default (the same
     posture as the package's test-support reference handle, which does not ship).
     The commented sketches show the shape a real HSM/KMS/key-server wiring takes;
     see docs/getting-started.md and docs/recipes.md for the full contracts.
@@ -40,21 +40,21 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     # The starter: all five callbacks defined (so the behavior compiles clean) but
-    # every body raises — the implementations are sketches in comments. Which
+    # every body raises: the implementations are sketches in comments. Which
     # operation needs which callback is stated inline (the moduledoc contract table
     # of BoundedAuthorityReportAdapter, as comments).
     defp starter_handle_source(module) do
       """
       defmodule #{inspect(module)} do
         @moduledoc \"\"\"
-        The holder's key handle — the ONLY place this application touches key material.
+        The holder's key handle: the ONLY place this application touches key material.
 
         Implement each callback against your real custody store (HSM, KMS, key
         server). The adapter calls THESE functions and never sees the private key.
 
         Two suite surfaces share this behavior: the major-1
-        surface (BoundedAuthorityReportAdapter — Ed25519, 32-byte keys) and
-        the major-3 surface (BoundedAuthorityReportAdapter.V3 — ES256,
+        surface (BoundedAuthorityReportAdapter: Ed25519, 32-byte keys) and
+        the major-3 surface (BoundedAuthorityReportAdapter.V3: ES256,
         65-byte uncompressed-SEC1 P-256 points, raw r||s signatures with
         low-S; the adapter normalizes high-S returns). The KEY's wire shape
         selects which surface it can serve; run
@@ -76,7 +76,7 @@ if Code.ensure_loaded?(Igniter) do
 
         @behaviour BoundedAuthorityReportAdapter
 
-        # The handle term is whatever YOUR callbacks understand — a key reference,
+        # The handle term is whatever YOUR callbacks understand: a key reference,
         # never key bytes (see docs/security.md: the contract is the guarantee).
         #
         # The params are underscored below (the raising bodies use nothing); when
@@ -89,12 +89,12 @@ if Code.ensure_loaded?(Igniter) do
           #   {:ok, signature}
           #
           # For the V3 surface (ES256): return the RFC 7518 §3.4 RAW r||s form
-          # (exactly 64 bytes). DER output must be converted first — e.g. for
+          # (exactly 64 bytes). DER output must be converted first: e.g. for
           # OTP crypto, decode the DER SEQUENCE to (r, s), normalize low-S
           # (s <- n - s when s > n/2), and re-encode as two padded 32-byte
           # big-endian integers. The adapter ALSO normalizes low-S, and
           # rejects DER (a 71-byte return is :signing_failed).
-          raise "wire #{inspect(module)}.sign/2 to your custody store — see docs/recipes.md"
+          raise "wire #{inspect(module)}.sign/2 to your custody store: see docs/recipes.md"
         end
 
         def sign(_message, _handle), do: {:error, :invalid_handle}
@@ -116,7 +116,7 @@ if Code.ensure_loaded?(Igniter) do
 
         @impl true
         def key_identity(_handle) do
-          # ONE atomic {key_id, public_key} snapshot — a split snapshot can sign
+          # ONE atomic {key_id, public_key} snapshot: a split snapshot can sign
           # the wrong kid into an anchor header (docs/recipes.md, the KMS recipe).
           #   {:ok, {key_id, public_key}} = MyKms.current_version(_handle)
           raise "wire #{inspect(module)}.key_identity/1 as ONE atomic snapshot"

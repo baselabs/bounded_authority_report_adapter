@@ -1,18 +1,19 @@
 # Contributing
 
 Contributions must preserve the invariants the repository exists to hold: the
-dependency-direction wall (the library depends only on the public protocol package — never
-the authority runtime, never a transport), the closed-atom error discipline, the value-free
-telemetry surface, and the test-only status of `test/support/` (nothing there ships).
+dependency-direction wall, closed-atom errors, value-free telemetry and test-only status of
+`test/support/` (nothing there ships). Required runtime dependencies are the public protocol
+package and telemetry, with optional Igniter installer support. Authority-runtime and
+transport dependencies are excluded from the library.
 
 ## Before a pull request
 
-Run the per-file floor on EVERY file you touched, from the project that owns it — the
+Run the per-file floor on EVERY file you touched, from the project that owns it: the
 library at the repo root, the example app from `examples/edge_agent/`:
 
 ```sh
 mix format
-MIX_ENV=test mix compile --warnings-as-errors   # NOT bare mix compile — it skips test/support
+MIX_ENV=test mix compile --warnings-as-errors   # :test includes test/support
 mix credo --strict
 mix test
 ```
@@ -30,21 +31,11 @@ MIX_ENV=test mix ci
 `test/support/`, which only compiles under `:test`, and `mix ci` refuses to run in any
 other environment.
 
-## Commits
+## Tests
 
-Surgical pathspecs — `git commit -o <files>` or explicit paths, never `git add -A`
-(process state and tool directories must never ride in a commit). Single tree on
-`master`; no feature branches unless the maintainer asks. Never `git stash`.
-
-## Tests and gates
-
-- New behavior ships red-first: write the test, watch it fail for the intended reason,
-  then make it green.
-- A new gate must be proven RED by a named mutation before it counts (plant the
-  contract violation, confirm the gate fires, restore). A gate that cannot go red is a
-  rubber stamp — several of this repo's tests exist specifically to mutation-prove
-  their own gates.
-- Behavior-CHANGING work greps the tests for the OLD contract before changing it.
+Changes to a public contract include its typespecs, examples, error reference and migration
+notes. Regression tests should demonstrate both acceptance and refusal with real cryptography
+and real services. New documentation guards must reject the violation they claim to detect.
 
 ## Protocol dependency bumps
 
@@ -64,24 +55,28 @@ corrective, or breaking.
 
 A release follows the [release runbook](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/release.md): the release commit, the gates
 before the tag (local and remote CI, the supply-chain attestation, and an archive
-checksum equal to the attested one), the owner's tag and publish, and the registry
+checksum equal to the attested one), the release tag and publication, and the registry
 read-back within Hex's one-hour revert window.
 
 ## Docs
 
-Docs for a capability ship in the same change as the capability. Three tests keep them
+Docs for a capability ship in the same change as the capability. These checks keep them
 honest:
 
 - `test/doc_samples_test.exs` runs every Elixir code block in the README and guides, and
   every example in the API docs, and checks each `#=> value` line. A block that cannot
   run as written is marked `<!-- doc-sample: fragment -->`, said to be a fragment in the
-  text, and must still compile with its free variables as stub parameters. The HSM and
-  KMS recipes run against a real local signer; the Plug recipe runs in
+  text, and must still compile with its free variables bound as parameters. Custodian-specific
+  fragments are compiled without substituting for a remote custodian. The Plug recipe runs in
   `examples/edge_agent/test/plug_recipe_test.exs`.
 - The generative tests in `test/bounded_authority_report_adapter/keyword_options_test.exs`
   draw from the run's random seed; a failure prints it, and `mix test --seed N` repeats it.
-- `test/docs_currency_test.exs` checks the error tables, the function references and the
-  install snippets against the code.
+- `test/docs_currency_test.exs` checks error meanings, references and install snippets.
+- `test/docs_contract_test.exs` checks all public type docs and function result contracts
+  against compiled documentation and typespecs.
+- `test/public_prose_test.exs` checks tracked public text.
+- `scripts/check_livebook.exs`, run with `elixir` outside a Mix project, installs the
+  public Hex release in a temporary cache and checks every pinned notebook output.
 - `test/bounded_authority_report_adapter/livebook_walkthrough_test.exs` runs the Livebook
   and compares each cell's value with the output pinned under it; edit a cell and you
   re-pin its output in the same commit.

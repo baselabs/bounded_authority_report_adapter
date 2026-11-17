@@ -5,7 +5,7 @@ defmodule BoundedAuthorityReportAdapter.InstallTaskTest do
   imports the dep into the consumer's .formatter.exs.
 
   The no-igniter fallback (a clean Mix.raise with the remedy) is exercised by
-  the smoke transcript in the ticket closeout — it compiles only when igniter
+  the smoke transcript in the ticket closeout: it compiles only when igniter
   is absent, which is never the case in this test env.
   """
 
@@ -36,7 +36,7 @@ defmodule BoundedAuthorityReportAdapter.InstallTaskTest do
   end
 
   test "imports the dep into the consumer's .formatter.exs" do
-    # The formatter file already exists — this is a modification, so assert on
+    # The formatter file already exists: this is a modification, so assert on
     # the planned diff rather than a creation.
     assert IT.diff(run_install()) =~ "import_deps: [:bounded_authority_report_adapter]"
   end

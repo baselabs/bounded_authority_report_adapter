@@ -1,6 +1,6 @@
 defmodule BoundedAuthorityReportAdapter.SignAnchorTest do
   @moduledoc """
-  RA4 — the boundary-anchor signing suite. Enforces the wrong-key guard, the
+  RA4: the boundary-anchor signing suite. Enforces the wrong-key guard, the
   key_id-from-handle invariant, exit/throw containment, the no-canonical-bytes-fork,
   and non-vacuity (defect injection), plus the round-trip acceptance proof through
   BAP's `verify_historical_anchor/3`.
@@ -146,7 +146,7 @@ defmodule BoundedAuthorityReportAdapter.SignAnchorTest do
     end
 
     test "a rotation race (atomic snapshot, then sign/2 with the rotated key) is caught at sign" do
-      # The cross-vendor (Codex) rotation-race probe, now defended at sign time:
+      # A rotation race must be refused at sign time:
       # key_identity/1 returns a consistent {key_id, pub_a} snapshot in ONE call,
       # so kid+public_key cannot drift; it then flips state so sign/2 signs with
       # key-b. The verify_signature guard catches the sign/2-vs-snapshot mismatch

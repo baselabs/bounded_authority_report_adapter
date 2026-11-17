@@ -1,13 +1,13 @@
-# edge_agent — a runnable end-to-end reference
+# edge_agent: a runnable end-to-end reference
 
 A minimal but real Elixir app that proves the adapter works in a deployment: an
 **edge agent** signs an application report with `BoundedAuthorityReportAdapter.sign_report/3`
 and POSTs it over HTTP to a **receiver** that verifies the envelope via
 `BoundedAuthorityProtocol.V1.check_envelope/2`. No database, no Docker, no other
-project running — the whole capability loop runs in one app.
+project running: the whole capability loop runs in one app.
 
 The Livebook (`../report_envelope_roundtrip.livemd`) plays all three roles
-in-process; THIS app adds the piece the Livebook does not — **real HTTP
+in-process; THIS app adds the piece the Livebook does not: **real HTTP
 transport** between an edge signer and a consumer.
 
 ## What's here
@@ -71,22 +71,22 @@ returns.
 
 `200 accepted` means the receiver decoded the raw report body, ran
 `check_envelope/2` against the published demo issuer key, bound the verified
-holder to the configured identity, claimed the nonce — and every step passed.
+holder to the configured identity and claimed the nonce. Every step passed.
 
 ## What the receiver actually checks (the complete safe path)
 
 The receiver (`EdgeAgent.Receiver`) runs ONE `with` that fails closed to a uniform
 `401 invalid`, following `docs/consumer-integration.md`:
 
-1. **`V1.Json.decode(raw_body)`** — the request's RAW bytes → BAP's tagged
+1. **`V1.Json.decode(raw_body)`**: the request's RAW bytes → BAP's tagged
    `cast_arguments`. A BAP-strict decode failure (a Jason-valid-but-BAP-invalid
    body) collapses to `:invalid`.
-2. **`V1.check_envelope/2`** — the grant + proof verified cryptographically
+2. **`V1.check_envelope/2`**: the grant + proof verified cryptographically
    against the published issuer key + the reconstructed expected request.
-3. **Identity binding (§8)** — the verified envelope's `holder_thumbprint` must
+3. **Identity binding (§8)**: the verified envelope's `holder_thumbprint` must
    equal the configured identity key's thumbprint. Without this, a captured
    envelope is replayable under a different identity.
-4. **Nonce dedup (§9)** — the nonce is claimed on a replay ledger. Without this,
+4. **Nonce dedup (§9)**: the nonce is claimed on a replay ledger. Without this,
    a byte-identical request is re-accepted within `proof_max_age`.
 
 The envelope rides as two headers (`X-BA-Grant`, `X-BA-Proof`); the raw report
@@ -100,7 +100,7 @@ mix test
 ```
 
 `test/edge_agent_test.exs` has six tests: the happy path (via `EdgeAgent.run/1` and a
-hand-built envelope) plus the four rejection classes that prove the defenses are real, not vacuous — a
+hand-built envelope) plus the four rejection classes that prove the defenses are real, not vacuous: a
 tampered proof, a stranger's proof, a wrong identity (the §8 binding catches an
 envelope `check_envelope` would otherwise accept), and a replayed nonce (the §9
 ledger catches a second identical request). `test/local_loopback_test.exs` runs the
@@ -110,17 +110,17 @@ loopback profile flow over real IPv4 and IPv6 listeners, and
 ## Development notes (gotchas specific to this app)
 
 This is its **own mix project** (`examples/edge_agent/mix.exs`), separate from the
-library at the repo root. Its deps (req/bandit/plug) live HERE — they never touch
+library at the repo root. Its deps (req/bandit/plug) live HERE: they never touch
 the library's `mix.exs`, so the library's dependency-direction wall (which
-scans `lib`/`test/support`/`mix.exs`/`mix.lock` — **not `examples/`**) stays green.
-See the repo-root [`AGENTS.md`](../../AGENTS.md) for the full operational picture.
+scans `lib`/`test/support`/`mix.exs`/`mix.lock`: **not `examples/`**) stays green.
+See [Contributing](../../CONTRIBUTING.md) for project layout and validation commands.
 
 - **Bandit ≥ 0.7.6:** `:ip`/`:port`/`:scheme` go at the TOP LEVEL of the Bandit
   child spec, not nested under `:options:` (nested options were removed in
   0.7.6). The old shape raises
   `Unsupported key(s) in top level config: [:options]` at server start (it passes
   `mix compile` and fails at runtime).
-- **Test-file warnings surface only at `mix test` time**, not `mix compile` — this
+- **Test-file warnings surface only at `mix test` time**, not `mix compile`: this
   app has no `elixirc_paths` override, so the compile step covers `lib/` only.
   Watch the `mix test` output.
 - **`V1.Json` is decode-only** (no `encode`): both the agent and the receiver
@@ -136,11 +136,11 @@ See the repo-root [`AGENTS.md`](../../AGENTS.md) for the full operational pictur
   and arrives at the edge out of band.
 - **Not production key custody.** `EdgeAgent.Handle` holds a `{pub, priv}` tuple in
   memory. A production edge agent implements the handle callbacks against an HSM,
-  the OS keychain, or a key server — that swap is the ONE place custody enters.
+  the OS keychain, or a key server: that swap is the ONE place custody enters.
 - **Not a production replay ledger.** `NonceLedger` is an in-memory ETS table. A
   production consumer keys a durable unique constraint on `(identity, nonce)`.
-- **The receiver depends ONLY on `bounded_authority_protocol`** — never on this
-  adapter. That is the dependency-direction wall: the verifier consumes the public
+- **The receiver uses the protocol package for verification.** It does not call the
+  adapter; Req, Bandit and Plug provide the application's transport. That is the dependency-direction wall: the verifier consumes the public
   protocol package; the adapter is the holder-side signing glue the agent uses.
 
 See [`docs/consumer-integration.md`](../../docs/consumer-integration.md) for the

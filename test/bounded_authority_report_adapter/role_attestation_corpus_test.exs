@@ -1,20 +1,20 @@
 defmodule BoundedAuthorityReportAdapter.RoleAttestationCorpusTest do
   @moduledoc """
-  Executes BAP's COMPLETE packaged role-attestation profile corpus through the dependency —
+  Executes BAP's COMPLETE packaged role-attestation profile corpus through the dependency.
   the profile-side acceptance oracle for the 0.6.0 pin (cross-vendor review B2: the RA11
   gate suite proves the adapter's own gate; this file proves the dependency's attestation
   verification against the 40 CERTIFIED cases, the `LocalLoopbackCorpusTest` discipline).
 
   Coverage (every certified case, no sampling):
 
-    * **identity** — the index's declared profile string, revision, exact two-file set, and
+    * **identity**: the index's declared profile string, revision, exact two-file set, and
       case count (corpus growth/revision reds until deliberately extended).
-    * **digests** — the index's own bytes pinned to the certified digest (compile-time in
+    * **digests**: the index's own bytes pinned to the certified digest (compile-time in
       the loader, re-asserted here) + each content file's sha256 re-verified at runtime.
-    * **40 cases** — each case's two DECLARED verdicts (`decode`, `verify`) against the
+    * **40 cases**: each case's two DECLARED verdicts (`decode`, `verify`) against the
       dependency's `RoleAttestation.V1` with the corpus's own `expected_overrides`
       derivation, plus the decode-false-implies-verify-false invariant.
-    * **cross-profile** — the certified attestation bytes rejected by the v1 surface, and
+    * **cross-profile**: the certified attestation bytes rejected by the v1 surface, and
       the corpus's own live-grant case rejected by the profile decode (both directions).
   """
 

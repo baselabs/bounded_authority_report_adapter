@@ -1,21 +1,21 @@
 defmodule EdgeAgentTest do
   @moduledoc """
-  RA9 acceptance — the end-to-end round-trip through real HTTP (Req POST → Bandit
+  RA9 acceptance: the end-to-end round-trip through real HTTP (Req POST → Bandit
   → `check_envelope/2`), plus the four rejection classes that prove the receiver's
   defenses are real, not vacuous:
 
-    1. **Happy path** — `EdgeAgent.run/1` (the actual ROADMAP-named flow: mint →
+    1. **Happy path**: `EdgeAgent.run/1` (the actual ROADMAP-named flow: mint →
        `sign_report/3` → POST) is accepted (`200`).
-    2. **Tampered proof** — one flipped proof byte → `401` (the crypto is real).
-    3. **Stranger's proof** — a proof signed by a key the grant was NOT issued to
+    2. **Tampered proof**: one flipped proof byte → `401` (the crypto is real).
+    3. **Stranger's proof**: a proof signed by a key the grant was NOT issued to
        → `401` (BAP's holder↔grant thumbprint binding, `runtime.ex:482`).
-    4. **Wrong identity** — a valid envelope presented to a receiver expecting a
+    4. **Wrong identity**: a valid envelope presented to a receiver expecting a
        DIFFERENT identity → `401` (the §8 binding is non-vacuous: `check_envelope`
        PASSED, the binding caught it).
-    5. **Replayed nonce** — a byte-identical second request within the proof
+    5. **Replayed nonce**: a byte-identical second request within the proof
        window → `401` (the §9 replay ledger is non-vacuous).
 
-  `async: false` — the nonce ledger is a named ETS table shared across receivers.
+  `async: false`: the nonce ledger is a named ETS table shared across receivers.
   """
 
   use ExUnit.Case, async: false
@@ -81,7 +81,7 @@ defmodule EdgeAgentTest do
   describe "rejection — the §8 identity binding is real" do
     test "a valid envelope presented to a receiver expecting a DIFFERENT identity is rejected (401)" do
       # check_envelope would PASS here (grant issued to A, proof by A), but the
-      # receiver's expected identity is B — the §8 binding must catch it.
+      # receiver's expected identity is B: the §8 binding must catch it.
       port = free_port()
       wrong_url = "http://127.0.0.1:#{port}/report"
 

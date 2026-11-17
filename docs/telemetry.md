@@ -14,7 +14,7 @@ an application sees nothing until it attaches one.
 | `[:bounded_authority_report_adapter, :sign, :stop]` | `%{duration: native_monotonic_delta}` | `%{object: object, result_class: result_class}` |
 
 `duration` is the monotonic time delta of the WHOLE signing span (entry point
-to closed-atom return), in `:erlang.monotonic_time/0` units — aggregate only,
+to closed-atom return), in `:erlang.monotonic_time/0` units: aggregate only,
 never per-callback timing (a per-HSM-operation split would leak which custody
 operation was slow or failing).
 
@@ -42,7 +42,7 @@ Result classes (the classified outcome of a span):
 | `:invalid_input` | The caller-supplied object failed validation (`:invalid_report`, `:invalid_anchor`, `:invalid_grant`, `:invalid_transition`, or `:invalid_content_assertion`). | Rate = caller input quality. Not a custody problem. |
 | `:invalid_key_handle` | The key handle is malformed, or a handle callback (`public_key/1`, `key_identity/1`, `signing_identity/1`) rejected / returned an invalid value (including an Ed25519 key BAP's strict rule refuses) / exited. | Rate = handle wiring or custody-endpoint health. |
 | `:invalid_role_attestation` | `sign_grant/3` refused its `:role_attestation` option: malformed, rejected by the protocol's verification, or not attesting the issuer role (and, on `V3.sign_grant/3`, any such option). | Rate = attestation supply or a caller trying to sign grants it is not attested for. Not a custody problem. |
-| `:signing_failed` | `sign/2` rejected, violated its contract, returned a non-64-byte signature, OR the signature did not verify against the resolved public key (wrong-key). | Rate = **custody misconfiguration** — the highest-priority signal this surface offers; a sustained nonzero rate means the handle is signing with the wrong key or failing outright. |
+| `:signing_failed` | `sign/2` rejected, violated its contract, returned a non-64-byte signature, OR the signature did not verify against the resolved public key (wrong-key). | Rate = **custody misconfiguration**: the highest-priority signal this surface offers; a sustained nonzero rate means the handle is signing with the wrong key or failing outright. |
 | `:producer_error` | The protocol's producer or assembler rejected the signing input (bounds, field constraints). | Rate = caller input quality against the protocol contract. |
 
 Error VALUES never ride along: `{:producer_error, :invalid}` is emitted as the
@@ -51,13 +51,13 @@ not the keys involved.
 
 ## The value-free invariant (a named misuse)
 
-Metadata carries exactly the two closed atoms above and NOTHING else — never
+Metadata carries exactly the two closed atoms above and NOTHING else: never
 key ids, thumbprints, message bytes, report content, caller opts, or error
 values. Adding a value-carrying field to an emission is a **named misuse** of
 this surface, not an extension: the library's internal emitters are
 shape-validated and refuse anything outside the closed shapes instead of
 emitting it. A compacted JWS's bytes, a report's fields, and a key id are all
-caller material the event stream must never carry — downstream sinks (logs,
+caller material the event stream must never carry: downstream sinks (logs,
 metrics labels) are not trusted to redact.
 
 ## Stability
@@ -76,7 +76,7 @@ your code called them, attach a handler to the two events instead; to exercise a
 handler in a test, call a signing entry point or `:telemetry.execute/3` with the
 documented event name, measurements and metadata.
 
-Hiding the emitters is surface minimisation, not a security boundary. Any code in the
+Hiding the emitters is surface minimization, not a security boundary. Any code in the
 VM can call `:telemetry.execute/3` with these event names, so an event is not proof
 that a signing call happened. Treat the stream as an operational signal, never as an
 audit record.
@@ -138,19 +138,20 @@ error term into telemetry.
 ## Telemetry never outranks the signature
 
 Each signing entry point returns the signer's result unchanged. A failure
-inside an emission is swallowed; a raise inside the SIGNER propagates — only the emission is guarded, never the crypto.
-(Consequence for counters: a crashing signer leaves an unpaired `:start` — no
+inside an emission is swallowed. A raise inside the signing function propagates;
+the telemetry guard does not contain the signing function.
+For counters, a crashing signer leaves an unpaired `:start`. No
 `:stop` is emitted after a raise. Treat `start − stop` accumulation as a
 crash-rate signal, not a bug; the classes cannot classify a call that never
-returned.)
+returned.
 
 ## If your handler raises
 
 The `:telemetry` library (not the adapter) contains handler failures: `:telemetry.execute/3`
 catches a raising handler, **permanently detaches it**, emits
-`[:telemetry, :handler, :failure]`, logs, and returns — the exception does NOT
+`[:telemetry, :handler, :failure]`, logs, and returns: the exception does NOT
 reach the adapter's emitters. Operational consequence: a handler that raises
-once silently stops receiving ALL subsequent sign telemetry — including the
+once stops receiving all subsequent signing events, including the
 `:signing_failed` custody-misconfiguration alarm this doc calls the
 highest-priority signal. Monitor `[:telemetry, :handler, :failure]` wherever
 you consume this surface, and make handlers total (never let report/label

@@ -3,14 +3,14 @@ defmodule BoundedAuthorityReportAdapter.Conformance.RoleAttestationCase do
   TEST-ONLY loader for BAP's packaged role-attestation profile corpus (BAP 0.6.0, ADR 0036).
 
   The profile corpus ships in the DEPENDENCY at
-  `priv/conformance/attestation-profiles/role-attestation/v1/` — an `index.json` (identity +
+  `priv/conformance/attestation-profiles/role-attestation/v1/`: an `index.json` (identity +
   revision + counts + per-file sha256s), a `profile.json` (the certified context: attestor
   trust-root, subject binding, now), and an `attestation-cases.json` (40 cases, each carrying
   `decode`/`verify` verdicts plus optional `expected_overrides`).
 
   The loader REFUSES an unverified corpus twice over: the index's sha256 over BOTH content
   files is checked at load, AND the index's own bytes are pinned to the certified digest
-  (REQ-RA1-CONFORMANCE-certified-pin: every consumer pins that digest independently) — a
+  (REQ-RA1-CONFORMANCE-certified-pin: every consumer pins that digest independently): a
   patched corpus reds at COMPILE, before any case executes. `@external_resource` recompiles
   on any corpus edit (the `LocalProfileCase` discipline).
   """
@@ -37,7 +37,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.RoleAttestationCase do
   @external_resource @cases_path
 
   # The certified revision-1 index digest (spec/bap-role-attestation-v1.md §6), pinned
-  # independently by every corpus consumer — this package's is the third pin (BAP's ExUnit
+  # independently by every corpus consumer: this package's is the third pin (BAP's ExUnit
   # suite + every in-repo SDK hold the others).
   @certified_index_sha "be5275c69539a0f31734242ff00a484c2f855f39181c55689d8b0f671195d62a"
 
@@ -74,7 +74,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.RoleAttestationCase do
   @doc """
   The baseline `%RoleAttestation.V1.ExpectedAttestation{}` from the certified context, with
   per-case `expected_overrides` applied (attestor_public_key / subject_key_id /
-  subject_public_key / now — mirroring the corpus's own declared shape).
+  subject_public_key / now: mirroring the corpus's own declared shape).
   """
   def expected(attestation_case) do
     base = base_expected()

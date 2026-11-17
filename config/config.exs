@@ -1,13 +1,13 @@
 import Config
 
 # Self-enforcing toolchain: the repository refuses to build on an
-# Erlang/OTP major outside the supported set — every major on which the
+# Erlang/OTP major outside the supported set: every major on which the
 # dependency stack actually compiles for the supported Elixir line
 # (1.18/1.19/1.20). Probed 2026-09-16 four ways: asdf list-all, the official
 # elixir docker tags, bob (repo.hex.pm) builds, AND compile probes. OTP 25
 # and 26 are EXCLUDED despite having images:
 # bounded_authority_protocol 0.4.0's codecs decode through :json
-# (deps/.../v1/json.ex:73), which enters stdlib in OTP 27 — proven by probe
+# (deps/.../v1/json.ex:73), which enters stdlib in OTP 27: proven by probe
 # (`code:ensure_loaded(json)` -> {error,nofile} on 25 and 26; the battery's
 # test/support corpus parsing raises UndefinedFunctionError :json on both).
 # This file is NOT shipped: `files:` in mix.exs excludes config/ (the

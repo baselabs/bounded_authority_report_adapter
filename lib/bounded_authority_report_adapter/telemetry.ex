@@ -8,15 +8,15 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   until it attaches one (`:telemetry.attach_many/4` or a `Telemetry.Metrics` reporter; the
   telemetry guide has a runnable handler). Two events are emitted:
 
-    * `[:bounded_authority_report_adapter, :sign, :start]` —
+    * `[:bounded_authority_report_adapter, :sign, :start]`.
       measurements `%{count: 1}`, metadata `%{object: object}`.
-    * `[:bounded_authority_report_adapter, :sign, :stop]` —
+    * `[:bounded_authority_report_adapter, :sign, :stop]`.
       measurements `%{duration: native_monotonic_delta}`, metadata
       `%{object: object, result_class: class}`.
 
   ## The value-free invariant (a named misuse)
 
-  Metadata carries exactly two closed atoms and NOTHING else — never key ids,
+  Metadata carries exactly two closed atoms and NOTHING else: never key ids,
   thumbprints, message bytes, report content, caller opts, or error VALUES
   (`{:producer_error, :invalid}` is the class `:producer_error`, full stop; a
   wrong-key failure is `:signing_failed`, not the keys involved). Adding a
@@ -39,21 +39,21 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   signing entry point, or call `:telemetry.execute/3` with the documented event name,
   measurements and metadata.
 
-  Hiding the emitters is surface minimisation, not a security boundary: any code in the
+  Hiding the emitters is surface minimization, not a security boundary: any code in the
   VM can call `:telemetry.execute/3` with these event names. A handler must not treat an
   event as proof that a signing call happened, or as evidence of which code emitted it.
 
   ## Telemetry never outranks the signature
 
   Each signing entry point returns the signer's result UNCHANGED. A failure inside the
-  emission is swallowed; a raise inside the SIGNER propagates — only the emission is
-  guarded, never the crypto.
+  emission is swallowed. A raise inside the signing function propagates; the telemetry
+  guard does not contain that function.
   """
 
   @prefix [:bounded_authority_report_adapter, :sign]
 
   # The single source of truth for both axes. docs/telemetry.md's tables are
-  # diffed against these by telemetry_test.exs — a drift reds the suite.
+  # diffed against these by telemetry_test.exs: a drift reds the suite.
   @objects [:report, :anchor, :grant, :key_transition, :local_loopback_report, :content_assertion]
   @classes [
     :ok,
@@ -82,7 +82,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   @spec classes() :: [atom()]
   def classes, do: @classes
 
-  # Internal from 1.0 (was documented before): runs `fun` inside a `:sign` span — emits
+  # Internal from 1.0 (was documented before): runs `fun` inside a `:sign` span: emits
   # :start, runs it, emits :stop with the monotonic duration and the classified result, and
   # returns whatever `fun` returned, unchanged. Telemetry failures are swallowed inside the
   # emitters; a raise inside `fun` propagates. An `object` outside objects/0 raises
@@ -144,7 +144,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
 
   # The closed classification. The per-object input errors collapse to
   # :invalid_input; error VALUES never ride along. The catch-all is unreachable
-  # per the entry points' closed @specs — an off-spec shape is a signing-path
+  # per the entry points' closed @specs: an off-spec shape is a signing-path
   # anomaly, never classified as success.
   defp classify({:ok, _envelope}), do: :ok
   defp classify({:error, :invalid_report}), do: :invalid_input

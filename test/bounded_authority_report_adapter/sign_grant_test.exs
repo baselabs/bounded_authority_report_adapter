@@ -1,6 +1,6 @@
 defmodule BoundedAuthorityReportAdapter.SignGrantTest do
   @moduledoc """
-  RA7 — the grant-signing suite. Enforces the C1 role gate (the design-adversarial
+  RA7: the grant-signing suite. Enforces the C1 role gate (the design-adversarial
   atomic-signing-identity revision), the key_id-from-handle invariant, the wrong-key +
   rotation-race guards, the no-canonical-bytes-fork, output + verifier non-vacuity,
   exit/throw containment, and the closed-atom error set, plus the round-trip acceptance
@@ -112,7 +112,7 @@ defmodule BoundedAuthorityReportAdapter.SignGrantTest do
                  issued_at: @now - 50
                })
 
-      # The verifier verifies the envelope — grant signature against the issuer key,
+      # The verifier verifies the envelope: grant signature against the issuer key,
       # proof signature against the holder key, proof.thumbprint == grant.holder_thumbprint.
       expected = %V1.ExpectedRequest{
         trusted_issuer: trusted_issuer(),
@@ -143,7 +143,7 @@ defmodule BoundedAuthorityReportAdapter.SignGrantTest do
       assert {:error, :invalid_key_handle} =
                BoundedAuthorityReportAdapter.sign_grant(input, holder_handle, %{})
 
-      # The holder key was never used to sign the grant — the role gate fired first.
+      # The holder key was never used to sign the grant: the role gate fired first.
       assert GrantHolderCountingHandle.sign_call_count() == 0
     end
 
@@ -276,7 +276,7 @@ defmodule BoundedAuthorityReportAdapter.SignGrantTest do
 
   describe "the producer-error path (closed-atom: {:producer_error, :invalid})" do
     # The adapter validates presence + shape; BAP validates semantics. A structurally-valid-
-    # but-semantically-invalid grant (a 31-byte holder_thumbprint — binary, so it passes the
+    # but-semantically-invalid grant (a 31-byte holder_thumbprint: binary, so it passes the
     # adapter's guard; but not bounds.digest_bytes, so BAP's grant_json rejects) surfaces as
     # {:producer_error, :invalid}, not :invalid_grant.
     test "a wrong-size holder_thumbprint yields {:error, {:producer_error, :invalid}}" do

@@ -7,13 +7,13 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
 
   The value-free tripwire (the ticket's named mutation) is a SLICE red-proof,
   quoted in the closeout rather than shipped: planting a value-carrying key
-  into the emitter's metadata makes the validator refuse the emission — the
+  into the emitter's metadata makes the validator refuse the emission: the
   stop event vanishes and every shape assertion here reds. What ships is the
   mechanical half: exact-key assertions on real emissions + the validator's
   refusal tests below.
   """
 
-  # async: false — the capture handler observes EVERY emission in the VM, so
+  # async: false: the capture handler observes EVERY emission in the VM, so
   # concurrent suites' sign calls would land in the capture (indistinguishable
   # by design: the surface is value-free). Serializing the module scopes the
   # capture to this suite's own calls.
@@ -156,7 +156,7 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
            ] = events
 
     assert start_measurements == %{count: 1}
-    # EXACT key sets — the value-free invariant is an exact-shape property.
+    # EXACT key sets: the value-free invariant is an exact-shape property.
     assert Map.keys(start_metadata) == [:object]
     assert start_metadata.object == :report
 
@@ -185,7 +185,7 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
           BoundedAuthorityReportAdapter.sign_report(report, handle, %{issued_at: @now - 50})
         end)
 
-      # The return is EXACTLY the pre-telemetry contract — the emission never
+      # The return is EXACTLY the pre-telemetry contract: the emission never
       # alters the signing result.
       assert result == unquote(Macro.escape(expected_return))
 
@@ -295,7 +295,7 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
 
   # The value-free TRIPWIRE is a slice red-proof, not a shipped test: planting a
   # value-carrying key (e.g. key_id) INSIDE the emitter makes the validator
-  # refuse the emission — the :stop event vanishes and every shape assertion
+  # refuse the emission: the :stop event vanishes and every shape assertion
   # above reds. The demonstration is quoted in the slice's closeout. What ships
   # is the mechanical half: the module's own API cannot express an off-shape
   # emission (covered by the exact-key assertions above + the refusals above).
@@ -328,7 +328,7 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
            "phantom or missing objects in docs/telemetry.md: #{inspect(doc_objects)}"
   end
 
-  # The doc segment from `marker` to the next paragraph break — one table's
+  # The doc segment from `marker` to the next paragraph break: one table's
   # scope. (Both tables live under a single heading, so the split anchors on
   # each table's lead-in sentence; the first \n\n is the gap between lead-in
   # and table, the second ends the table.)

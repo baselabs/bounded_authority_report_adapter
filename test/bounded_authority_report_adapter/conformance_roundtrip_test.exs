@@ -1,6 +1,6 @@
 defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
   @moduledoc """
-  RA2 — the conformance round-trip harness. Makes BAP's published
+  RA2: the conformance round-trip harness. Makes BAP's published
   `grant-holder-proof.json` vector the oracle for the adapter's envelope
   contract (ROADMAP RA2). Bars (design §1):
 
@@ -16,7 +16,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
 
   ## The honest boundary (design §1.1)
 
-  The handoff's "bar (ii)" — adapter-produced proof vs the *published* grant —
+  The handoff's "bar (ii)": adapter-produced proof vs the *published* grant.
   is a falsifiable impossibility: `verify_proof_parsed` (runtime.ex:482) binds
   the proof's holder thumbprint to the grant's `cnf.jkt`, and the published
   holder's private key is not tracked. The reachable adapter-coherent bar is
@@ -35,7 +35,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
   # RA1 fixture grant windows (the TestKeys grant builder is the issuer here).
   @now 1_750_000_000
 
-  # The cast_arguments for bar (iii) — tagged Json.value() form (the RA1
+  # The cast_arguments for bar (iii): tagged Json.value() form (the RA1
   # gotcha: a raw map is rejected by RequestDigest.typed/1).
   @cast_arguments {:object, [{"record", {:object, [{"region", {:string, "us-east"}}]}}]}
   @operation "report_external_materialization"
@@ -124,7 +124,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       # thumbprint differs from the grant's cnf.jkt). check_envelope returns an
       # opaque {:error, :invalid}, so the first assert proves the envelope REDS
       # but CANNOT attribute the red to the duplicate-member rejection
-      # specifically — a verifier that tolerated duplicate members would still
+      # specifically: a verifier that tolerated duplicate members would still
       # red here on the other defects (cross-vendor finding: this is not an
       # isolation of duplicate-member rejection).
       #
@@ -132,7 +132,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       # Json.decode) is an INDEPENDENT property: it proves BAP's JSON decoder
       # rejects objects with duplicated member keys, applied to the case's
       # `{"alg":"EdDSA","alg":"HS256","typ":"ba+cap"}` header. This is a
-      # decoder property, not an envelope-verifier attribution — the two
+      # decoder property, not an envelope-verifier attribution: the two
       # asserts together show (a) the published case reds and (b) BAP's decoder
       # rejects duplicate members, but not that (a) is caused by (b).
       v = VectorCase.vector()
@@ -146,7 +146,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       )
 
       # BAP's normative Json.decode rejects an object with a duplicated member
-      # key — an independent decoder property, verified on the case's header.
+      # key: an independent decoder property, verified on the case's header.
       protected_segment = dm["protected_segment"]
 
       assert {:error, :invalid} =
@@ -190,7 +190,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       # closes the residual a cross-vendor note named: a hypothetical future
       # nonce-carrying case whose proof nonce DRIFTED from expected_context would
       # otherwise compare the proof's nonce against the authoritative value and
-      # red — but only if such a case were added. Asserting here that every
+      # red: but only if such a case were added. Asserting here that every
       # CURRENT nonce-carrying published case's proof nonce equals the
       # authoritative value makes the invariant explicit and pins it: a future
       # vector edit that drifts a carrying case's nonce reds this test, not just
@@ -217,7 +217,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       # access cases through fixed literal keys, so a case ADDED to the vector's
       # positive_cases/negative_cases would reach no test and the suite stays
       # green. This test asserts the published case-set keys EXACTLY match the
-      # set the per-case tests cover — so a new case reds here until a covering
+      # set the per-case tests cover: so a new case reds here until a covering
       # test is added, and a dropped case reds if a test references a removed key.
       # It ALSO enumerates nested sub-cases (e.g. selector_denied.equals/one_of)
       # so a sub-case added under an existing container key can't slip through
@@ -311,7 +311,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     # The reachable form of "adapter-produced proof verifies": the adapter signs
     # a proof with a fresh holder keypair against a freshly issuer-signed grant
     # binding that holder's thumbprint. The handoff's "bar (ii)" (adapter proof
-    # vs the PUBLISHED grant) is a falsifiable impossibility — the published
+    # vs the PUBLISHED grant) is a falsifiable impossibility: the published
     # grant's cnf.jkt binds the published holder (private key not tracked), so
     # verify_proof_parsed (runtime.ex:482) reds any fresh-holder proof against
     # it. This bar proves the adapter's proof is byte-compatible with a grant a
@@ -428,7 +428,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
           bounds: V1.Bounds.maximum()
         }
 
-      # The un-tampered envelope MUST be green — otherwise the red tests below
+      # The un-tampered envelope MUST be green: otherwise the red tests below
       # prove nothing (they would red for the wrong reason).
       assert {:ok, _} = V1.check_envelope(%Credentials{grant: grant, proof: proof}, expected)
 
@@ -481,7 +481,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       # (secure_equal?(proof.request_hash, request_hash)) BEFORE verify_signature
       # at :500. The tampered ba_req decodes to a request_hash that no longer
       # matches the recomputed digest over the unchanged cast_arguments, so the
-      # chain short-circuits at :491 — a FIELD-BINDING red, genuinely distinct
+      # chain short-circuits at :491: a FIELD-BINDING red, genuinely distinct
       # from the signature-flip test (which reds at :500). (The signature over
       # the tampered payload is also invalid, but :491 short-circuits first, so
       # the signature check is never reached.) Verified first-hand via a probe.
@@ -495,7 +495,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     test "the published vector's tamper_verdicts all go RED through check_envelope (the oracle + the verifier agree)" do
       # The published expected.tamper_verdicts declares 7 tamper classes. The
       # prior version of this test only asserted the metadata strings equal
-      # "invalid" — it constructed no tampered credential and never called
+      # "invalid": it constructed no tampered credential and never called
       # check_envelope, so it tested the JSON file's self-description, not BAP's
       # rejection (a cross-vendor blocking finding: vacuous for the verifier).
       # This version constructs each tampered credential and confirms
@@ -551,7 +551,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
 
   defp flip_signature_byte(compact) do
     # compact = protected.payload.signature. Flip the LAST byte of the signature
-    # segment (byte 63 of the 64-byte Ed25519 signature — the high byte of the
+    # segment (byte 63 of the 64-byte Ed25519 signature: the high byte of the
     # second half, S). A single-bit change invalidates the signature; the red
     # comes from verify_signature/3 in verify_proof_parsed (the signature no
     # longer verifies against the holder public key), proving signature binding.
@@ -568,7 +568,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
   # the vector's 6 byte-flip tamper classes through check_envelope. For JSON
   # segments (protected=0, payload=1), flips an interior NON-STRUCTURAL byte
   # (walking backward from the end past `}`/structural bytes) so the re-encoded
-  # segment stays VALID JSON with a CHANGED value — forcing the red through a
+  # segment stays VALID JSON with a CHANGED value: forcing the red through a
   # signed-field binding or signature check, NOT a malformed-JSON parse reject
   # (a cross-vendor finding: flipping the last byte hit `}` -> `|`, reding at
   # parse). For the signature segment (2), flips the last byte (a signature
@@ -615,7 +615,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
   # Flip the first byte inside the ba_req string VALUE of the proof payload.
   # The field-binding check at runtime.ex:491 (secure_equal?(proof.request_hash,
   # request_hash)) runs BEFORE verify_signature (:500), so the tampered ba_req
-  # reds at the field binding — the signature check is never reached (even though
+  # reds at the field binding: the signature check is never reached (even though
   # the signature over the tampered payload is also invalid). This is a genuinely
   # different property from the signature-flip test (which reds at :500).
   defp flip_ba_req_value_byte(compact) do

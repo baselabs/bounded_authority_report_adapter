@@ -1,32 +1,32 @@
 defmodule EdgeAgent.LocalLoopbackTest do
   @moduledoc """
-  The local-loopback external-consumer smoke — the byte-distinct
+  The local-loopback external-consumer smoke: the byte-distinct
   `ba+loopback-proof` flow end-to-end over REAL sockets on BOTH literal
   loopback families:
 
-    1. **IPv4 happy path** — a Bandit listener bound to `{127, 0, 0, 1}`;
+    1. **IPv4 happy path**: a Bandit listener bound to `{127, 0, 0, 1}`;
        `EdgeAgent.run_local_loopback/1` reserves the listener's challenge,
        signs via `sign_local_loopback_report/3`, and POSTs through Req; the
        receiver verifies via the profile's `check_envelope` against the target
        DERIVED from its own bound listener → `200`.
-    2. **IPv6 happy path** — the same flow against a listener bound to
+    2. **IPv6 happy path**: the same flow against a listener bound to
        `{0, 0, 0, 0, 0, 0, 0, 1}` (canonical `http://[::1]:PORT/report`) →
        `200`.
-    3. **Cross-profile rejection** — a STANDARD `dpop+jwt` proof presenting a
+    3. **Cross-profile rejection**: a STANDARD `dpop+jwt` proof presenting a
        properly reserved challenge is still rejected by the loopback receiver
        (`401`, the typ gate); a loopback proof is rejected by the STANDARD
        receiver; `run_local_loopback/1` against a `localhost` URL fails closed
        at signing.
-    4. **The reserved-challenge defenses** — a proof signed under challenge A
+    4. **The reserved-challenge defenses**: a proof signed under challenge A
        presented with reserved challenge B → `401` (the {:required, nonce}
        binding); an unreserved (never minted) nonce → `401`; a replayed
        envelope → `401` (the challenge is single-use: consumed by the first
        arrival, so a captured request cannot be replayed even once).
-    5. **Boot binding** — the loopback receiver REFUSES to start on a
+    5. **Boot binding**: the loopback receiver REFUSES to start on a
        non-loopback interface, and refuses a hand-configured `target_uri`
        (the target is derived from the listener, never configured).
 
-  `async: false` — the nonce ledger is a named ETS table shared across receivers.
+  `async: false`: the nonce ledger is a named ETS table shared across receivers.
   """
 
   use ExUnit.Case, async: false
@@ -38,7 +38,7 @@ defmodule EdgeAgent.LocalLoopbackTest do
 
   # Binds a free port on `ip`, starts the profile receiver there (the plug
   # DERIVES its target from the listener state it is given), and returns the
-  # canonical target — the listener's own URL.
+  # canonical target: the listener's own URL.
   defp start_loopback_receiver(ip) do
     start_supervised!(EdgeAgent.Receiver.NonceLedger)
 
@@ -111,7 +111,7 @@ defmodule EdgeAgent.LocalLoopbackTest do
       wait_for_server(url)
 
       # The STANDARD receiver mints no challenges (its flow is client-nonce +
-      # ledger) — sign the loopback proof with a plain nonce value; the red we
+      # ledger): sign the loopback proof with a plain nonce value; the red we
       # assert is the STANDARD verifier rejecting ba+loopback-proof bytes.
       {grant, proof, invocation_id, nonce} = loopback_signed_envelope(url, "plain-nonce-here")
 
@@ -124,7 +124,7 @@ defmodule EdgeAgent.LocalLoopbackTest do
 
     test "run_local_loopback/1 against a reachable localhost URL fails closed at signing" do
       # localhost resolves and CONNECTS (a live listener is up on the port), so
-      # the challenge reservation succeeds — and BAP's profile admission still
+      # the challenge reservation succeeds: and BAP's profile admission still
       # rejects the spelling at SIGNING: localhost is not a canonical literal
       # loopback target, and no proof is ever produced.
       port = free_port({127, 0, 0, 1})
@@ -152,7 +152,7 @@ defmodule EdgeAgent.LocalLoopbackTest do
       target = start_loopback_receiver({127, 0, 0, 1})
 
       # TWO genuine, distinct reserved challenges. The proof binds A; the POST
-      # presents B. The challenge gate passes (B is minted + unconsumed) — the
+      # presents B. The challenge gate passes (B is minted + unconsumed): the
       # red is the profile verifier's {:required, nonce} binding.
       {grant, proof, invocation_id, _challenge_a} = loopback_signed_envelope(target)
       challenge_b = reserved_challenge(target)
@@ -188,7 +188,7 @@ defmodule EdgeAgent.LocalLoopbackTest do
                )
 
       # Byte-identical replay: the challenge was CONSUMED by the first arrival
-      # (single-use), so the replay reds at the challenge gate itself — the
+      # (single-use), so the replay reds at the challenge gate itself: the
       # first-use replay window a client-chosen nonce leaves open is closed.
       assert {:ok, %{status: 401, body: "invalid"}} =
                Req.post(target,

@@ -20,8 +20,9 @@ private key. What it guarantees follows from that narrow job.
 - **Wrong-key rejection.** Every signature is verified against the handle's public key
   before it is returned. A handle that signs with a different key than it reports gets
   `:signing_failed`, never a bad signature.
-- **Closed errors and value-free telemetry.** Errors are atoms; telemetry metadata is two
-  closed atoms. Neither can carry key material, message bytes or report content. See
+- **Closed errors and value-free telemetry.** Signing errors use closed atoms or the
+  fixed tuple `{:producer_error, :invalid}`; telemetry metadata uses closed atoms. Neither
+  carries key material, message bytes or report content. See
   [telemetry.md](telemetry.md) for the handler side.
 - **Callbacks run in your process, without a timeout.** The adapter calls the handle's
   callbacks in the process that called the entry point, one after another, and sets no
@@ -29,9 +30,10 @@ private key. What it guarantees follows from that narrow job.
   your client waits: bound every remote call inside the handle. A callback that raises,
   throws or exits (a `GenServer.call/3` timeout is an exit) is contained and returns a
   closed error.
-- **Authorization is the verifier's decision.** A signed envelope proves possession and
-  binding. Identity binding, replay protection and revocation happen in the verifying
-  service; see [consumer-integration.md](consumer-integration.md) §8 and §9.
+- **Verification is never authorization.** Pure verification returns facts about
+  signatures and request binding against caller-supplied trust and expected context.
+  Execution depends on the verifying service's authorization policy, including trusted
+  keys, identity binding, replay reservation and live revocation; see [consumer-integration.md](consumer-integration.md) §8 and §9.
 
 ## Named misuses
 

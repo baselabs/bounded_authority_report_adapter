@@ -1,10 +1,10 @@
 defmodule BoundedAuthorityReportAdapter.SignGrantRoleAttestationTest do
   @moduledoc """
-  RA11 — the BA-attested role gate on `sign_grant/3` (ADR-0008; BAP 0.6.0's
+  RA11: the BA-attested role gate on `sign_grant/3` (ADR-0008; BAP 0.6.0's
   `bap-role-attestation/1`). When the caller supplies `:role_attestation`, the gate calls
   `BoundedAuthorityProtocol.RoleAttestation.V1.verify_attestation/2` against the
   caller-trusted BA attestor, binds the expected subject to the handle's ATOMIC
-  `signing_identity/1` snapshot (never caller input — the lying-handle defeat), and requires
+  `signing_identity/1` snapshot (never caller input: the lying-handle defeat), and requires
   the BA-attested role to be `"issuer"`. The gate fires BEFORE `sign/2`; a holder-role,
   foreign-subject, wrong-trust-root, or window-expired attestation never signs.
 
@@ -123,7 +123,7 @@ defmodule BoundedAuthorityReportAdapter.SignGrantRoleAttestationTest do
     end
 
     # Cross-vendor review B1: the keyword-list opts idiom must not silently drop the gate
-    # (the normalizer's %{} default did exactly that — a holder-role attestation SIGNED).
+    # (the normalizer's %{} default did exactly that: a holder-role attestation SIGNED).
     test "the keyword-list opts idiom runs the gate, not around it" do
       {compact, attestor_pub} = issuer_attestation("holder")
       handle = counting_issuer_handle()
@@ -224,7 +224,7 @@ defmodule BoundedAuthorityReportAdapter.SignGrantRoleAttestationTest do
     end
 
     test "an attestation outliving the attestor key's validity never signs" do
-      # The attestor window ends BEFORE the attestation's exp — containment fails.
+      # The attestor window ends BEFORE the attestation's exp: containment fails.
       {compact, attestor_pub} = issuer_attestation("issuer", exp: @now + 8000)
       narrow = trust_root(attestor_pub, valid_before: @now + 4000)
       handle = counting_issuer_handle()

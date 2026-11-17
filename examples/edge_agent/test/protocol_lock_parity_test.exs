@@ -5,8 +5,8 @@ defmodule EdgeAgent.ProtocolLockParityTest do
 
   The two locks regenerate independently (the example resolves the protocol
   transitively through the path dep on the adapter). If the example drifts
-  while the library holds — a bare `mix deps.update` run from the wrong
-  directory — the two CI jobs test DIFFERENT protocol versions: a quiet
+  while the library holds: a bare `mix deps.update` run from the wrong
+  directory: the two CI jobs test DIFFERENT protocol versions: a quiet
   split-brain in which the gate job's green certifies a span the example job
   never ran. The library's wall checks its lock is inside the range; this test
   checks the PARITY of the two.
@@ -32,7 +32,7 @@ defmodule EdgeAgent.ProtocolLockParityTest do
 
   # The lock line shape: "bounded_authority_protocol": {:hex, :bounded_authority_protocol, "0.2.0", …
   # (terminated at the closing quote + comma so a version that merely PREFIX-matches
-  # cannot satisfy it — the same terminator discipline as the library wall's clause).
+  # cannot satisfy it: the same terminator discipline as the library wall's clause).
   defp locked_version(lock) do
     case Regex.run(~r/"#{@protocol_app}": \{:hex, :#{@protocol_app}, "([^"]+)",/, lock) do
       [_, version] -> {:ok, version}

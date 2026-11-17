@@ -3,7 +3,7 @@ defmodule BoundedAuthorityReportAdapter.TestHandles do
   Test-only key-handle modules for the sign_report (RA1) + sign_anchor (RA4) suites.
 
   These live in `test/support/` (compiled in `:test` via `mix.exs`
-  `elixirc_paths`) so they are always loaded when the tests run — defining
+  `elixirc_paths`) so they are always loaded when the tests run: defining
   them at the bottom of the `_test.exs` file left them unloaded at test time
   in some `mix test` orderings (function_exported? returned false even though
   the module compiled), which made the WrongKeyHandle test flake.
@@ -16,7 +16,7 @@ defmodule BoundedAuthorityReportAdapter.TestHandles do
 end
 
 defmodule CountingKeyHandle do
-  @moduledoc "Counts sign/2 calls — the C1 tripwire (asserts exactly one signing call)."
+  @moduledoc "Counts sign/2 calls: the C1 tripwire (asserts exactly one signing call)."
   @behaviour BoundedAuthorityReportAdapter
 
   @key {__MODULE__, :sign_count}
@@ -40,7 +40,7 @@ defmodule CountingKeyHandle do
 end
 
 defmodule CapturingKeyHandle do
-  @moduledoc "Captures the message handed to sign/2 — the no-canonical-bytes-fork tripwire."
+  @moduledoc "Captures the message handed to sign/2: the no-canonical-bytes-fork tripwire."
   @behaviour BoundedAuthorityReportAdapter
 
   @key {__MODULE__, :message}
@@ -64,7 +64,7 @@ defmodule CapturingKeyHandle do
 end
 
 defmodule FailingKeyHandle do
-  @moduledoc "A key-handle whose sign/2 always fails — exercises the :signing_failed path."
+  @moduledoc "A key-handle whose sign/2 always fails: exercises the :signing_failed path."
   @behaviour BoundedAuthorityReportAdapter
 
   @impl true
@@ -88,7 +88,7 @@ defmodule BadContractHandle do
   """
   @behaviour BoundedAuthorityReportAdapter
 
-  # The contract violation IS this fixture's purpose — suppress the dialyzer
+  # The contract violation IS this fixture's purpose: suppress the dialyzer
   # callback mismatch for this one module, narrowly, so the dialyzer gate
   # stays zero-warning without weakening the fixture.
   @dialyzer {:nowarn_function, sign: 2}
@@ -171,14 +171,14 @@ defmodule WrongKeyHandle do
 end
 
 # ---------------------------------------------------------------------------
-# RA4 anchor handles — implement key_identity/1 (the optional callback sign_anchor/3
+# RA4 anchor handles: implement key_identity/1 (the optional callback sign_anchor/3
 # places in the signed header). key_id is pinned to the same constant RawKey
 # uses so the anchor round-trip can build the matching HistoricalPublicKey.
 # ---------------------------------------------------------------------------
 
 defmodule AnchorCapturingKeyHandle do
   @moduledoc """
-  Captures the message handed to sign/2 — the no-canonical-bytes-fork tripwire
+  Captures the message handed to sign/2: the no-canonical-bytes-fork tripwire
   for sign_anchor/3. Implements key_identity/1 so sign_anchor reaches sign/2.
   """
   @key {__MODULE__, :message}
@@ -255,8 +255,8 @@ defmodule RacingKeyIdentityHandle do
   internal state so `sign/2` signs with key-b (a simulated post-snapshot
   rotation). The atomic snapshot means `key_id`+`public_key` cannot drift apart;
   the `verify_signature` guard catches the `sign/2`-vs-snapshot mismatch ->
-  `:signing_failed`. This is the rotation race a cross-vendor (Codex) probe
-  exploited under the separate-callback design, now caught at sign time.
+  `:signing_failed`. Separate identity callbacks cannot protect against this
+  rotation race; the signature self-check catches it at sign time.
 
   The handle term is an `Agent` pid whose state is
   `%{key_id:, pub_a:, priv_a:, priv_b:, rotated:}`.
@@ -275,10 +275,10 @@ defmodule RacingKeyIdentityHandle do
 end
 
 # ---------------------------------------------------------------------------
-# RA8 transition handles — like the anchor handles, they implement key_identity/1
+# RA8 transition handles: like the anchor handles, they implement key_identity/1
 # (the optional callback sign_key_transition/3 resolves as the atomic {key_id,
 # public_key} snapshot). Role-agnostic: NO signing_identity/1 (the transition is a
-# historical-key operation, not a role-gated one — see ADR-0009). RawKey (the holder/
+# historical-key operation, not a role-gated one: see ADR-0009). RawKey (the holder/
 # anchor reference) already implements key_identity/1 -> {"test-anchor-key-001", pub},
 # so it is the happy-path transition handle; the modules below exercise the failure /
 # tripwire paths (wrong-key, capturing, exit, atomic-snapshot drift).
@@ -286,7 +286,7 @@ end
 
 defmodule TransitionCapturingKeyHandle do
   @moduledoc """
-  Captures the message handed to sign/2 — the no-canonical-bytes-fork tripwire for
+  Captures the message handed to sign/2: the no-canonical-bytes-fork tripwire for
   sign_key_transition/3. Implements key_identity/1 so sign_key_transition reaches sign/2.
   """
   @key {__MODULE__, :message}
@@ -362,7 +362,7 @@ defmodule TransitionRacingKeyIdentityHandle do
 end
 
 # ---------------------------------------------------------------------------
-# RA7 grant handles — implement signing_identity/1 (the optional callback sign_grant/3
+# RA7 grant handles: implement signing_identity/1 (the optional callback sign_grant/3
 # resolves as the atomic {role, key_id, public_key} snapshot + the C1 role gate).
 # GrantIssuerHandle is the issuer-role reference; the others exercise the failure /
 # tripwire paths (holder-role rejection, roleless rejection, atomic-snapshot drift,
@@ -401,7 +401,7 @@ defmodule GrantHolderCountingHandle do
   The C1 tripwire for sign_grant: signing_identity/1 -> {:holder, ...}, and sign/2
   counts calls. sign_grant MUST reject a :holder handle BEFORE sign/2, so
   sign_call_count/0 stays 0. (The mirror of sign_report's CountingKeyHandle, which
-  asserts sign/2 is called exactly once — pointed the other way.)
+  asserts sign/2 is called exactly once: pointed the other way.)
   """
   @behaviour BoundedAuthorityReportAdapter
   @key {__MODULE__, :sign_count}
@@ -432,7 +432,7 @@ defmodule GrantIssuerCountingHandle do
   @moduledoc """
   The RA11 tripwire for the role-attestation gate: an ISSUER-role handle whose sign/2 counts
   calls. When the BA-attestation gate rejects (holder-role attestation, foreign subject
-  binding, wrong trust-root, expired window), sign_grant MUST fail BEFORE sign/2 —
+  binding, wrong trust-root, expired window), sign_grant MUST fail BEFORE sign/2.
   sign_call_count/0 stays 0. (The issuer-role mirror of GrantHolderCountingHandle.)
   """
   @behaviour BoundedAuthorityReportAdapter
@@ -492,7 +492,7 @@ defmodule GrantRolelessHandle do
 end
 
 defmodule GrantCapturingKeyHandle do
-  @moduledoc "Captures the sign/2 message — the no-canonical-bytes-fork tripwire for sign_grant."
+  @moduledoc "Captures the sign/2 message: the no-canonical-bytes-fork tripwire for sign_grant."
   @behaviour BoundedAuthorityReportAdapter
   @key {__MODULE__, :message}
 

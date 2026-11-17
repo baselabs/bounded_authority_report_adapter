@@ -7,12 +7,12 @@ defmodule BoundedAuthorityReportAdapter.Conformance.VectorCase do
   `ExpectedGrant` (bar i-grant) / `TrustedIssuer` structs BAP's
   `check_envelope/2` + `verify_grant/3` consume.
 
-  ## The three non-obvious pieces (design §1.6 — all first-hand verified)
+  ## The three non-obvious pieces (design §1.6: all first-hand verified)
 
     * **(A) Typed-tuple translation.** `cast_arguments` MUST be BAP's tagged
       `Json.value()` form, not a raw map. The vector carries the typed form as a
       JSON array `["type", value]`; `Tag.from_json/1` translates it. **No type
-      guard** on the object/array arms — `:json.decode` yields maps for JSON
+      guard** on the object/array arms: `:json.decode` yields maps for JSON
       objects, and `Enum.map` over a map yields `{k,v}` tuples.
     * **(B) Synthesized `:bounds`.** The vector's `expected_context` carries no
       `bounds`; the structs require it (`@enforce_keys`). `V1.Bounds.maximum/0`
@@ -48,7 +48,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.VectorCase do
   # in-place edit to the dep's grant-holder-proof.json would NOT recompile this
   # module, so the harness could silently certify a stale copy of the oracle
   # (a dep REF bump forces a full recompile, so the practical window is a
-  # locally-patched dep — but the binding closes it anyway). Cross-vendor note.
+  # locally-patched dep: but the binding closes it anyway). Cross-vendor note.
   @external_resource @vector_path
 
   @vector File.read!(@vector_path) |> :json.decode()
@@ -60,7 +60,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.VectorCase do
   def expected_context, do: @vector["expected_context"]
 
   @doc """
-  The 32-byte raw issuer public key — the verifier's TRUST ANCHOR.
+  The 32-byte raw issuer public key: the verifier's TRUST ANCHOR.
 
   Sourced from `expected_context.trusted_issuer.public_key_base64url` (the
   authoritative trust anchor the verifier is configured with), NOT from
@@ -129,7 +129,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.VectorCase do
   end
 
   @doc """
-  Builds an `%ExpectedGrant{}` for bar (i-grant) — the grant-only verifier
+  Builds an `%ExpectedGrant{}` for bar (i-grant): the grant-only verifier
   surface. No nonce field on `ExpectedGrant`; `bounds` synthesized.
   """
   def expected_grant do
@@ -166,7 +166,7 @@ defmodule BoundedAuthorityReportAdapter.Conformance.VectorCase do
 
   # Per-case nonce derivation (design §1.6 C; cross-vendor CV-nonce fix). The
   # nonce EXPECTATION must come from the authoritative expected_context, NOT
-  # from the proof under test — deriving it from the proof payload makes BAP's
+  # from the proof under test: deriving it from the proof payload makes BAP's
   # nonce_matches?/2 compare the proof's nonce against itself (a tautology that
   # a drifted nonce would pass). So: when the proof payload carries a nonce,
   # the expectation is {:required, expected_context.nonce["required"]} (the

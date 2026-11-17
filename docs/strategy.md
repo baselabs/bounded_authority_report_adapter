@@ -1,124 +1,95 @@
-# Strategy — Bounded Authority Report Adapter
+# Strategy: Bounded Authority Report Adapter
 
-**Status:** Governing · **Companion to:** `docs/charter.md` (the what),
-`docs/ROADMAP.md` (the build order). This doc carries the *how* and *why* of the
-engineering + release posture.
+This guide explains the released package's stability, dependencies and signing boundary.
+The [charter](charter.md) describes the authority model; the [capability map](ROADMAP.md)
+and [CHANGELOG](../CHANGELOG.md) record the shipped surface.
 
-## 1. Release posture: public package and public source
+## 1. Release posture
 
-`bounded_authority_report_adapter` is public on Hex and consumes the
-public `bounded_authority_protocol` Hex package. Its GitHub source is public and
-the release tags are the durable source identities. Every
-release remains responsible for its own compatibility, conformance, provenance,
-security, and clean-consumer evidence.
+`bounded_authority_report_adapter` 1.0.0 is released on public Hex under Apache-2.0,
+with public source and versioned release tags. The
+[stability contract](upgrading.md#stability-contract) has applied since 1.0.0.
+Breaking changes to its public API require a major release. Additions and soundness
+repairs follow the contract's documented minor-release rules.
 
-The authority runtime (the service that issues and revokes grants) is a separate
-application. It is never a library dependency of this adapter, and nothing about its
-distribution can be inferred from this package's or the protocol package's
-publication.
+The authority service is a separate application. The adapter has no dependency on it
+and does not contact it at signing time.
 
-## 2. "Public" terminology
+## 2. Public API stability
 
-"Public" means the registry, source, and portable-contract boundary for the protocol
-package and this adapter. It does not mean their APIs are 1.0-stable, and it says
-nothing about the authority runtime.
+Public distribution and API stability are separate properties; this package has both.
+The stable surface includes the signing functions, the thumbprint helper, key-handle
+callbacks, result and error shapes, telemetry contract and doctor preflight described
+in the upgrading guide. Protocol wire compatibility follows the protocol package's
+contract-major rules, independently of this adapter's package version.
 
-## 3. Dependencies — the edge-path constraint
+## 3. Dependencies and direction
 
-The adapter's dependency graph is deliberately minimal and one-directional:
+The direct dependency graph declared by `mix.exs` is:
 
-```
+```text
 bounded_authority_report_adapter
-        │
-        └──► bounded_authority_protocol   (public Hex dep; the ONLY runtime dep)
+  + bounded_authority_protocol ~> 1.0   required runtime dependency
+  + telemetry ~> 1.3                    required runtime dependency
+  + igniter ~> 0.8                      optional installer dependency
+  + credo, dialyxir, ex_doc, mix_audit,
+    sbom                               dev/test only; runtime: false
 ```
 
-- **The adapter depends only on the public protocol package.** This is the
-  governing acceptance clause: the adapter depends only on the public protocol
-  package and has no runtime-service dependency. A verifier application consumes
-  BAP directly and never needs this signer as a dependency.
-- **The authority runtime is NOT a dependency.** The adapter signs
-  with a holder key it already holds; it does not call the runtime at sign time.
-  Grant issuance + revocation are out of band (the runtime talks to the consuming
-  application, not to this adapter).
-- **No transport libraries.** Transports stay free of protocol code; this
-  adapter is called by the edge agent, not embedded in the transport.
+The protocol owns canonical bytes, producers, assembly and pure verification. Telemetry
+provides value-free signing events. Igniter enables the install task when present; it
+is optional and is not called by signing entry points. Its transitive dependencies
+belong to that optional installer graph.
 
-A dependency-direction test in this repo's suite proves the "only BAP"
-constraint structurally.
+The dependency-direction test rejects authority-runtime dependencies, transport libraries
+and HTTP clients or servers in the library. The separate example app declares its own
+Req, Bandit and Plug dependencies. Those never enter the library's required runtime graph.
 
-## 4. Why a separate signer library
+## 4. Why a separate signer
 
-This is the most-asked design question, so stated plainly:
+The pure protocol package accepts public keys and produces deterministic signing inputs;
+it never holds private keys or signs. This adapter signs through caller-owned handles.
+A verifying service can use the protocol package without installing a signer or gaining
+access to holder keys. Issuers can use the same adapter through issuer-role handles.
 
-- **Not in a verifier:** a verifier must never gain a signing path.
-  Putting the signer in a verifier app puts the holder key in the app's
-  memory, collapsing the invariant that a compromised app cannot forge
-  authority.
-- **Not in BAP:** BAP is a pure verifier — it produces signing inputs but
-  refuses to hold keys or sign (its charter). Folding signing into BAP would
-  force every verifier (including third parties) to carry signing code.
-- **Not in the runtime:** the runtime is a server; the whole point is the
-  reporter signs *locally* on the edge, without a round-trip to the authority.
-- **Therefore: a composable signer library.** Its single job is "BAP produces the
-  bytes, this adapter signs them, hands back the envelope." Small, single-purpose,
-  reusable by any holder that needs to sign protocol objects.
-
-The cost (a repo for a small amount of code) buys the invariant. The invariant
-is load-bearing: once the signing key is in the app, extracting it is a
-re-architecture, not a refactor.
+Verification is never authorization. Operational decisions belong to the verifying
+service's authorization policy, with its own trust configuration, identity binding,
+replay reservation and revocation state.
 
 ## 5. Cryptographic posture
 
-- **Ed25519** on the major-1 surface, **EC P-256 / `ES256`** on the `V3` surface
-  for holder proofs + grants (matching each BAP major's closed
-  header). The private key is held by the edge agent; only the public key +
-  signatures cross the boundary.
-- **Deterministic signing inputs** from BAP (`proof_signing_input`,
-  `boundary_anchor_signing_input`, `grant_signing_input`,
-  `key_transition_signing_input`, the local-loopback profile's
-  `proof_signing_input` and the content-assertion profile's
-  `assertion_signing_input`) — the adapter does NOT construct canonical
-  bytes itself; it calls BAP and signs what BAP returns. This keeps the wire
-  format owned by the protocol package (single source of truth) and makes the
-  adapter a thin glue layer across every object it signs. In the
-  `sign_report/3` flow the grant arrives issuer-signed as input and the
-  adapter signs only the proof; grant signing is the issuer-role
-  instantiation's concern (`sign_grant/3`; charter §2/§4).
-- **`assemble_compact`** frames the signed result. The adapter does not roll its
-  own envelope format.
-- **Key custody** is the edge agent's responsibility (how it loads/secures the
-  private key). This adapter takes a key handle + a report and returns an
-  envelope; it does not mandate a key store.
+The root module signs contract-major 1 using Ed25519. `BoundedAuthorityReportAdapter.V3`
+signs the four standard objects using P-256 and ES256 for contract-major 3. Local-loopback
+proofs and content assertions use their explicit Ed25519 profiles.
 
-## 6. Release cadence
+For each object, the protocol package produces the exact signing input. The adapter
+signs through the handle, checks the signature against the handle-resolved public key,
+and calls the protocol assembler with the same bounds. It does not implement another
+canonical serializer. Holder-proof signing passes the issuer-signed grant through
+unchanged; grant signing is a separate issuer-side call.
 
-- **0.x is public** — pre-1.0; compatibility follows the package's declared
-  pre-1.0 policy and every change must retain conformance and release evidence.
-- **1.0.0** — cut when three things hold: the shipped surface is exactly the
-  [stability contract](upgrading.md#stability-contract); the package requires the
-  protocol's 1.0 line from Hex; and the release passes every gate in the
-  [release runbook](release.md) (green CI, the supply-chain attestation, a local archive
-  checksum equal to the attested one, and the registry read-back after publish). From
-  1.0.0, breaking changes to that contract need a major release.
-- Package publication and source-repository visibility are separate operations;
-  neither may be inferred from the other.
+Key custody belongs to the caller. Public keys and signatures cross the handle boundary;
+private keys remain in the custodian.
 
-## 7. Relationship to the sibling repos' release gates
+## 6. Release compatibility
 
-This adapter inherits no release gate from BAP or the runtime — each repo runs
-its own. But the adapter's conformance test is *defined by* BAP's published
-vectors: if a reviewed BAP release changes the consumed surface in a way this
-adapter's output no longer matches, the adapter's test goes red. That coupling
-is intentional; the BAP Hex requirement and resolved lock in this repository
-are the explicit identities that gate an adapter bump.
+Version 1.0.0 established the current stability contract and the protocol `~> 1.0`
+requirement. The [release runbook](release.md) describes compatibility, conformance,
+provenance, archive reproducibility and registry read-back checks for subsequent releases.
+Historical 0.x behavior is recorded under its own version in the upgrading guide.
+
+## 7. Protocol conformance
+
+The adapter qualifies its output against the protocol's published vectors and certified
+corpora, including exact-byte comparisons where signatures are deterministic.
+A successful self-round-trip alone is not independent interoperability evidence.
+Each package runs its own release checks; a protocol release does not qualify an adapter
+release automatically.
 
 ## 8. Following protocol releases
 
-`sign_content_assertion/3` (0.9.0)
-shows the release order this library follows: BAP publishes a release with its own
-normative contract, certified corpus, and independent SDK agreement; this adapter moves
-its protocol requirement and lock to that published release and qualifies the adoption
-with its own suite. No consumer's pin
-or schedule is a precondition; consumers adopt protocol and adapter releases on their own
-schedules.
+`mix.exs` declares the supported protocol range; `mix.lock` records the release used by
+this checkout. The example app's parity test requires the same protocol lock. New protocol
+releases within the range are qualified by this repository's tests. Moving the floor or
+crossing a compatibility boundary also updates the range checks, both locks, examples
+and migration notes. Consumers choose when to adopt compatible releases.

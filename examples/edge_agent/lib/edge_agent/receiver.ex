@@ -1,9 +1,9 @@
 defmodule EdgeAgent.Receiver do
   @moduledoc """
-  The consumer side of the BA envelope — a Plug served by Bandit that verifies a
+  The consumer side of the BA envelope: a Plug served by Bandit that verifies a
   `{grant, proof}` envelope via `BoundedAuthorityProtocol.V1.check_envelope/2`.
 
-  This module depends ONLY on the public `bounded_authority_protocol` package —
+  This module depends ONLY on the public `bounded_authority_protocol` package.
   NEVER on `BoundedAuthorityReportAdapter`. That is the dependency-direction wall
   (`docs/consumer-integration.md` §1): the verifier consumes the published
   protocol package; the adapter is the holder-side signing glue the edge agent
@@ -14,14 +14,14 @@ defmodule EdgeAgent.Receiver do
 
   ONE `with`, fail closed to a uniform `401`:
 
-    1. `V1.Json.decode(raw_body)` — decode the request's RAW bytes into BAP's
+    1. `V1.Json.decode(raw_body)`: decode the request's RAW bytes into BAP's
        tagged `cast_arguments` (a BAP-strict decode catches Jason-valid-but-BAP-
        invalid bodies: duplicate keys, number bounds).
-    2. `V1.check_envelope/2` — verify the grant + proof cryptographically against
+    2. `V1.check_envelope/2`: verify the grant + proof cryptographically against
        the published issuer key + the reconstructed expected request.
     3. Bind the verified envelope's `holder_thumbprint` to the configured
-       identity key (§8) — defeats cross-identity replay of a captured envelope.
-    4. Claim the nonce on the replay ledger (§9) — defeats same-identity replay
+       identity key (§8): defeats cross-identity replay of a captured envelope.
+    4. Claim the nonce on the replay ledger (§9): defeats same-identity replay
        within the proof window.
 
   Every failure collapses to the SAME `401 invalid` body (§5): an attacker learns
@@ -29,7 +29,7 @@ defmodule EdgeAgent.Receiver do
 
   ## Raw-body retention
 
-  This minimal receiver reads the body directly via `Plug.Conn.read_body/1` — no
+  This minimal receiver reads the body directly via `Plug.Conn.read_body/1`: no
   `Plug.Parsers` competes for it (this pipeline has only the report route), so a
   `body_reader` is unnecessary here. consumer-integration.md §2's `body_reader`
   guidance applies to a pipeline that ALSO parses other routes behind
@@ -40,7 +40,7 @@ defmodule EdgeAgent.Receiver do
   In production the "authenticated identity" (step 3) is established by a
   SEPARATE transport-auth layer (api_key, mTLS) and the ledger (step 4) is a
   durable unique constraint. This demo uses a configured identity key as a
-  stand-in for the transport-auth layer and an ETS table for the ledger — enough
+  stand-in for the transport-auth layer and an ETS table for the ledger: enough
   to demonstrate BOTH obligations are present and non-vacuous, which is the point.
   """
 
@@ -63,8 +63,8 @@ defmodule EdgeAgent.Receiver do
     #
     # Loopback mode (profile: :local_loopback) is BOUND to the listener: the
     # operator passes the ip/port the server actually binds (`ip:` / `port:`,
-    # plus optional `path:`), the target is DERIVED from that listener state —
-    # never from a client header and never hand-configured — and a non-loopback
+    # plus optional `path:`), the target is DERIVED from that listener state
+    # never from a client header and never hand-configured: and a non-loopback
     # `ip:` FAILS LOUDLY HERE at boot: a profile receiver on a routable
     # interface would accept loopback-scoped proofs over unauthenticated plain
     # HTTP from the network, which the profile exists to prevent.
@@ -114,7 +114,7 @@ defmodule EdgeAgent.Receiver do
   @impl true
   def call(%{method: "GET"} = conn, %{loopback: true} = _config) do
     # The profile's nonce reservation: the LISTENER mints the challenge the
-    # signer must bind. Client-chosen nonces are not verifiable reservations —
+    # signer must bind. Client-chosen nonces are not verifiable reservations
     # on a no-TLS transport a captured client-chosen nonce can be replayed
     # first-use; a server-minted single-use challenge cannot (it is consumed
     # by the legitimate arrival before any replay reaches the ledger).
@@ -125,7 +125,7 @@ defmodule EdgeAgent.Receiver do
   def call(conn, config) do
     # read_body/1 returns {:ok, body, conn} once the whole body is read,
     # {:more, partial, conn} when it exceeded Plug's length limit (an oversize
-    # body for this demo — reject it), or {:error, reason} (a 2-tuple; the
+    # body for this demo: reject it), or {:error, reason} (a 2-tuple; the
     # original conn is all we have). Each branch threads the conn it actually
     # has so the 401 is written against the read-state Bandit expects.
     case Plug.Conn.read_body(conn) do
@@ -152,17 +152,17 @@ defmodule EdgeAgent.Receiver do
     end
   end
 
-  # The complete safe path — ONE `with`, fail closed. A BAP-strict decode
+  # The complete safe path: ONE `with`, fail closed. A BAP-strict decode
   # failure, a check_envelope failure (STANDARD or the local-loopback profile,
   # per the receiver's configured profile), an identity-binding mismatch, AND a
   # replay ALL collapse to :invalid -> the uniform 401. nil grant/proof (a
   # header absent) hits the verifier's non-binary catch-all clause -> :invalid.
   #
   # In loopback mode the nonce is a RESERVED CHALLENGE: the presented value
-  # must be one THIS receiver minted (GET) and not yet consumed — atomically
+  # must be one THIS receiver minted (GET) and not yet consumed: atomically
   # consumed HERE, before verification, so a captured request cannot be
   # replayed even once (first-use included). The standard profile keeps the
-  # client-nonce + ledger model (§9) — its transport is TLS-authenticated.
+  # client-nonce + ledger model (§9): its transport is TLS-authenticated.
   defp verify(raw_body, grant, proof, invocation_id, nonce, config) do
     with {:ok, cast_arguments} <- V1.Json.decode(raw_body),
          :ok <- maybe_consume_challenge(config.loopback, nonce),
@@ -242,7 +242,7 @@ defmodule EdgeAgent.Receiver do
   Starts the receiver (the nonce-ledger GenServer + a Bandit server) for
   standalone `mix run --no-halt -e EdgeAgent.Receiver.start` use. ip/port default
   to config; pass `ip:` / `port:` to override. Pass `profile: :local_loopback`
-  for the profile receiver — the plug then binds to the given (loopback-only)
+  for the profile receiver: the plug then binds to the given (loopback-only)
   ip/port, derives its target from them, and mints the flow's reserved
   challenges on GET.
   """
@@ -259,7 +259,7 @@ defmodule EdgeAgent.Receiver do
 
     children = [
       # Bandit takes :ip/:port/:scheme at the top level (since 0.7.6; the
-      # nested :options key was removed then — under our ~> 1.0 constraint no
+      # nested :options key was removed then: under our ~> 1.0 constraint no
       # version accepts it).
       NonceLedger,
       {Bandit, plug: plug, scheme: :http, ip: ip, port: port}

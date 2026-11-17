@@ -3,17 +3,17 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   Pins the CI orchestration to the surfaces that must stay in step:
 
     * the example job audits its OWN lock immediately after resolving its deps
-      (the original advisory-parity invariant) — in the workflow directly, in
+      (the original advisory-parity invariant): in the workflow directly, in
       `mix ci` through scripts/ci_example.exs's internal step order,
     * the env guard is the FIRST `mix ci` step (the RA7 trap's cross-platform
       replacement for the old POSIX env(1) re-exec), and
     * the gate battery (coverage floor, dialyzer, doc warnings, the library's
       own audits) exists as explicit steps in BOTH `mix ci` and the workflow's
-      gate job, in the same order — the local/CI parity the `mix ci` alias
+      gate job, in the same order: the local/CI parity the `mix ci` alias
       exists to guarantee.
 
   Mutation-proven (the house rule): each assertion is demonstrated RED by
-  dropping/renaming its pinned step in an in-memory copy — a parity test that
+  dropping/renaming its pinned step in an in-memory copy: a parity test that
   cannot red is a rubber stamp.
   """
 
@@ -30,7 +30,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
   # The gate battery, in the canonical step order shared by `mix ci` and the
   # workflow's gate job. The workflow spells each command `mix <command>`;
-  # the alias carries it as a bare task name (no env(1) re-exec — the
+  # the alias carries it as a bare task name (no env(1) re-exec: the
   # cross-platform shape).
   @battery [
     {"coverage floor", "mix test --cover"},
@@ -150,7 +150,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
   test "both jobs run the full compatibility matrix on Linux (every supported OTP major)" do
     # A dropped matrix cell narrows CI coverage silently (a lane that never
-    # runs looks green by absence) — pin the exact cells per job and that
+    # runs looks green by absence): pin the exact cells per job and that
     # setup-beam actually consumes the matrix variables. CI is Linux only:
     # developer portability across macOS and Linux is a developer-setup property,
     # never a CI lane; Windows developers use WSL2, the Linux path.
@@ -238,11 +238,11 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   defp workflows, do: Path.wildcard(".github/workflows/*.yml")
 
   # Full-line comments (the alias's step annotations, the workflow's battery
-  # comment) must not weaken step-adjacency matching — strip them so the
+  # comment) must not weaken step-adjacency matching: strip them so the
   # pattern pins ACTUAL adjacency of the commands.
   defp strip_comments(text), do: Regex.replace(~r/^\s*#[^\n]*$/m, text, "")
 
-  # The alias spells a battery command as a bare task name (no `mix ` prefix —
+  # The alias spells a battery command as a bare task name (no `mix ` prefix
   # the cross-platform, env(1)-free shape).
   defp alias_form("mix " <> rest), do: rest
 

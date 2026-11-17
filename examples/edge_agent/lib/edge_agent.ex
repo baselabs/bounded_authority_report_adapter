@@ -1,6 +1,6 @@
 defmodule EdgeAgent do
   @moduledoc """
-  The edge-agent reference — the HOLDER role, played by a real (if minimal)
+  The edge-agent reference: the HOLDER role, played by a real (if minimal)
   application that calls `BoundedAuthorityReportAdapter.sign_report/3` and ships
   the envelope over HTTP.
 
@@ -14,19 +14,19 @@ defmodule EdgeAgent do
 
   Both the edge and the receiver derive each bound field from the SAME source:
 
-    * `method` — literal `"POST"`.
-    * `target_uri` — the configured canonical URI (https, `Uri.normalize`-stable).
+    * `method`: literal `"POST"`.
+    * `target_uri`: the configured canonical URI (https, `Uri.normalize`-stable).
       Boot-time-consistent with the receiver because both read this config.
-    * `invocation_id` — a fresh unique id the edge generates per report.
-    * `operation` — the normative contract constant the issuer's grant authorizes.
-    * `cast_arguments` — `V1.Json.decode(raw_report_body_bytes)` of the WHOLE
+    * `invocation_id`: a fresh unique id the edge generates per report.
+    * `operation`: the normative contract constant the issuer's grant authorizes.
+    * `cast_arguments`: `V1.Json.decode(raw_report_body_bytes)` of the WHOLE
       body: BAP's tagged `Json.value()` form. The receiver decodes the SAME raw
-      bytes with the SAME function — byte-agreement by construction.
-    * `nonce` — a fresh nonce the edge generates per report.
+      bytes with the SAME function: byte-agreement by construction.
+    * `nonce`: a fresh nonce the edge generates per report.
 
   The raw report body rides as the HTTP request body; the envelope rides as
   `X-BA-Grant` + `X-BA-Proof` headers (presence of BOTH is the scheme
-  discriminator — consumer-integration.md §2).
+  discriminator: consumer-integration.md §2).
 
   ## What the demo simplifies
 
@@ -48,7 +48,7 @@ defmodule EdgeAgent do
 
   Options:
 
-    * `:receiver_url` — override the configured receiver URL (default:
+    * `:receiver_url`: override the configured receiver URL (default:
       `config :edge_agent, :receiver_url`).
 
   """
@@ -92,21 +92,21 @@ defmodule EdgeAgent do
   end
 
   @doc """
-  Runs the edge agent once over the LOCAL-LOOPBACK profile — the byte-distinct
+  Runs the edge agent once over the LOCAL-LOOPBACK profile: the byte-distinct
   `ba+loopback-proof` flow (`sign_local_loopback_report/3`) for a development
   listener on the literal loopback interface.
 
   The flow is challenge-first: GET the receiver's URL to obtain a
   LISTENER-RESERVED nonce (the receiver mints it; the agent never chooses it),
   sign the proof binding that challenge, then POST. The `target_uri` is the
-  receiver's own canonical URL (`:receiver_url` — exactly
+  receiver's own canonical URL (`:receiver_url`: exactly
   `http://127.0.0.1:PORT/PATH` or `http://[::1]:PORT/PATH`), and the receiver
   verifies against the target derived from ITS OWN bound listener, never from
-  client-supplied headers. Local-loopback HTTP is plain HTTP — no TLS
+  client-supplied headers. Local-loopback HTTP is plain HTTP: no TLS
   confidentiality or server authentication, NOT equivalent to HTTPS.
 
   A non-canonical or non-loopback `:receiver_url` fails closed at signing
-  (`{:producer_error, :invalid}` — BAP's profile admission).
+  (`{:producer_error, :invalid}`: BAP's profile admission).
   """
   @spec run_local_loopback(keyword()) ::
           {:ok, non_neg_integer(), binary()} | {:error, term()}
@@ -159,7 +159,7 @@ defmodule EdgeAgent do
     end
   end
 
-  # A fresh UUID v4 per report — the invocation_id the proof binds (RFC 4122 v4:
+  # A fresh UUID v4 per report: the invocation_id the proof binds (RFC 4122 v4:
   # 16 random bytes, version + variant nibbles set). BAP's verifier gates the
   # invocation_id through `valid_uuid?`, so the canonical UUID shape is required.
   defp generate_invocation_id do

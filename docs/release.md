@@ -1,9 +1,8 @@
 # Release runbook
 
 How a release of `bounded_authority_report_adapter` goes from a commit on `master` to Hex.
-Every gate is a command whose output is recorded in the release's evidence commit. Steps
-marked ★ are the owner's: pushing the tag and publishing. Publishing is irreversible after
-Hex's one-hour revert window.
+Each release checks compatibility, examples, documentation and artifact provenance.
+Publishing is irreversible after Hex's one-hour revert window.
 
 Throughout, `X.Y.Z` is the version being released and `SHA` is the release commit.
 
@@ -12,14 +11,14 @@ Throughout, `X.Y.Z` is the version being released and `SHA` is the release commi
 One commit on `master` carries:
 
 - `@version "X.Y.Z"` in `mix.exs`;
-- the CHANGELOG's `[Unreleased]` section renamed to `[X.Y.Z] — YYYY-MM-DD`;
+- the CHANGELOG's `[Unreleased]` section renamed to `[X.Y.Z]: YYYY-MM-DD`;
 - the upgrading notes for anything a caller must change;
 - the install lines in the README and `docs/getting-started.md` (`~> X.Y`), the Livebook's
   `Mix.install` line and version sentence, and the landing page's Hex badge
   (`site/index.html`). The docs-currency and Livebook tests fail until these agree with
   `mix.exs`.
 
-When the release also moves the protocol range (for 1.0: `~> 0.9.1` to `~> 1.0`), the same
+When the release also moves the protocol range (for example, the 1.0.0 move from `~> 0.9.1` to `~> 1.0`), the same
 commit edits:
 
 - the requirement in `mix.exs`;
@@ -80,9 +79,9 @@ Run each and keep its output.
 
 ## 3. Tag and publish
 
-6. ★ Push the tag: `git tag -a vX.Y.Z SHA -m "X.Y.Z" && git push origin vX.Y.Z`. The tag's
+6. Push the tag: `git tag -a vX.Y.Z SHA -m "X.Y.Z" && git push origin vX.Y.Z`. The tag's
    supply-chain run must attest the same digest as step 4.
-7. ★ Publish from the clean checkout of `SHA`: `mix hex.publish`. The one-hour revert
+7. Publish from the clean checkout of `SHA`: `mix hex.publish`. The one-hour revert
    window starts.
 
 ## 4. Read-back, within the hour
@@ -101,7 +100,7 @@ Run each and keep its output.
 12. `examples/edge_agent` runs against the published package: in a scratch copy, replace
     the `path: "../.."` dependency with `"~> X.Y"`, then `mix deps.get && mix test`.
 
-If any read-back fails inside the hour: ★ `mix hex.publish --revert X.Y.Z`, fix, and start
+If any read-back fails inside the hour: `mix hex.publish --revert X.Y.Z`, fix, and start
 again from step 1. After the hour, fix forward as `X.Y.(Z+1)`.
 
 ## 5. Evidence commit

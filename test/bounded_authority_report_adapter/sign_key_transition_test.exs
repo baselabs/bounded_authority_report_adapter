@@ -1,6 +1,6 @@
 defmodule BoundedAuthorityReportAdapter.SignKeyTransitionTest do
   @moduledoc """
-  The RA8 key-transition test suite — the 4th instantiation of the universal
+  The RA8 key-transition test suite: the 4th instantiation of the universal
   companion-signer tail. `sign_key_transition/3` signs a `KeyTransition` (the current
   retiring key's assertion of its successor) and the compact round-trips through
   `BoundedAuthorityProtocol.V1.verify_key_transition/4`.
@@ -102,7 +102,7 @@ defmodule BoundedAuthorityReportAdapter.SignKeyTransitionTest do
 
   describe "wrong-key + atomic-snapshot drift (the verify_signature guard)" do
     # MUTATION PROOF: remove the verify_signature guard in sign_and_assemble/3 and these
-    # two tests go RED — the wrong-key signature would assemble as {:ok, _} instead of
+    # two tests go RED: the wrong-key signature would assemble as {:ok, _} instead of
     # {:error, :signing_failed}.
 
     test "a handle signing with a different key than its key_identity snapshot is rejected" do

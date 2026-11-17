@@ -1,14 +1,14 @@
 defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
   @moduledoc """
   TEST-ONLY reference implementation of the `BoundedAuthorityReportAdapter`
-  key-handle behaviour.
+  key-handle behavior.
 
   The handle term is a `{public_key, private_key}` tuple: raw 32-byte
   Ed25519 keys for the major-1 entry points, or a 65-byte uncompressed-SEC1
   P-256 public key + P-256 private key for the `V3` entry points (the term's
-  public-key shape selects the suite — the same wire-shape discrimination
+  public-key shape selects the suite: the same wire-shape discrimination
   ADR-0021 applies at the adapter's resolvers). This compiles ONLY under
-  `:test` (via `mix.exs` `elixirc_paths`) — it
+  `:test` (via `mix.exs` `elixirc_paths`): it
   does NOT ship in the artifact.
 
   ## Why test-only (design C5 / strategy §4 / ADR-0014)
@@ -19,9 +19,9 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
   strategy §4 says the separate-repo architecture exists to prevent ("once the
   signing key is in the app, extracting it is a re-architecture, not a
   refactor"). Production holders implement the callbacks themselves with proper
-  custody (HSM, OS keychain, a key server) — never this module.
+  custody (HSM, OS keychain, a key server): never this module.
 
-  The callbacks match the `BoundedAuthorityReportAdapter` behaviour contract:
+  The callbacks match the `BoundedAuthorityReportAdapter` behavior contract:
   `sign/2` performs the `:crypto.sign` (the holder's job), `public_key/1` +
   `thumbprint/1` expose the public material the adapter needs to build the proof.
   """
@@ -35,7 +35,7 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
       when is_binary(message) and byte_size(public_key) == 65 do
     # The v3 shape: a P-256 keypair whose public half is the 65-byte
     # uncompressed-SEC1 point. The reference producer signs in the v3 wire
-    # form — raw `r || s`, low-S normalized (ADR-0021 Decision 4's posture,
+    # form: raw `r || s`, low-S normalized (ADR-0021 Decision 4's posture,
     # mirrored by the test-only issuer path).
     {:ok, TestKeys.ec_sign_raw_low_s(message, private_key)}
   end
@@ -74,7 +74,7 @@ defmodule BoundedAuthorityReportAdapter.Keys.RawKey do
 
   @impl true
   # The role-gated signing identity {role, key_id, public_key}. RawKey is the
-  # HOLDER/ANCHOR reference handle — it declares :holder, so sign_grant/3's C1 gate
+  # HOLDER/ANCHOR reference handle: it declares :holder, so sign_grant/3's C1 gate
   # rejects it (a holder-role key cannot sign a grant). A production ISSUER handle
   # implements signing_identity/1 to return :issuer instead (see GrantIssuerHandle in
   # test_handles.ex for the test exemplar). The kid mirrors key_identity/1.
