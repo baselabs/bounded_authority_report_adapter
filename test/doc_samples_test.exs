@@ -28,6 +28,7 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
   import ExUnit.CaptureLog
 
   alias BoundedAuthorityProtocol.V1.Json
+  alias BoundedAuthorityReportAdapter.DocsChunk
 
   @root Path.expand("../", __DIR__)
 
@@ -466,12 +467,12 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
   end
 
   defp moduledoc_blocks(module) do
-    {:docs_v1, _anno, :elixir, _format, %{"en" => doc}, _meta, _docs} = Code.fetch_docs(module)
+    %{language: :elixir, module_doc: %{"en" => doc}} = DocsChunk.fetch!(module)
     code_blocks(doc)
   end
 
   defp function_docs(module) do
-    {:docs_v1, _anno, :elixir, _format, _moduledoc, _meta, docs} = Code.fetch_docs(module)
+    %{language: :elixir, entries: docs} = DocsChunk.fetch!(module)
     Enum.sort_by(docs, fn {_kind, anno, _sig, _doc, _meta} -> :erl_anno.line(anno) end)
   end
 

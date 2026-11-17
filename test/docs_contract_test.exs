@@ -1,6 +1,8 @@
 defmodule BoundedAuthorityReportAdapter.DocsContractTest do
   use ExUnit.Case, async: true
 
+  alias BoundedAuthorityReportAdapter.DocsChunk
+
   @signers [BoundedAuthorityReportAdapter, BoundedAuthorityReportAdapter.V3]
 
   test "every public type in every documented library module has a typedoc" do
@@ -11,7 +13,7 @@ defmodule BoundedAuthorityReportAdapter.DocsContractTest do
       for module <- modules,
           Code.ensure_loaded!(module),
           filter.(module, %{}),
-          {:docs_v1, _, _, _, module_doc, _, entries} = Code.fetch_docs(module),
+          %{module_doc: module_doc, entries: entries} = DocsChunk.fetch!(module),
           module_doc not in [false, :hidden],
           {{kind, name, arity}, _, _, doc, _} <- entries,
           kind in [:type, :opaque],
@@ -39,7 +41,7 @@ defmodule BoundedAuthorityReportAdapter.DocsContractTest do
 
     documented =
       for module <- @signers,
-          {:docs_v1, _, _, _, _, _, entries} = Code.fetch_docs(module),
+          %{entries: entries} = DocsChunk.fetch!(module),
           {{:function, name, arity}, _, _, %{"en" => _}, metadata} <- entries,
           do: {module, name, arity, Map.get(metadata, :defaults, 0)}
 
@@ -90,7 +92,7 @@ defmodule BoundedAuthorityReportAdapter.DocsContractTest do
           module not in @signers,
           Code.ensure_loaded!(module),
           filter.(module, %{}),
-          {:docs_v1, _, _, _, module_doc, _, entries} = Code.fetch_docs(module),
+          %{module_doc: module_doc, entries: entries} = DocsChunk.fetch!(module),
           module_doc not in [false, :hidden],
           {{:function, name, arity}, _, _, %{"en" => _}, _} <- entries,
           do: {module, name, arity}

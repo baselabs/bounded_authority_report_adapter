@@ -83,6 +83,7 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
   alias BoundedAuthorityProtocol.V1
   alias BoundedAuthorityProtocol.V3, as: ProtocolV3
   alias BoundedAuthorityReportAdapter, as: Adapter
+  alias BoundedAuthorityReportAdapter.DocsChunk
   alias BoundedAuthorityReportAdapter.OptionalCallbacks
   alias BoundedAuthorityReportAdapter.Options
   alias BoundedAuthorityReportAdapter.RecordingHandle
@@ -140,8 +141,7 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
       end)
 
     # The moduledoc's key-handle bullets: each names the major-1 entry points that call it.
-    {:docs_v1, _anno, :elixir, _format, %{"en" => moduledoc}, _meta, _docs} =
-      Code.fetch_docs(Adapter)
+    %{language: :elixir, module_doc: %{"en" => moduledoc}} = DocsChunk.fetch!(Adapter)
 
     [_before, section] = String.split(moduledoc, "## The key-handle behavior", parts: 2)
     [section, _after] = String.split(section, "\nKey and signature shapes", parts: 2)

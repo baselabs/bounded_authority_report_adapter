@@ -17,6 +17,8 @@ defmodule BoundedAuthorityReportAdapter.ProtocolPrivateApiTest do
 
   use ExUnit.Case, async: true
 
+  alias BoundedAuthorityReportAdapter.DocsChunk
+
   @roots ["lib", "scripts", "examples", "test"]
   @protocol_app :bounded_authority_protocol
 
@@ -52,8 +54,7 @@ defmodule BoundedAuthorityReportAdapter.ProtocolPrivateApiTest do
     {:ok, modules} = :application.get_key(@protocol_app, :modules)
 
     for module <- modules,
-        {:docs_v1, _anno, _language, _format, module_doc, _meta, docs} <-
-          [Code.fetch_docs(module)],
+        {:ok, %{module_doc: module_doc, entries: docs}} <- [DocsChunk.fetch(module)],
         {{kind, name, arity}, _anno, _signature, doc, meta} <- docs,
         kind in [:function, :macro],
         module_doc == :hidden or doc == :hidden,
