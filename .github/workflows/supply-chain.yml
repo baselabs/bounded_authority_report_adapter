@@ -4,12 +4,10 @@ on:
   push:
     tags:
       - "v*"
+  # A manual run attests the ref it is started on: the default branch's head
+  # before a tag, or an existing version tag again. It takes no commit input,
+  # so it never builds or attests a commit that has not landed.
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "Tag or ref to attest (for example v1.0.0); supports re-attesting an existing release"
-        required: false
-        default: ""
 
 permissions:
   contents: read
@@ -27,12 +25,21 @@ jobs:
     # attest job below is the only one that can mint attestations, and it
     # runs no project code.
     steps:
+      - name: Refuse a ref that is not the default branch or a version tag
+        env:
+          DEFAULT_REF: refs/heads/${{ github.event.repository.default_branch }}
+        run: |
+          case "$GITHUB_REF" in
+            "$DEFAULT_REF"|refs/tags/v*) ;;
+            *)
+              echo "::error::supply-chain attests only $DEFAULT_REF or a version tag, not $GITHUB_REF"
+              exit 1
+              ;;
+          esac
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          # workflow_dispatch re-attestation targets a specific tag/ref;
-          # tag pushes attest the pushed ref itself.
-          ref: ${{ inputs.ref || github.ref }}
 
       - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:

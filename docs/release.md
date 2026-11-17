@@ -49,12 +49,12 @@ Run each and keep its output.
 2. **Local CI.** `MIX_ENV=test mix ci` exits 0.
 3. **CI on `SHA`.** `gh run watch <run-id> --exit-status` for the CI run of the release
    commit exits 0.
-4. **Supply-chain attestation of `SHA`.** Run the workflow on the release commit while it
-   is the head of `master` (the evidence artifact is named after the head commit) and wait
-   for it:
+4. **Supply-chain attestation of `SHA`.** Run the workflow on `master` while the release
+   commit is its head. The workflow attests the head of the ref it is started on and takes no
+   commit input; the evidence artifact is named after that head commit. Wait for it:
 
    ```sh
-   gh workflow run supply-chain.yml --ref master -f ref=SHA
+   gh workflow run supply-chain.yml --ref master
    gh run watch <run-id> --exit-status
    gh run download <run-id> --name release-evidence-SHA --dir evidence
    (cd evidence && sha256sum --check SHA256SUMS)
