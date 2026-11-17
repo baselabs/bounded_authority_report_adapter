@@ -198,6 +198,33 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     end
   end
 
+  @contributor_requirements [
+    "test/bounded_authority_report_adapter/protocol_private_api_test.exs",
+    "test/bounded_authority_report_adapter/dependency_direction_test.exs",
+    "scripts/check-bap-drift.sh",
+    "Elixir 1.18 through 1.20",
+    "Erlang/OTP 27 through 29"
+  ]
+
+  test "the contributor guide retains protocol, dependency and environment rules" do
+    assert_contributor_guidance!(File.read!("CONTRIBUTING.md"))
+  end
+
+  for required <- @contributor_requirements do
+    test "the contributor guard rejects deletion of #{required}" do
+      guide = File.read!("CONTRIBUTING.md") |> String.replace(~r/\s+/, " ")
+      required = unquote(required)
+      assert_contributor_guidance!(guide)
+      mutant = String.replace(guide, required, "[removed]")
+      assert mutant != guide
+
+      error =
+        assert_raise ExUnit.AssertionError, fn -> assert_contributor_guidance!(mutant) end
+
+      assert error.message =~ required
+    end
+  end
+
   test "the 0.11.0 CHANGELOG and upgrading notes cover its breaking changes" do
     [_before, zero_11] = String.split(File.read!("CHANGELOG.md"), "## [0.11.0]", parts: 2)
     [zero_11 | _older] = String.split("[0.11.0]" <> zero_11, ~r/^## /m)
@@ -286,6 +313,14 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
   end
 
   ## helpers
+
+  defp assert_contributor_guidance!(guide) do
+    guide = String.replace(guide, ~r/\s+/, " ")
+
+    for required <- @contributor_requirements do
+      assert guide =~ required, "CONTRIBUTING.md must document #{required}"
+    end
+  end
 
   # The atoms of one @type error set, from the lib source (the source of
   # truth). GENERIC: every :atom in the body is extracted, so a future error
