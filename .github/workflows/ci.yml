@@ -24,21 +24,27 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Read the default lane from .tool-versions
+      - name: Read every declared lane from .tool-versions
         id: versions
         run: |
           python3 - <<'PYTHON'
-          import json, os, pathlib
+          import json, os, pathlib, re
           versions = {}
           for line in pathlib.Path('.tool-versions').read_text().splitlines():
               fields = line.split('#', 1)[0].split()
               if fields:
-                  versions[fields[0]] = fields[1]
-          lanes = [
-              {'elixir': '1.18.4-otp-27', 'otp': '27.3.4.14'},
-              {'elixir': '1.19.5-otp-28', 'otp': '28.5.0.3'},
-              {'elixir': versions['elixir'], 'otp': versions['erlang']},
-          ]
+                  if len(fields) < 2 or fields[0] in versions:
+                      raise SystemExit('Invalid or duplicate toolchain declaration')
+                  versions[fields[0]] = fields[1:]
+          lanes = []
+          for elixir in versions['elixir']:
+              match = re.fullmatch(r'(\d+\.\d+\.\d+)-otp-(\d+)', elixir)
+              if not match:
+                  raise SystemExit('Declare an exact Elixir build')
+              matches = [otp for otp in versions['erlang'] if otp.split('.')[0] == match[2]]
+              if len(matches) != 1:
+                  raise SystemExit('Each Elixir build requires exactly one declared OTP version')
+              lanes.append({'elixir': elixir, 'otp': matches[0]})
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('lanes=' + json.dumps(lanes) + '\n')
           PYTHON
@@ -83,15 +89,6 @@ jobs:
         # The Hex version is written into the archive metadata; .hex-version keeps CI, the
         # attestation and a local release build on the same client.
         run: mix local.hex "$(cat .hex-version)" --force
-
-      # dialyzer's PLTs (_build/plts, mix.exs): rebuilt from scratch on every run without this.
-      - name: Cache dialyzer PLTs
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: _build/plts
-          key: plt-${{ runner.os }}-${{ runner.arch }}-otp-${{ matrix.otp }}-elixir-${{ matrix.elixir }}-${{ hashFiles('mix.lock') }}
-          restore-keys: |
-            plt-${{ runner.os }}-${{ runner.arch }}-otp-${{ matrix.otp }}-elixir-${{ matrix.elixir }}-
 
       - name: Install deps
         run: mix deps.get --check-locked

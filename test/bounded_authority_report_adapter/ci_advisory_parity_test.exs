@@ -26,7 +26,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   # A public repository runs on GitHub-hosted runners only, on a pinned image.
   @runner "ubuntu-24.04"
 
-  @pinned_action ~r/\A[\w.-]+\/[\w.\/-]+@[0-9a-f]{40}\z/
+  @pinned_action ~r/\A[\w.-]+\/[\w.\/-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+\z/
 
   # The gate battery, in the canonical step order shared by `mix ci` and the
   # workflow's gate job. The workflow spells each command `mix <command>`;
@@ -45,13 +45,13 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   test "mix ci boots through the env guard before any step" do
     root_mix = File.read!("mix.exs") |> strip_comments()
 
-    assert root_mix =~ ~r|"#{@env_guard_step}",\s*"deps\.get",|,
-           "the env guard must be the FIRST ci step, immediately before deps.get — " <>
+    assert root_mix =~ ~r|"#{@env_guard_step}",\s*"deps\.get --check-locked",|,
+           "the env guard must be the FIRST ci step, immediately before locked deps.get — " <>
              "it replaces the old POSIX env(1) re-exec (the RA7 trap stays guarded)"
 
     mutated = String.replace(root_mix, ~s{"#{@env_guard_step}",}, "", global: false)
     refute mutated == root_mix, "env-guard mutation fixture changed nothing"
-    refute mutated =~ ~r|"#{@env_guard_step}",\s*"deps\.get",|
+    refute mutated =~ ~r|"#{@env_guard_step}",\s*"deps\.get --check-locked",|
   end
 
   test "mix ci audits the edge example immediately after resolving its dependencies" do
@@ -65,7 +65,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
            "mix ci must run the example job's runner as its example section"
 
     assert runner =~
-             ~r|\{"install deps", \["deps\.get"\]\},\s*\{"audit dependencies", \["hex\.audit"\]\},|,
+             ~r|\{"install deps", \["deps\.get", "--check-locked"\]\},\s*\{"audit dependencies", \["hex\.audit"\]\},|,
            "the example runner must audit the edge example's own lock immediately " <>
              "after resolving its dependencies"
   end
@@ -79,7 +79,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
            "the GitHub example job must bind every mix command to examples/edge_agent"
 
     assert example_job =~
-             ~r|- name: Install deps\s+run: mix deps\.get\s+- name: Audit dependencies\s+run: #{@audit_command}|,
+             ~r|- name: Install deps\s+run: mix deps\.get --check-locked\s+- name: Audit dependencies\s+run: #{@audit_command}|,
            "the GitHub example job must run mix hex.audit against examples/edge_agent, not " <>
              "the root library lock"
   end
@@ -148,54 +148,58 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     end
   end
 
-  test "both jobs run the full compatibility matrix on Linux (every supported OTP major)" do
-    # A dropped matrix cell narrows CI coverage silently (a lane that never
-    # runs looks green by absence): pin the exact cells per job and that
-    # setup-beam actually consumes the matrix variables. CI is Linux only:
-    # developer portability across macOS and Linux is a developer-setup property,
-    # never a CI lane; Windows developers use WSL2, the Linux path.
+  test "both jobs consume every declared compatibility lane through the toolchain reader" do
     workflow = File.read!(".github/workflows/ci.yml")
+    declaration = File.read!(".tool-versions")
 
     for runner <- ["windows-", "macos-"] do
-      refute String.contains?(workflow, runner),
-             "ci.yml must not run a #{runner}* lane (CI is Linux only)"
-
-      planted = String.replace(workflow, "ubuntu-24.04", runner <> "latest", global: false)
-      assert String.contains?(planted, runner), "the #{runner} guard fixture changed nothing"
+      refute String.contains?(workflow, runner)
+      planted = String.replace(workflow, @runner, runner <> "latest", global: false)
+      assert String.contains?(planted, runner), "the runner guard fixture changed nothing"
     end
 
-    [gate_job, example_job] = String.split(workflow, "\n  example:", parts: 2)
+    versions =
+      declaration
+      |> String.split("\n", trim: true)
+      |> Map.new(fn line ->
+        [tool | values] = String.split(line)
+        {tool, values}
+      end)
 
-    lanes = [
-      {"1.18.4", "27.3.4.14"},
-      {"1.19.5", "28.5.0.3"},
-      {"1.20.2", "29.0.3"}
-    ]
+    assert versions["elixir"] == ["1.20.2-otp-29", "1.18.4-otp-27", "1.19.5-otp-28"]
+    assert versions["erlang"] == ["29.0.3", "27.3.4.14", "28.5.0.3"]
+
+    reader = workflow |> String.split("\n  gate:", parts: 2) |> hd()
+    assert reader =~ "pathlib.Path('.tool-versions').read_text()"
+    assert reader =~ "for elixir in versions['elixir']:"
+    assert reader =~ "otp.split('.')[0] == match[2]"
+    assert reader =~ "if len(matches) != 1:"
+    assert reader =~ "lanes.append({'elixir': elixir, 'otp': matches[0]})"
+
+    [_, gate_and_example] = String.split(workflow, "\n  gate:", parts: 2)
+    [gate_job, example_and_qualified] = String.split(gate_and_example, "\n  example:", parts: 2)
+    [example_job, _] = String.split(example_and_qualified, "\n  qualified:", parts: 2)
+    matrix = "include: ${{ fromJSON(needs.toolchain.outputs.lanes) }}"
 
     for {job_name, job} <- [{"gate", gate_job}, {"example", example_job}] do
-      assert job =~ ~r/strategy:\s+fail-fast:\s*false\s+matrix:\s+include:/m,
-             "the #{job_name} job must declare the fail-fast: false matrix"
-
-      assert String.contains?(job, "runs-on: #{@runner}\n"),
-             "the #{job_name} job must run on #{@runner}"
-
-      for {elixir, otp} <- lanes do
-        cell = "- elixir: \"#{elixir}\"\n            otp: \"#{otp}\"\n"
-
-        assert job =~ cell,
-               "the #{job_name} job must include the #{elixir}/#{otp} matrix cell"
-
-        # Non-vacuity: the cell string removed in-memory must break the match
-        # (a loosened assertion that passes over a dropped lane reds here).
-        mutated = String.replace(job, cell, "", global: false)
-        refute mutated == job, "the #{job_name} mutation fixture for #{elixir} changed nothing"
-        refute String.contains?(mutated, cell), "dropping #{elixir}/#{otp} left it present"
-      end
+      assert job =~ "needs: toolchain"
+      assert job =~ ~r/strategy:\s+fail-fast:\s*false\s+matrix:\s+include:/m
+      assert job =~ "runs-on: #{@runner}\n"
+      assert job =~ matrix, "#{job_name} must consume the reader's whole lane list"
+      mutated = String.replace(job, matrix, "include: []", global: false)
+      refute mutated == job
+      refute mutated =~ matrix
 
       assert job =~
-               ~r/elixir-version: \$\{\{ matrix\.elixir \}\}\s+otp-version: \$\{\{ matrix\.otp \}\}/,
-             "the #{job_name} job's setup-beam must consume the matrix variables, not a pin"
+               ~r/uses: \.\/\.github\/actions\/setup-beam\s+with:\s+elixir-version: \$\{\{ matrix\.elixir \}\}\s+otp-version: \$\{\{ matrix\.otp \}\}/
     end
+
+    setup = File.read!(".github/actions/setup-beam/action.yml")
+    assert setup =~ "version-type: strict"
+    assert setup =~ "elixir not in versions.get('elixir', [])"
+    assert setup =~ "otp not in versions.get('erlang', [])"
+    assert setup =~ "actual_otp == System.fetch_env!(\"EXPECTED_OTP\")"
+    assert setup =~ "System.version() == version"
   end
 
   test "every job in every workflow runs on the pinned GitHub-hosted image" do
@@ -207,17 +211,22 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     end
   end
 
-  test "every action in every workflow is pinned to a full commit SHA" do
+  test "external actions are release-pinned and local composites are inspected too" do
     uses =
-      for path <- workflows(),
-          [_, ref] <- Regex.scan(~r/^\s+(?:- )?uses: (\S+)/m, File.read!(path)),
+      for path <- workflows() ++ Path.wildcard(".github/actions/**/action.yml"),
+          [_, ref] <- Regex.scan(~r/^\s+(?:- )?uses: ([^\n]+)/m, File.read!(path)),
           do: {path, ref}
 
     assert length(uses) >= 10, "the uses: scan found #{length(uses)} actions; it is broken"
 
     for {path, ref} <- uses do
-      assert ref =~ @pinned_action,
-             "#{path} uses #{ref}; pin it to a 40-hex commit SHA with the tag in a comment"
+      if String.starts_with?(ref, "./") do
+        assert ref == "./.github/actions/setup-beam"
+        assert File.regular?(Path.join(ref, "action.yml"))
+      else
+        assert ref =~ @pinned_action,
+               "#{path} uses #{ref}; pin it to a 40-hex commit SHA with its release comment"
+      end
     end
 
     # Non-vacuity: a tag reference fails the same pattern.

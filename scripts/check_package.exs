@@ -238,7 +238,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
 
   defp compile_package!(package_root) do
     environment = [{"MIX_ENV", "prod"}]
-    run_mix!(["deps.get", "--only", "prod"], package_root, environment)
+    run_mix!(["deps.get", "--only", "prod", "--check-locked"], package_root, environment)
     run_mix!(["compile", "--warnings-as-errors"], package_root, environment)
   end
 
@@ -273,7 +273,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     )
 
     environment = [{"MIX_ENV", "prod"}]
-    run_mix!(["deps.get"], consumer_root, environment)
+    run_mix!(["deps.get", "--check-locked"], consumer_root, environment)
     run_mix!(["compile", "--warnings-as-errors"], consumer_root, environment)
 
     run!(
