@@ -23,8 +23,8 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   @audit_command "mix hex.audit"
   @env_guard_step "run --no-start scripts/ci_env_guard.exs"
 
-  # The BaseLabs runner expression, verbatim.
-  @runner_expression "${{ vars.BASELABS_RUNNER || 'ubuntu-24.04' }}"
+  # A public repository runs on GitHub-hosted runners only, on a pinned image.
+  @runner "ubuntu-24.04"
 
   @pinned_action ~r/\A[\w.-]+\/[\w.\/-]+@[0-9a-f]{40}\z/
 
@@ -176,8 +176,8 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
       assert job =~ ~r/strategy:\s+fail-fast:\s*false\s+matrix:\s+include:/m,
              "the #{job_name} job must declare the fail-fast: false matrix"
 
-      assert String.contains?(job, "runs-on: #{@runner_expression}\n"),
-             "the #{job_name} job must run on the BaseLabs runner expression"
+      assert String.contains?(job, "runs-on: #{@runner}\n"),
+             "the #{job_name} job must run on #{@runner}"
 
       for {elixir, otp} <- lanes do
         cell = "- elixir: \"#{elixir}\"\n            otp: \"#{otp}\"\n"
@@ -198,15 +198,13 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     end
   end
 
-  test "every job in every workflow runs on the runner expression or a pinned Linux image" do
+  test "every job in every workflow runs on the pinned GitHub-hosted image" do
     for path <- workflows(),
         [_, runner] <- Regex.scan(~r/^\s+runs-on: (.+)$/m, File.read!(path)) do
-      assert runner in [@runner_expression, "ubuntu-24.04"],
-             "#{path} runs a job on #{runner}; use the BaseLabs runner expression " <>
-               "(a floating image such as ubuntu-latest changes under the job)"
+      assert runner == @runner,
+             "#{path} runs a job on #{runner}; use #{@runner} (a public repository never " <>
+               "uses an organization runner, and a floating image changes under the job)"
     end
-
-    refute "ubuntu-latest" in [@runner_expression, "ubuntu-24.04"]
   end
 
   test "every action in every workflow is pinned to a full commit SHA" do
