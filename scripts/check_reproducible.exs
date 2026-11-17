@@ -131,7 +131,7 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
   end
 
   defp build_in!(copy_root, output) do
-    run_mix!(["deps.get"], copy_root)
+    run_mix!(["deps.get", "--check-locked"], copy_root)
     run_mix!(["hex.build", "--output", output], copy_root)
     assert_regular_nonempty!(output)
   end

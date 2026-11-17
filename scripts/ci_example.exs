@@ -12,7 +12,7 @@ defmodule BoundedAuthorityReportAdapter.CiExample do
 
   # The example job's steps, in the workflow's order.
   @steps [
-    {"install deps", ["deps.get"]},
+    {"install deps", ["deps.get", "--check-locked"]},
     {"audit dependencies", ["hex.audit"]},
     {"check formatting", ["format", "--check-formatted"]},
     {"compile (warnings as errors)", ["compile", "--warnings-as-errors"]},

@@ -68,7 +68,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       ci: [
         "run --no-start scripts/ci_env_guard.exs",
         # job: gate (the library)
-        "deps.get",
+        "deps.get --check-locked",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "credo --strict",

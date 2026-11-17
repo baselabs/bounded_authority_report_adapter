@@ -20,6 +20,7 @@ jobs:
   build:
     name: Build release package evidence
     runs-on: ubuntu-24.04
+    timeout-minutes: 8 # run 42809482079
     # Deliberately NO id-token/attestations here: this job compiles and runs
     # ~40 third-party packages' code: it must not hold OIDC identity. The
     # attest job below is the only one that can mint attestations, and it
@@ -39,12 +40,10 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
-      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
-        with:
-          elixir-version: "1.20.2"
-          otp-version: "29.0.3"
+      - uses: ./.github/actions/setup-beam
 
       - name: Pin the Hex client
         # The Hex version is written into the archive metadata; .hex-version keeps CI, the
@@ -52,7 +51,7 @@ jobs:
         run: mix local.hex "$(cat .hex-version)" --force
 
       - name: Install dependencies
-        run: mix deps.get
+        run: mix deps.get --check-locked
 
       # MIX_ENV is explicit: the mix ci alias's env-guard REFUSES any boot
       # other than :test instead of changing it implicitly; the
@@ -96,6 +95,7 @@ jobs:
     name: Attest provenance and SBOM
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 5 # run 42809482079
     # The ONLY job with signing permissions (SLSA's build/attest split): the
     # artifact-metadata permission is on actions/attest@v4's documented
     # required set alongside id-token + attestations.

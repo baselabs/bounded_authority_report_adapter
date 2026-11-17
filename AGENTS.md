@@ -15,3 +15,10 @@ The library and `examples/edge_agent` are separate Mix projects. The library has
 runtime dependencies on the public protocol package and telemetry, with optional Igniter
 support for its installer. Transport dependencies belong to the example application.
 `test/support` compiles only in the test environment and is excluded from the Hex archive.
+
+## CI/CD and releases
+
+Releases, deployments, and publications are done by the infra session (`infra-1`). The project
+lands on its default branch with `kimosabe-land --repo . --sha <full sha>` and stops there.
+The requirements live in the infra repository at `baselabs/docs/ci.md`,
+"What infra requires of every product".

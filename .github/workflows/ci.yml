@@ -4,8 +4,7 @@ name: CI
 # Markdown guides, so a docs-only push is a code change to those tests.
 on:
   push:
-    branches: [master, 'kci/**']
-  pull_request:
+    branches: ['kci/**']
 
 permissions:
   contents: read
@@ -15,10 +14,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  toolchain:
+    name: Read suite toolchains
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5 # no green run yet
+    outputs:
+      lanes: ${{ steps.versions.outputs.lanes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read the default lane from .tool-versions
+        id: versions
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, pathlib
+          versions = {}
+          for line in pathlib.Path('.tool-versions').read_text().splitlines():
+              fields = line.split('#', 1)[0].split()
+              if fields:
+                  versions[fields[0]] = fields[1]
+          lanes = [
+              {'elixir': '1.18.4-otp-27', 'otp': '27.3.4.14'},
+              {'elixir': '1.19.5-otp-28', 'otp': '28.5.0.3'},
+              {'elixir': versions['elixir'], 'otp': versions['erlang']},
+          ]
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write('lanes=' + json.dumps(lanes) + '\n')
+          PYTHON
+
   gate:
+    needs: toolchain
     name: Gate battery (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     # A public repository runs on GitHub-hosted runners only, on a pinned image.
     runs-on: ubuntu-24.04
+    timeout-minutes: 7 # run 44167643363
 
     # Local parity: `mix ci` reproduces these steps step-for-step on the
     # PINNED lane only (asdf .tool-versions, the local floor). The matrix is
@@ -33,13 +63,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - elixir: "1.18.4"
-            otp: "27.3.4.14"
-          - elixir: "1.19.5"
-            otp: "28.5.0.3"
-          - elixir: "1.20.2"
-            otp: "29.0.3"
+        include: ${{ fromJSON(needs.toolchain.outputs.lanes) }}
 
     env:
       MIX_ENV: test
@@ -47,9 +71,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
-      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+      - uses: ./.github/actions/setup-beam
         with:
           elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
@@ -69,7 +94,7 @@ jobs:
             plt-${{ runner.os }}-${{ runner.arch }}-otp-${{ matrix.otp }}-elixir-${{ matrix.elixir }}-
 
       - name: Install deps
-        run: mix deps.get
+        run: mix deps.get --check-locked
 
       - name: Check formatting
         run: mix format --check-formatted
@@ -107,8 +132,10 @@ jobs:
         run: mix run --no-start scripts/check_reproducible.exs
 
   example:
+    needs: toolchain
     name: examples/edge_agent (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 5 # run 44167643363
 
     # Same matrix as the gate job (one Linux lane per supported OTP major):
     # the example app is part of the supported surface (its
@@ -116,13 +143,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - elixir: "1.18.4"
-            otp: "27.3.4.14"
-          - elixir: "1.19.5"
-            otp: "28.5.0.3"
-          - elixir: "1.20.2"
-            otp: "29.0.3"
+        include: ${{ fromJSON(needs.toolchain.outputs.lanes) }}
 
     env:
       MIX_ENV: test
@@ -133,14 +154,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+      - uses: ./.github/actions/setup-beam
         with:
           elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
 
       - name: Install deps
-        run: mix deps.get
+        run: mix deps.get --check-locked
 
       - name: Audit dependencies
         run: mix hex.audit
@@ -156,3 +179,22 @@ jobs:
 
       - name: Test (the end-to-end round-trip + the four rejection classes)
         run: mix test
+
+  qualified:
+    if: always()
+    needs: [toolchain, gate, example]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5 # no green run yet
+    steps:
+      - name: Require every qualification job to succeed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, sys
+          results = json.loads(os.environ['NEEDS'])
+          failed = [name for name, job in results.items() if job['result'] != 'success']
+          if failed:
+              print('Qualification refused: ' + ', '.join(failed))
+          sys.exit(bool(failed) or not results)
+          PYTHON
