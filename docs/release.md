@@ -78,7 +78,10 @@ Run each and keep its output.
    `HEX_API_KEY` exists only in that step's environment; project and dependency code
    do not run in the process holding it. The workflow fails if Hex stages the upload
    for approval instead of completing publication. The pinned Hex client keeps
-   archive metadata consistent with the supply-chain build.
+   archive metadata consistent with the supply-chain build. A separate job,
+   `published-livebooks`, then runs every notebook unchanged against the release. It
+   has no environment and no key; qualification never installs this package from Hex,
+   because a version commit names a release Hex does not serve yet.
 
 ## 3. Publish and tag
 
@@ -99,8 +102,11 @@ Run each and keep its output.
 9. HexDocs renders the release: `https://hexdocs.pm/bounded_authority_report_adapter/X.Y.Z`.
 10. A fresh consumer compiles: `mix new` a scratch project, add
     `{:bounded_authority_report_adapter, "~> X.Y"}`, then `mix deps.get && mix compile`.
-11. Every notebook runs unchanged from Hex: `elixir scripts/check_livebooks.exs --published`
-    installs `== X.Y.Z`, checks version and registry origin, and compares every semantic output.
+11. Every notebook runs unchanged from Hex: the `published-livebooks` job of `publish.yml`
+    waits until the Hex repository serves `X.Y.Z`, then runs
+    `elixir scripts/check_livebooks.exs --published`, which installs `== X.Y.Z`, checks version
+    and registry origin, and compares every semantic output. The job holds no key. Read its
+    result as part of the read-back.
 12. `examples/edge_agent` runs against the published package: in a scratch copy, replace
     the `path: "../.."` dependency with `"~> X.Y"`, then `mix deps.get && mix test`.
 

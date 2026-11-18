@@ -23,14 +23,14 @@ both locks, version notes, examples and tests together.
 mix deps.get --check-locked
 MIX_ENV=test mix ci
 elixir scripts/check_livebooks.exs --local
-elixir scripts/check_livebooks.exs --published
 python3 scripts/check_doc_links.py doc
 ```
 
 `mix ci` checks formatting, compilation, lint, tests with coverage, Dialyzer, docs, links,
 advisories, package contents and reproducibility, notebooks and the example app. It runs
 checks in order and exits non-zero if any step failed. Some failures allow later checks to
-run; read all output. CI runs the supported toolchain matrix and both notebook modes.
+run; read all output. CI runs the supported toolchain matrix and the local notebook mode; `publish.yml` runs the
+notebooks unchanged against Hex after each upload.
 
 Every authored Elixir fence is discovered recursively with a CommonMark parser and executed.
 HTTP examples execute in the example app, which supplies Plug. No compile-only fragments

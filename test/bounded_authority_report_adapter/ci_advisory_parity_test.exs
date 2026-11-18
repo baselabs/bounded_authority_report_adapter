@@ -282,19 +282,29 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
            "ci.yml skips some paths, but the tests read the Markdown guides and docs/"
   end
 
-  test "both notebook modes and rendered links are qualification requirements" do
+  test "local notebooks and rendered links qualify; published notebooks run after upload" do
     workflow = File.read!(".github/workflows/ci.yml")
     aliases = File.read!("mix.exs")
     [_, qualified] = String.split(workflow, "\n  qualified:", parts: 2)
 
-    for mode <- ["local", "published"] do
-      assert workflow =~ "  notebooks-#{mode}:"
-      assert workflow =~ "run: elixir scripts/check_livebooks.exs --#{mode}"
-      assert qualified =~ "notebooks-#{mode}"
-      assert aliases =~ "cmd elixir scripts/check_livebooks.exs --#{mode}"
-    end
-
+    assert workflow =~ "  livebooks-local:"
+    assert workflow =~ "run: elixir scripts/check_livebooks.exs --local"
+    assert qualified =~ "livebooks-local"
+    assert aliases =~ "cmd elixir scripts/check_livebooks.exs --local"
     assert workflow =~ "run: python3 scripts/check_doc_links.py doc"
+
+    # Qualification never installs this package from Hex: a version commit names a
+    # version Hex does not serve yet, so it could never land.
+    refute workflow =~ "--published"
+    refute aliases =~ "--published"
+
+    publish = File.read!(".github/workflows/publish.yml")
+    [keyed, after_upload] = String.split(publish, "\n  published-livebooks:\n", parts: 2)
+    assert keyed =~ "secrets.HEX_API_KEY"
+    assert after_upload =~ "    needs: publish\n"
+    assert after_upload =~ "run: elixir scripts/check_livebooks.exs --published"
+    refute after_upload =~ "secrets."
+    refute after_upload =~ "environment:"
   end
 
   defp workflows, do: Path.wildcard(".github/workflows/*.yml")

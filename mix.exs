@@ -93,8 +93,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "run --no-start scripts/check_reproducible.exs",
         # job: example (the workflow's working-directory: examples/edge_agent)
         "run --no-start scripts/ci_example.exs",
-        "cmd elixir scripts/check_livebooks.exs --local",
-        "cmd elixir scripts/check_livebooks.exs --published"
+        "cmd elixir scripts/check_livebooks.exs --local"
       ]
     ]
   end

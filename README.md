@@ -252,7 +252,7 @@ MIX_ENV=test mix ci
 `mix ci` runs the same checks as CI: formatting, compilation with warnings as errors,
 Credo, the test suite (including a conformance round-trip against the protocol's
 published vectors, the notebook registry, and the recursively discovered code samples in these docs), coverage,
-Dialyzer, documentation, rendered links, both notebook modes, advisory audits, and the package and reproducibility checks, for
+Dialyzer, documentation, rendered links, the notebooks against this checkout, advisory audits, and the package and reproducibility checks, for
 the library and the example app. It runs the steps in order and exits non-zero if any step
 failed. Not every failing step ends the run: a failing test suite, for one, lets the later
 steps run, so read the whole output.

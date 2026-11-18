@@ -196,22 +196,9 @@ jobs:
       - name: Execute every notebook against local dependencies
         run: elixir scripts/check_livebooks.exs --local
 
-  livebooks-published:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90 # no green run yet
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-beam
-      - name: Pin the Hex client
-        run: mix local.hex "$(cat .hex-version)" --force
-      - name: Execute every notebook against published dependencies
-        run: elixir scripts/check_livebooks.exs --published
-
   qualified:
     if: always()
-    needs: [toolchain, gate, example, livebooks-local, livebooks-published]
+    needs: [toolchain, gate, example, livebooks-local]
     runs-on: ubuntu-24.04
     timeout-minutes: 5 # run 44208265114
     steps:

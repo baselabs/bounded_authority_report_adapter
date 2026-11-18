@@ -84,20 +84,20 @@ defmodule BoundedAuthorityReportAdapter.LivebookWalkthroughTest do
     end
   end
 
-  test "qualification requires both Livebook modes under the shared job names" do
+  test "qualification requires local Livebooks under the shared job name" do
     workflow = File.read!(".github/workflows/ci.yml")
     [_header, definitions] = String.split(workflow, "\njobs:\n", parts: 2)
     jobs = Regex.scan(~r/^  ([\w-]+):$/m, definitions) |> Enum.map(&Enum.at(&1, 1))
 
     assert jobs ==
-             ~w(toolchain gate example livebooks-local livebooks-published qualified)
+             ~w(toolchain gate example livebooks-local qualified)
 
     [_before, qualification] = String.split(definitions, "  qualified:\n", parts: 2)
     assert qualification =~ "    if: always()\n"
     [_, needs] = Regex.run(~r/    needs: \[([^\]]+)\]/, qualification)
     assert String.split(needs, ", ") == List.delete(jobs, "qualified")
     assert workflow =~ "elixir scripts/check_livebooks.exs --local"
-    assert workflow =~ "elixir scripts/check_livebooks.exs --published"
+    refute workflow =~ "elixir scripts/check_livebooks.exs --published"
   end
 
   test "the notebook parser rejects missing outputs, mismatched fences and no code" do

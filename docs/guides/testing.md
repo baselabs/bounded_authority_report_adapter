@@ -16,14 +16,15 @@ commit when the real store returns uncertainty, and reconcile effects before ret
 A fresh proof for an existing invocation must not execute again.
 
 This repository recursively executes authored Elixir samples, runs real HTTP example
-tests and both notebook modes, and checks source and rendered links. Run:
+tests and the notebooks, and checks source and rendered links. Run:
 
 ```sh
-elixir scripts/check_livebooks.exs --local
-elixir scripts/check_livebooks.exs --published
 MIX_ENV=test mix ci
 ```
 
-Local mode substitutes this checkout only in the dependency AST. Published mode leaves
-notebooks unchanged and asserts the exact Hex version and source origin. Both compare
+`mix ci` includes `elixir scripts/check_livebooks.exs --local`, which substitutes this
+checkout only in the dependency AST. `elixir scripts/check_livebooks.exs --published`
+leaves the notebooks unchanged and asserts the exact Hex version and source origin; the
+publication workflow runs it right after each upload, because a commit that sets a new
+version names a release Hex does not serve until it is published. Both modes compare
 semantic outputs, reject an incomplete registry, and remove their temporary install cache.

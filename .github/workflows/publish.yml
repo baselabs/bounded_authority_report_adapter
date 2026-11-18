@@ -139,3 +139,35 @@ jobs:
               System.fetch_env!("VERSION"), File.read!(System.fetch_env!("DOCS_ARCHIVE")), auth)
               |> published!.()
           '
+
+  # Qualification never installs this package from Hex: a version commit names a version Hex
+  # does not serve yet. The published release is checked here, after the upload, in a job with
+  # no environment and no secrets, so project and dependency code never share the keyed job.
+  published-livebooks:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90 # no green run yet
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-beam
+
+      - name: Pin the Hex client
+        run: mix local.hex "$(cat .hex-version)" --force
+
+      - name: Wait until the Hex repository serves the release
+        run: |
+          version="$(sed -n 's/^  @version "\(.*\)"$/\1/p' mix.exs)"
+          test -n "$version"
+          tarball="https://repo.hex.pm/tarballs/bounded_authority_report_adapter-${version}.tar"
+          for _ in $(seq 1 60); do
+            if curl -fsSIo /dev/null "$tarball"; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Hex did not serve ${tarball} within ten minutes of publication"
+          exit 1
+
+      - name: Execute every notebook unchanged against the published release
+        run: elixir scripts/check_livebooks.exs --published
