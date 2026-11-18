@@ -4,6 +4,10 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 import sys
 
+# ExDoc references docs_config.js from every page; HexDocs serves it per package (the version
+# selector), so a local build never contains it. It is the only link allowed to be absent.
+HOSTED_BY_HEXDOCS = {"docs_config.js"}
+
 
 class Page(HTMLParser):
     def __init__(self, source):
@@ -32,6 +36,8 @@ def check(root):
         for link in page.links:
             parts = urlsplit(link)
             if parts.scheme or parts.netloc:
+                continue
+            if parts.path in HOSTED_BY_HEXDOCS and not parts.fragment:
                 continue
             target = (path.parent / unquote(parts.path)).resolve() if parts.path else path
             if target.is_dir():
