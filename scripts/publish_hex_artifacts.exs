@@ -25,7 +25,10 @@ defmodule PublishHexArtifacts do
     end
 
     if System.fetch_env!("PUBLISH_DOCS") == "true" do
-      accepted!(Hex.API.ReleaseDocs.publish(nil, name, version, docs_bytes, auth), "Documentation")
+      accepted!(
+        Hex.API.ReleaseDocs.publish(nil, name, version, docs_bytes, auth),
+        "Documentation"
+      )
     end
   end
 

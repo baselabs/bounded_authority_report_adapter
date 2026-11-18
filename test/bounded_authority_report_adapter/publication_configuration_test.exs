@@ -3,6 +3,7 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
 
   defp read(path), do: YamlElixir.read_from_file!(path)
   defp uses?(step, action), do: String.starts_with?(step["uses"] || "", action)
+  defp unabridged(term), do: inspect(term, limit: :infinity, printable_limit: :infinity)
 
   test "only the isolated upload holds the registry key, between inspection and read-back" do
     workflow = read(".github/workflows/publish.yml")
@@ -22,20 +23,21 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     assert notebooks["needs"] == "publish"
     assert notebooks["if"] == job["if"]
     refute Map.has_key?(notebooks, "environment")
-    refute inspect(notebooks) =~ "secrets."
+    refute unabridged(notebooks) =~ "secrets."
     [upload] = Enum.filter(steps, &Map.has_key?(&1["env"] || %{}, "HEX_API_KEY"))
     assert upload["env"] == %{"HEX_API_KEY" => "${{ secrets.HEX_API_KEY }}"}
     assert upload["id"] == "upload"
     assert upload["working-directory"] == "${{ runner.temp }}"
     assert upload["run"] =~ "test ! -e mix.exs"
     assert upload["run"] =~ "sha256sum --check"
+
     assert upload["run"] =~
              ~s(mix run --no-mix-exs --no-start "$GITHUB_WORKSPACE/scripts/publish_hex_artifacts.exs")
 
     assert upload["run"] =~ ~s("$PACKAGE" "$VERSION" "$PACKAGE_ARCHIVE" "$DOCS_ARCHIVE")
     refute upload["run"] =~ "mix hex.publish"
     without_upload = put_in(workflow, ["jobs", "publish", "steps"], steps -- [upload])
-    refute inspect(without_upload) =~ "HEX_API_KEY"
+    refute unabridged(without_upload) =~ "HEX_API_KEY"
 
     for path <- Path.wildcard(".github/workflows/*.yml") -- [".github/workflows/publish.yml"] do
       refute File.read!(path) =~ "HEX_API_KEY"
@@ -64,11 +66,15 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
              [name, deps, docs, build, check, verify, prepare, keyed, read_back],
              &is_integer/1
            )
+
     assert name < deps and deps < docs
     assert Enum.at(steps, name)["env"] == %{"PACKAGE" => "bounded_authority_report_adapter"}
     assert docs < build and build < check and check < verify and verify < prepare
     assert prepare < keyed and keyed < read_back
-    assert Enum.at(steps, read_back)["env"]["PUBLICATION_HELD"] == "${{ steps.upload.outputs.held }}"
+
+    assert Enum.at(steps, read_back)["env"]["PUBLICATION_HELD"] ==
+             "${{ steps.upload.outputs.held }}"
+
     assert Enum.at(commands, docs) =~ "--formatter html"
     assert Enum.at(commands, docs) =~ "--sort=name --mtime="
     assert Enum.at(commands, docs) =~ "gzip -n"
@@ -151,8 +157,8 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     assert upload =~ "Hex.API.ReleaseDocs.publish("
     assert upload =~ "replace: false"
     refute upload =~ "replace: true"
-    assert upload =~ ~s(System.fetch_env!("PUBLISH_PACKAGE") == "true")
-    assert upload =~ ~s(System.fetch_env!("PUBLISH_DOCS") == "true")
+    assert upload =~ ~S|System.fetch_env!("PUBLISH_PACKAGE") == "true"|
+    assert upload =~ ~S|System.fetch_env!("PUBLISH_DOCS") == "true"|
     assert upload =~ ~s(state in ["staged", "held", "pending"])
     assert upload =~ "status == 202"
     assert upload =~ "held for approval on Hex; publication is incomplete"
