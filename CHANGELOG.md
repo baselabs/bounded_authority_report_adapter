@@ -17,6 +17,8 @@ reorganized guides and Livebooks.
   in the HTTP demonstration.
 
 - Audit the example project with both dependency feeds; add `mix_audit` as development and test tooling.
+- Qualify against protocol 1.1.0: the library and example locks resolve it from Hex. The
+  requirement stays `~> 1.0`, and the certified corpus pins are unchanged.
 
 ### Documentation
 
