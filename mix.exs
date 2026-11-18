@@ -28,8 +28,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         plt_core_path: "_build/plts",
         plt_local_path: "_build/plts",
         # :mix so the install task's Mix.Task behaviour callbacks resolve in the
-        # PLT (the conditional-def pattern dialyzes clean with it).
-        plt_add_apps: [:mix]
+        # PLT (the conditional-def pattern dialyzes clean with it); :earmark_parser
+        # because the test-support documentation parser calls it at test time only.
+        plt_add_apps: [:mix, :earmark_parser]
       ],
       deps: deps(),
       package: package(),
