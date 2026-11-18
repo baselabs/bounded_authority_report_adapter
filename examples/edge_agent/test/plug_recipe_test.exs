@@ -1,43 +1,40 @@
-defmodule MyApp.NonceLedger do
-  @moduledoc false
-  # The replay ledger the Plug recipe leaves to the reader (consumer integration §9): a real
-  # ETS table keyed by (identity, nonce).
-  @table __MODULE__
-
-  def start, do: :ets.new(@table, [:named_table, :public, :set])
-
-  def spend(identity, nonce) do
-    if :ets.insert_new(@table, {{identity, nonce}}), do: :ok, else: {:error, :replayed}
-  end
-end
-
 defmodule EdgeAgent.PlugRecipeTest do
-  @moduledoc """
-  Runs the library's Plug recipe (`docs/recipes.md`) as written, in this app because it has
-  Plug. The recipe plugs into the verifier module from `docs/consumer-integration.md` §4,
-  and the README's quick start signs the request, so those blocks are evaluated from the
-  library's docs too. The recipe module is then called with real `Plug.Conn` requests
-  carrying a real envelope: the matching request is accepted, and a replay, another
-  identity's key and a missing header are rejected.
-  """
+  @moduledoc "Executes HTTP documentation against real crypto, policy and replay storage."
 
   use ExUnit.Case, async: false
 
   @root Path.expand("../../..", __DIR__)
 
   setup_all do
-    {_readme_handle, readme_binding} =
-      eval_blocks(["README.md"], &(&1 =~ "defmodule MyApp.DevKey" or &1 =~ "V1.check_envelope("))
+    Code.require_file("test/support/bounded_authority_report_adapter/documentation.ex", @root)
+    parser = Module.concat([BoundedAuthorityReportAdapter, Documentation])
 
-    eval_blocks(["docs/consumer-integration.md"], &(&1 =~ "defmodule MyApp.EnvelopeVerifier"))
-    eval_blocks(["docs/recipes.md"], &(&1 =~ "defmodule MyApp.ReportPlug"))
+    {_value, binding, _env} =
+      Enum.reduce(
+        parser.blocks(File.read!(Path.join(@root, "README.md"))),
+        {nil, [], Code.env_for_eval([])},
+        fn block, {_value, binding, env} ->
+          if String.starts_with?(String.trim(block.code), "def deps") do
+            {nil, binding, env}
+          else
+            quoted = Code.string_to_quoted!(block.code)
+            Code.eval_quoted_with_env(quoted, binding, env)
+          end
+        end
+      )
 
-    %{binding: readme_binding}
-  end
+    # The application supplies Plug for every discovered HTTP sample.
+    File.cd!(@root, fn ->
+      for path <- parser.files(),
+          Path.extname(path) != ".livemd",
+          block <- parser.blocks(File.read!(path)),
+          String.contains?(block.code, "Plug.") or
+            String.contains?(block.code, "defmodule MyApp.EnvelopeVerifier") do
+        Code.eval_string(block.code)
+      end
+    end)
 
-  setup do
-    MyApp.NonceLedger.start()
-    :ok
+    %{binding: binding}
   end
 
   test "the recipe accepts a real envelope once and rejects a replay, another key and a missing header",
@@ -68,6 +65,10 @@ defmodule EdgeAgent.PlugRecipeTest do
     {:ok, holder_public_key} = dev_key.public_key({:holder, "holder-key-1"})
     {:ok, other_public_key} = dev_key.public_key({:holder, "another-key-1"})
 
+    ledger = :ets.new(:admissions, [:set, :public])
+    policy = MapSet.new(["archive_document"])
+    revoked = MapSet.new()
+
     config =
       report_plug.init(%{
         issuer_key_id: "issuer-key-1",
@@ -77,7 +78,21 @@ defmodule EdgeAgent.PlugRecipeTest do
         target_uri: "https://records.example/archive",
         operation: "archive_document",
         clock_skew: 60,
-        proof_max_age: 300
+        proof_max_age: 300,
+        authorize: fn facts, _identity ->
+          if MapSet.member?(policy, facts.operation), do: :ok, else: :invalid
+        end,
+        revocation: fn facts ->
+          if MapSet.member?(revoked, facts.grant_id), do: :invalid, else: :ok
+        end,
+        admit: fn facts, invocation, nonce ->
+          claims = [
+            {{:invocation, "https://issuer.example", facts.grant_id, invocation}, true},
+            {{:nonce, facts.holder_thumbprint, nonce}, true}
+          ]
+
+          if :ets.insert_new(ledger, claims), do: :ok, else: :invalid
+        end
       })
 
     headers = [
@@ -87,47 +102,63 @@ defmodule EdgeAgent.PlugRecipeTest do
       {"x-ba-nonce", "nonce-plug-1"}
     ]
 
-    request = fn headers, identity_public_key ->
-      conn =
-        Enum.reduce(headers, Plug.Test.conn(:post, "/archive", raw_body), fn {name, value},
-                                                                             conn ->
-          Plug.Conn.put_req_header(conn, name, value)
-        end)
+    request = fn headers, identity_public_key, config ->
+      conn = %{Plug.Test.conn(:post, "/archive", raw_body) | req_headers: headers}
 
       conn = conn |> Plug.Conn.assign(:identity_public_key, identity_public_key)
       conn = report_plug.call(conn, config)
       {conn.status, conn.resp_body}
     end
 
-    assert request.(headers, other_public_key) == {401, "invalid"}
+    assert request.(headers, other_public_key, config) == {401, "invalid"}
 
-    assert request.(List.keydelete(headers, "x-ba-proof", 0), holder_public_key) ==
+    assert request.(List.keydelete(headers, "x-ba-proof", 0), holder_public_key, config) ==
              {401, "invalid"}
 
-    assert request.(headers, holder_public_key) == {200, "accepted"}
-    assert request.(headers, holder_public_key) == {401, "invalid"}
-  end
+    assert request.([{"x-ba-proof", proof} | headers], holder_public_key, config) ==
+             {401, "invalid"}
 
-  # Evaluates the elixir blocks of the given docs that match `select`, in order, in one
-  # binding, and returns the last value and the binding.
-  defp eval_blocks(paths, select) do
-    blocks =
-      for path <- paths,
-          block <- elixir_blocks(File.read!(Path.join(@root, path))),
-          select.(block),
-          do: block
+    empty = List.keyreplace(headers, "x-ba-proof", 0, {"x-ba-proof", ""})
+    assert request.(empty, holder_public_key, config) == {401, "invalid"}
 
-    assert blocks != [], "no matching block in #{inspect(paths)}"
+    for {method, path} <- [{:get, "/archive"}, {:post, "/other"}, {:post, "/archive?extra=1"}] do
+      conn = %{Plug.Test.conn(method, path, raw_body) | req_headers: headers}
+      conn = Plug.Conn.assign(conn, :identity_public_key, holder_public_key)
+      response = report_plug.call(conn, config)
+      assert {response.status, response.resp_body} == {401, "invalid"}
+    end
 
-    Enum.reduce(blocks, {nil, []}, fn code, {_value, binding} ->
-      {value, binding} = Code.eval_string(code, binding)
-      {value, binding}
-    end)
-  end
+    # Local policy and revocation decisions refuse before any replay claims are written.
+    denied = %{config | authorize: fn _facts, _identity -> :invalid end}
+    revoked = %{config | revocation: fn _facts -> :invalid end}
+    assert request.(headers, holder_public_key, denied) == {401, "invalid"}
+    assert request.(headers, holder_public_key, revoked) == {401, "invalid"}
+    assert :ets.info(ledger, :size) == 0
 
-  defp elixir_blocks(markdown) do
-    ~r/^```elixir\n(.*?)^```$/ms
-    |> Regex.scan(markdown)
-    |> Enum.map(fn [_, code] -> code end)
+    assert request.(headers, holder_public_key, config) == {200, "accepted"}
+    assert request.(headers, holder_public_key, config) == {401, "invalid"}
+
+    {:ok, %{proof: fresh_proof}} =
+      BoundedAuthorityReportAdapter.sign_report(
+        %{
+          grant_compact: grant,
+          operation: "archive_document",
+          method: "POST",
+          target_uri: "https://records.example/archive",
+          invocation_id: invocation_id,
+          cast_arguments: cast_arguments,
+          nonce: "fresh-nonce"
+        },
+        holder
+      )
+
+    fresh_headers =
+      headers
+      |> List.keyreplace("x-ba-proof", 0, {"x-ba-proof", fresh_proof})
+      |> List.keyreplace("x-ba-nonce", 0, {"x-ba-nonce", "fresh-nonce"})
+
+    assert request.(fresh_headers, holder_public_key, config) == {401, "invalid"}
+    assert :ets.info(ledger, :size) == 2
+    :ets.delete(ledger)
   end
 end

@@ -32,7 +32,8 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## The key-handle behavior
 
-  The private key never enters this library. A caller passes a `{module(), term()}`
+  Keep private bytes behind callbacks, never in the opaque handle term. A caller passes a
+  `{module(), term()}`
   handle whose module implements the callbacks below; the term is a key reference only
   that module understands. Callbacks may reach a remote custodian (an HSM, a KMS, a key
   server). A callback that raises, throws or exits is contained: the entry point returns
@@ -109,10 +110,10 @@ defmodule BoundedAuthorityReportAdapter do
 
   ## What this library does not do
 
-    * It does not verify credentials. Verifiers use the protocol package
+    * It is not a general credential verifier. Verifiers use the protocol package
       (`check_envelope/2`, `verify_grant/3`, `verify_historical_anchor/3`,
-      `verify_key_transition/4`, `verify_assertion/2`). The one signature this library
-      checks is its own, before returning it.
+      `verify_key_transition/4`, `verify_assertion/2`). This library self-verifies signatures
+      it produces and can verify an Ed25519 issuer-role attestation against supplied trust.
     * It does not issue, track or revoke grants, and it does not hold or rotate keys. That
       is the job of your authority service and your key custody.
     * It does not transport or store anything. It returns compact strings.

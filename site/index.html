@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BAP in Elixir: the reference signer</title>
-<meta name="description" content="bounded_authority_report_adapter: the Elixir reference implementation of the Bounded Authority Protocol's holder/issuer signing side. Private keys never enter the library: callers supply a {module, term} handle into their own custody.">
+<meta name="description" content="bounded_authority_report_adapter: the Elixir reference implementation of the Bounded Authority Protocol's holder/issuer signing side. Callers supply a {module, term} handle and keep private bytes behind their own custody callbacks.">
 <link rel="stylesheet" href="./styles.css?v=2">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%230f172a'/%3E%3Ctext x='24' y='32' font-family='Arial,sans-serif' font-size='19' font-weight='800' text-anchor='middle' fill='%23a78bfa'%3E[BAP]%3C/text%3E%3C/svg%3E">
 </head>
@@ -43,11 +43,11 @@
     <p class="lede"><code style="background:none;border:none;color:#cbd5e1">bounded_authority_report_adapter</code> is the holder/issuer
     companion signer the TypeScript package ports: it takes a <strong>{module, term()} key handle</strong> whose callbacks reach
     your own custody (an HSM, a KMS, an in-process test key) and produces the signed envelope.
-    <strong>The private key never enters the library.</strong> The dependency is one-directional:
+    Keep private bytes behind callbacks, never in the opaque handle term. The dependency is one-directional:
     this adapter depends on the protocol package, never the reverse; verifiers depend only on the
     protocol package, never on this adapter.</p>
     <div class="hero-actions">
-      <a class="btn primary" href="https://baselabs.github.io/bounded_authority_signer_typescript/"><svg class="ic"><use href="#i-terminal"/></svg> Try the signer playground</a>
+      <a class="btn primary" href="https://hexdocs.pm/bounded_authority_report_adapter/getting-started.html"><svg class="ic"><use href="#i-terminal"/></svg> Get started in Elixir</a>
       <a class="btn ghost" href="https://hex.pm/packages/bounded_authority_report_adapter">hex.pm package</a>
     </div>
     <div class="flow" aria-label="The envelope flow">
@@ -77,7 +77,7 @@
 
 <section id="surface" class="wrap">
   <div class="sec-head"><h2>The signing surface</h2>
-  <p>Six entry points, one shared signing tail, closed error atoms. The <code>BoundedAuthorityReportAdapter.V3</code> module signs the four standard objects over ES256 with P-256 keys.</p></div>
+  <p>Six entry points, one shared signing tail, closed error atoms or fixed producer-error tuples. The <code>BoundedAuthorityReportAdapter.V3</code> module signs the four standard objects over ES256 with P-256 keys.</p></div>
   <table class="signers">
     <thead><tr><th>Function</th><th>Object</th><th>Role</th></tr></thead>
     <tbody>
@@ -85,7 +85,7 @@
       <tr><td><code>sign_local_loopback_report/3</code></td><td>local-loopback application proof (<code>ba+loopback-proof</code>)</td><td><span class="role-badge holder">holder</span></td></tr>
       <tr><td><code>sign_anchor/3</code></td><td>boundary anchor</td><td><span class="role-badge">role-agnostic</span></td></tr>
       <tr><td><code>sign_key_transition/3</code></td><td>key transition</td><td><span class="role-badge">role-agnostic</span></td></tr>
-      <tr><td><code>sign_grant/3</code></td><td>capability grant</td><td><span class="role-badge issuer">issuer-only, structurally gated</span></td></tr>
+      <tr><td><code>sign_grant/3</code></td><td>capability grant</td><td><span class="role-badge issuer">caller declares issuer</span></td></tr>
       <tr><td><code>sign_content_assertion/3</code></td><td>content assertion (<code>ba+content-assertion</code>)</td><td><span class="role-badge">role-agnostic</span></td></tr>
     </tbody>
   </table>
@@ -106,10 +106,9 @@
       misconfigured custodian fails loudly.</p>
     </article>
     <article class="whycard">
-      <h3>A holder cannot mint capability.</h3>
-      <p class="pain">If the agent’s key can self-issue grants, the boundary is decorative.</p>
-      <p class="answer"><svg class="ic"><use href="#i-check"/></svg> <strong>sign_grant/3 resolves the issuer role atomically</strong> and fails
-      closed before sign/2 is ever called: a holder handle cannot mint its own authority.</p>
+      <h3>Check the declared issuer role.</h3>
+      <p class="pain">Issuer authorization belongs to the host and its trusted key enrollment.</p>
+      <p class="answer"><svg class="ic"><use href="#i-check"/></svg> <strong>sign_grant/3 requires the caller callback to declare :issuer</strong> in one role/key snapshot. It cannot establish that the declaration is authorized. The Ed25519 surface can also verify a role attestation against an explicitly trusted attestor.</p>
     </article>
     <article class="whycard">
       <h3>Nothing leaks in failure.</h3>

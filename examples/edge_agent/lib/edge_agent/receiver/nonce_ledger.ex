@@ -57,9 +57,12 @@ defmodule EdgeAgent.Receiver.NonceLedger do
   `reserve_challenge/0` and is unconsumed; `{:error, :unknown_challenge}`
   otherwise (never minted, or already used). `:ets.take/2` is the atomic
   take: two concurrent requests presenting the same challenge cannot both
-  consume it: the first-use replay race on a no-TLS transport is what this
-  closes (a captured request cannot be replayed even once, because the
-  challenge it carries was consumed by the legitimate arrival).
+  consume it. This prevents later consumption, not first-arrival interception:
+  an attacker can submit a captured valid request first and deny the sender.
+  Authenticated confidential transport, identity binding, host policy, current
+  revocation and durable nonce/invocation admission remain host obligations.
+  The receiver consumes before verification, so invalid attempts can burn a
+  challenge too; this is a transport demo with no business effects.
   """
   @spec consume_challenge(binary()) :: :ok | {:error, :unknown_challenge}
   def consume_challenge(challenge) when is_binary(challenge) do

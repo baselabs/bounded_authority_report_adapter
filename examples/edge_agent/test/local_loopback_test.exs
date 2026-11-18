@@ -188,8 +188,8 @@ defmodule EdgeAgent.LocalLoopbackTest do
                )
 
       # Byte-identical replay: the challenge was CONSUMED by the first arrival
-      # (single-use), so the replay reds at the challenge gate itself: the
-      # first-use replay window a client-chosen nonce leaves open is closed.
+      # (single-use), so this later arrival is rejected. An interceptor can
+      # still win first arrival; this test makes no interception guarantee.
       assert {:ok, %{status: 401, body: "invalid"}} =
                Req.post(target,
                  headers: envelope_headers(grant, proof, invocation_id, challenge),

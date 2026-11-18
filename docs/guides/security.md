@@ -2,17 +2,19 @@
 
 This library signs. It produces holder proofs, local-loopback proofs, grants, boundary
 anchors, key transitions and content assertions over the protocol package's deterministic
-signing inputs. It does not verify credentials, transport or persist anything, or hold a
-private key. What it guarantees follows from that narrow job.
+signing inputs. It self-verifies signatures and can verify an optional Ed25519 role
+attestation; it is not a general credential verifier. It does not transport or persist
+objects or manage private keys. What it guarantees follows from that narrow job.
 
 ## Trust boundaries
 
-- **The library never asks for, processes or keeps private key material.** Custody lives
-  behind the `{module, term}` key-handle behavior; the adapter sees messages, signatures
-  and public keys only. The guarantee is the contract (the callbacks are its only way to
-  reach a key), not an inspection of your handle term: a handle that puts key bytes in
-  its term, like the repository's test-only reference handles, has chosen that itself.
-  Production handles call an HSM, a KMS or a key server.
+- **Private-key custody belongs to the caller.** Keep private bytes behind the
+  `{module, term}` callbacks, never in the opaque handle term. The adapter does not
+  inspect or sanitize that term: the repository's test-only reference handles can
+  therefore pass private bytes through it, which is unsuitable for production.
+  Callback results must expose only signatures, public keys and identity metadata.
+  Production handles call an HSM, a KMS or a key server; the provider and host enforce
+  any non-exportability or isolation requirement.
 - **Key identity comes from the handle.** The key id and public key of anchors, key
   transitions and content assertions come from one `key_identity/1` call, and those of
   grants from one `signing_identity/1` call. Key ids in the input are ignored, so a
@@ -33,7 +35,7 @@ private key. What it guarantees follows from that narrow job.
 - **Verification is never authorization.** Pure verification returns facts about
   signatures and request binding against caller-supplied trust and expected context.
   Execution depends on the verifying service's authorization policy, including trusted
-  keys, identity binding, replay reservation and live revocation; see [consumer-integration.md](consumer-integration.md) §8 and §9.
+  keys, identity binding, replay reservation and live revocation; see [framework-integration.md](framework-integration.md) §8 and §9.
 
 ## Named misuses
 
@@ -46,7 +48,7 @@ accept them.
 **Misuse: skipping identity binding at the verifier.** An envelope that verifies was
 validly signed by someone; it does not prove who is presenting it. Without the binding, a
 captured envelope replays under a different authenticated identity until it expires
-(consumer-integration.md §8). The verifier must bind the verified holder to the
+(framework-integration.md §8). The verifier must bind the verified holder to the
 authenticated identity; the adapter cannot do it.
 
 **Misuse: running without a nonce ledger.** Within the proof's freshness window the same
@@ -74,3 +76,13 @@ was signed from the signed objects themselves.
 repository's `test/support/` keep a private key in process memory as a plain binary. In
 production that reduces key custody to reading the heap, the failure the separate handle
 contract exists to prevent. They are excluded from the package.
+
+## Replay and first arrival
+
+A single-use challenge permits at most one consumption. It cannot authenticate the first
+arrival: an interceptor may submit a captured valid request first and deny its sender.
+The host must use authenticated confidential transport where interception matters, bind
+the authenticated identity, apply policy and live revocation, and reserve both challenge
+and invocation identities in durable shared storage. Retain invocation claims through
+grant expiry plus maximum skew or in a longer-lived execution record. Refuse uncertain
+admission outcomes. Rotation, proof freshness and nonce equality do not replace this store.

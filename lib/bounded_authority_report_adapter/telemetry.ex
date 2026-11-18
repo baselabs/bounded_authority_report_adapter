@@ -52,7 +52,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
 
   @prefix [:bounded_authority_report_adapter, :sign]
 
-  # The single source of truth for both axes. docs/telemetry.md's tables are
+  # The single source of truth for both axes. docs/guides/telemetry.md's tables are
   # diffed against these by telemetry_test.exs: a drift reds the suite.
   @objects [:report, :anchor, :grant, :key_transition, :local_loopback_report, :content_assertion]
   @classes [

@@ -1,24 +1,17 @@
-# Repository guide
+# Contributor agent instructions
 
-The public technical contract is described in:
+Read [README](README.md), [Contributing](CONTRIBUTING.md), [Usage rules](usage-rules.md),
+and the [integration guide](docs/guides/framework-integration.md) before changing this package.
 
-- [README](README.md): installation and first signing/verification flow.
-- [Charter](docs/charter.md): signing, verification and service-policy boundaries.
-- [Strategy](docs/strategy.md): current stability and dependency graph.
-- [Consumer integration](docs/consumer-integration.md): raw-body binding, identity and replay.
-- [Contributing](CONTRIBUTING.md): project layout and validation commands.
-- [Upgrading](docs/upgrading.md#stability-contract): the SemVer contract since 1.0.0.
-- [Protocol specifications](https://github.com/baselabs/bounded_authority_protocol/tree/main/spec):
-  canonical wire formats and independent conformance requirements.
+This is a public, provider-neutral signer. The protocol dependency owns canonical signing
+inputs and pure verification. The caller owns custody, issuer policy, trusted keys,
+authorization, revocation, replay and execution. Never place private keys in handle terms.
+Never infer authority from verification facts or the handle's self-declared issuer role.
 
-The library and `examples/edge_agent` are separate Mix projects. The library has required
-runtime dependencies on the public protocol package and telemetry, with optional Igniter
-support for its installer. Transport dependencies belong to the example application.
-`test/support` compiles only in the test environment and is excluded from the Hex archive.
+The library and example app are separate projects. Keep transport dependencies in the
+example. Use only documented protocol functions. Update examples and documentation with
+contracts; discover and execute samples recursively and check rendered links.
 
-## CI/CD and releases
-
-Releases, deployments, and publications are done by the infra session (`infra-1`). The project
-lands on its default branch with `kimosabe-land --repo . --sha <full sha>` and stops there.
-The requirements live in the infra repository at `baselabs/docs/ci.md`,
-"What infra requires of every product".
+Use the exact toolchains in `.tool-versions`. Validate through the repository CI contract.
+Commit named paths. Do not push, publish, tag, deploy or dispatch workflows without a
+maintainer's explicit instruction. Never read, print or commit secrets; never mock services.

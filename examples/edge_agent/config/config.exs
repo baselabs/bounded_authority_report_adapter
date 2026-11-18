@@ -14,7 +14,7 @@ unless running_otp in supported_otp do
 end
 
 # Demo configuration for the edge-agent reference app. The agent + receiver SHARE
-# this config so the request-field contract (consumer-integration.md §3) is
+# this config so the request-field contract (framework-integration.md §3) is
 # byte-agreement-by-construction: `target_uri`, `operation`, `issuer`,
 # `audience`, and the issuer/holder key seeds resolve IDENTICALLY on both sides.
 # A real deployment keeps the edge↔verifier config in sync by operations policy

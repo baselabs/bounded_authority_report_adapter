@@ -4,12 +4,12 @@
    The envelope proves the holder signed this request under that grant; whether the action
    is allowed depends on the verifying service's authorization policy. Pure verification
    returns facts; verification is never authorization ([consumer integration
-   §8](docs/consumer-integration.md)).
-2. The private key never enters this library. Keep it behind a `{module, term}` key handle
+   §8](docs/guides/framework-integration.md)).
+2. Keep private bytes out of the opaque handle term and behind a `{module, term}` key handle
    implementing the `BoundedAuthorityReportAdapter` behavior (`sign/2`, `public_key/1`,
    `thumbprint/1`, and as needed `key_identity/1` and `signing_identity/1`). If you find
    yourself passing key bytes into the adapter, the integration is wrong; see
-   [Getting started](docs/getting-started.md). `thumbprint/1` is one call:
+   [Getting started](docs/guides/getting-started.md). `thumbprint/1` is one call:
    `public_key_thumbprint/1` of the handle's public key. The adapter calls the handle in the
    caller's process and sets no timeout, so bound every remote custody call inside the
    handle.
@@ -32,21 +32,21 @@
    `BoundedAuthorityProtocol.V1.Json.decode/2` from the same raw bytes on both sides. A
    raw map is refused (`{:producer_error, :invalid}`). Decoding different bytes on the two
    sides, or a re-encoding instead of the bytes sent, is the mismatch this rule prevents
-   ([consumer integration §3 and §4](docs/consumer-integration.md)).
+   ([consumer integration §3 and §4](docs/guides/framework-integration.md)).
 7. Identity binding and a nonce ledger are verifying-service obligations. This library
    signs; the service must bind the holder thumbprint to the identity it authenticated
    and reject a nonce it has seen ([consumer integration §8 and
-   §9](docs/consumer-integration.md)).
+   §9](docs/guides/framework-integration.md)).
 8. Signing errors use closed atoms or the fixed tuple `{:producer_error, :invalid}`,
    with no input values; key ids, message bytes and report content never appear in an error. Do not add
-   them back by logging the inputs on failure ([Errors](docs/errors.md)).
+   them back by logging the inputs on failure ([Errors](docs/guides/errors.md)).
 9. A signature that does not verify against the handle's public key is `:signing_failed`;
    the check runs on every object. If your handle signs with a different key than
    `public_key/1` reports, you get an error, never a bad signature. Fix the handle.
 10. Attach telemetry before the first production signing call if you want the custody
     alarm: `[:bounded_authority_report_adapter, :sign, :stop]` with
     `result_class: :signing_failed`. Metadata carries no values; never extend it with key
-    material ([Telemetry](docs/telemetry.md)).
+    material ([Telemetry](docs/guides/telemetry.md)).
 11. Review protocol upgrades. This package declares a range of compatible
     `bounded_authority_protocol` releases; your application's `mix.lock` decides which one
     you run. Read the protocol's changelog before moving that lock.
@@ -59,7 +59,7 @@
     you. The nonce is mandatory, only canonical `http://127.0.0.1` and `http://[::1]`
     targets sign, and the verifying host owns the nonce, replay control and the expected
     target. Loopback HTTP is not equivalent to HTTPS; see
-    [Recipes](docs/recipes.md#recipe-the-local-loopback-development-listener).
+    [Recipes](docs/guides/local-loopback.md).
 14. A content assertion is not authorization. `sign_content_assertion/3` takes the twelve
     fields listed in its documentation, with raw 32-byte digests, and a handle with
     `key_identity/1`. It does not read the content, consume a role attestation or resolve
@@ -68,6 +68,6 @@
     expected identifiers, digests, trusted key, time and bounds, and keeps its own state
     if it must reject replays or check a lineage.
 
-See [Getting started](docs/getting-started.md), [Errors](docs/errors.md),
-[Telemetry](docs/telemetry.md) and
-[Consumer integration](docs/consumer-integration.md) for the long forms.
+See [Getting started](docs/guides/getting-started.md), [Errors](docs/guides/errors.md),
+[Telemetry](docs/guides/telemetry.md) and
+[Consumer integration](docs/guides/framework-integration.md) for the long forms.

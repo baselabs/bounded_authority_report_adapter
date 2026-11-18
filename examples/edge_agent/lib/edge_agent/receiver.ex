@@ -5,12 +5,15 @@ defmodule EdgeAgent.Receiver do
 
   This module depends ONLY on the public `bounded_authority_protocol` package.
   NEVER on `BoundedAuthorityReportAdapter`. That is the dependency-direction wall
-  (`docs/consumer-integration.md` §1): the verifier consumes the published
+  (`docs/guides/framework-integration.md` §1): the verifier consumes the published
   protocol package; the adapter is the holder-side signing glue the edge agent
   uses, invisible to the receiver. A consumer who coupled to the adapter would
   have built the wall backwards.
 
-  ## The complete safe path (consumer-integration.md §4 + §8 + §9)
+  This receiver performs no business effect. Authorization, current revocation and
+  durable invocation admission belong to a production host; see the integration guide.
+
+  ## The cryptographic transport path (framework-integration.md §4 + §8 + §9)
 
   ONE `with`, fail closed to a uniform `401`:
 
@@ -31,7 +34,7 @@ defmodule EdgeAgent.Receiver do
 
   This minimal receiver reads the body directly via `Plug.Conn.read_body/1`: no
   `Plug.Parsers` competes for it (this pipeline has only the report route), so a
-  `body_reader` is unnecessary here. consumer-integration.md §2's `body_reader`
+  `body_reader` is unnecessary here. framework-integration.md §2's `body_reader`
   guidance applies to a pipeline that ALSO parses other routes behind
   `Plug.Parsers`; this example has no such competing parser.
 
@@ -113,16 +116,13 @@ defmodule EdgeAgent.Receiver do
 
   @impl true
   def call(%{method: "GET"} = conn, %{loopback: true} = _config) do
-    # The profile's nonce reservation: the LISTENER mints the challenge the
-    # signer must bind. Client-chosen nonces are not verifiable reservations
-    # on a no-TLS transport a captured client-chosen nonce can be replayed
-    # first-use; a server-minted single-use challenge cannot (it is consumed
-    # by the legitimate arrival before any replay reaches the ledger).
+    # The listener mints a fresh challenge. Atomic consumption rejects later uses;
+    # an interceptor can still win first arrival and deny the legitimate sender.
     challenge = NonceLedger.reserve_challenge()
     Plug.Conn.send_resp(conn, 200, challenge)
   end
 
-  def call(conn, config) do
+  def call(%{method: "POST"} = conn, config) do
     # read_body/1 returns {:ok, body, conn} once the whole body is read,
     # {:more, partial, conn} when it exceeded Plug's length limit (an oversize
     # body for this demo: reject it), or {:error, reason} (a 2-tuple; the
@@ -140,19 +140,28 @@ defmodule EdgeAgent.Receiver do
     end
   end
 
+  def call(conn, _config), do: Plug.Conn.send_resp(conn, 401, "invalid")
+
   defp verify_and_respond(conn, raw_body, config) do
     grant = first_header(conn, "x-ba-grant")
     proof = first_header(conn, "x-ba-proof")
     invocation_id = first_header(conn, "x-ba-invocation-id")
     nonce = first_header(conn, "x-ba-nonce")
 
-    case verify(raw_body, grant, proof, invocation_id, nonce, config) do
+    result =
+      if conn.request_path == URI.parse(config.target_uri).path and conn.query_string == "" do
+        verify(raw_body, grant, proof, invocation_id, nonce, config)
+      else
+        :invalid
+      end
+
+    case result do
       :ok -> Plug.Conn.send_resp(conn, 200, "accepted")
       :invalid -> Plug.Conn.send_resp(conn, 401, "invalid")
     end
   end
 
-  # The complete safe path: ONE `with`, fail closed. A BAP-strict decode
+  # The cryptographic transport path: ONE `with`, fail closed. A BAP-strict decode
   # failure, a check_envelope failure (STANDARD or the local-loopback profile,
   # per the receiver's configured profile), an identity-binding mismatch, AND a
   # replay ALL collapse to :invalid -> the uniform 401. nil grant/proof (a
@@ -160,8 +169,8 @@ defmodule EdgeAgent.Receiver do
   #
   # In loopback mode the nonce is a RESERVED CHALLENGE: the presented value
   # must be one THIS receiver minted (GET) and not yet consumed: atomically
-  # consumed HERE, before verification, so a captured request cannot be
-  # replayed even once (first-use included). The standard profile keeps the
+  # consumed HERE before verification: even invalid attempts can burn a challenge.
+  # An interceptor can win first arrival. The standard profile keeps the
   # client-nonce + ledger model (§9): its transport is TLS-authenticated.
   defp verify(raw_body, grant, proof, invocation_id, nonce, config) do
     with {:ok, cast_arguments} <- V1.Json.decode(raw_body),
@@ -230,8 +239,8 @@ defmodule EdgeAgent.Receiver do
 
   defp first_header(conn, name) do
     case Plug.Conn.get_req_header(conn, name) do
-      [value | _] -> value
-      [] -> nil
+      [value] when value != "" -> value
+      _missing_or_repeated -> nil
     end
   end
 

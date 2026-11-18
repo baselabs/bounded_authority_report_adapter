@@ -8,7 +8,7 @@ and [CHANGELOG](../CHANGELOG.md) record the shipped surface.
 
 `bounded_authority_report_adapter` 1.0.0 is released on public Hex under Apache-2.0,
 with public source and versioned release tags. The
-[stability contract](upgrading.md#stability-contract) has applied since 1.0.0.
+[stability contract](guides/upgrading.md#stability-contract) has applied since 1.0.0.
 Breaking changes to its public API require a major release. Additions and soundness
 repairs follow the contract's documented minor-release rules.
 

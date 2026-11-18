@@ -16,7 +16,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicyTest do
             name: "BoundedAuthorityProtocol.V1"
           },
           %{
-            path: "docs/consumer-integration.md",
+            path: "docs/guides/framework-integration.md",
             kind: :wire_scheme,
             name: "ba_protocol_v1"
           }

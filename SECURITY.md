@@ -3,18 +3,18 @@
 ## Supported versions
 
 Security fixes land in the latest release of the current major. Version 1.0.0 is released;
-the [stability contract](docs/upgrading.md#stability-contract) has applied since that release.
+the [stability contract](docs/guides/upgrading.md#stability-contract) has applied since that release.
 Wire compatibility follows the protocol package's contract-major discipline.
 
 ## Security invariants (what a report is measured against)
 
 The properties a report is measured against (the long form is the
-[security model](docs/security.md)):
+[security model](docs/guides/security.md)):
 
 - The library never solicits, processes, or retains private key material: custody lives
   entirely behind the caller's key-handle callbacks (the contract; a handle that embeds
   key bytes in its term has chosen that posture itself: see
-  [security.md](docs/security.md) § Trust boundaries).
+  [security.md](docs/guides/security.md) § Trust boundaries).
 - Every signature is verified against the handle-resolved public key before success: a
   wrong-key sign is `:signing_failed`, never a false success.
 - Errors use closed atoms or the fixed tuple `{:producer_error, :invalid}`. Telemetry

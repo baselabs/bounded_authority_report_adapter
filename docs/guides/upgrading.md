@@ -114,7 +114,7 @@ Migration notes:
 
 ## 0.8.1: the documentation-truth patch
 
-Documentation-only: the 0.8.0 package shipped docs/getting-started.md still showing
+Documentation-only: the 0.8.0 package shipped the getting-started guide still showing
 the `~> 0.7.0` install pin; 0.8.1 republishes with the pin reading `~> 0.8.0`. No
 code, API, or dependency change: nothing for a consumer to do beyond preferring
 0.8.1's docs.
@@ -161,7 +161,7 @@ Migration notes:
   Callers that fed grants of another major see the earlier, clearer error.
 - **v3 handles** return the 65-byte uncompressed-SEC1 public key and the
   64-byte raw `r || s` signature (DER is rejected as `:signing_failed`;
-  convert at the handle). See `docs/recipes.md`'s P-256 sibling and the
+  convert at the handle). See the [P-256 custody guide](key-custody.md) and the
   doctor's `--major 3` gate.
 
 ## 0.6.3

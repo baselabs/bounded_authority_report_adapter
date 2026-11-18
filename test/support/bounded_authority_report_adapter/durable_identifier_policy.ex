@@ -6,7 +6,7 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
                          {"mix.exs", :package_source_ref, ~S(source_ref: "v#{@version}")},
                          {"lib/bounded_authority_report_adapter.ex", :external_wire_module,
                           "BoundedAuthorityProtocol.V1"},
-                         {"docs/consumer-integration.md", :wire_scheme, "ba_protocol_v1"},
+                         {"docs/guides/framework-integration.md", :wire_scheme, "ba_protocol_v1"},
                          # ADR-0021 (2026-09-22): the contract-major-3 signing surface's
                          # enumerated identities: the adapter-owned V3 module, its test
                          # suite and handles wrapper.
@@ -152,11 +152,11 @@ defmodule BoundedAuthorityReportAdapter.DurableIdentifierPolicy do
       end)
 
     schemes =
-      "docs/consumer-integration.md"
+      "docs/guides/framework-integration.md"
       |> File.read!()
       |> then(&Regex.scan(~r/\bba_protocol_v\d+\b/, &1))
       |> Enum.map(fn [name] ->
-        %{path: "docs/consumer-integration.md", kind: :wire_scheme, name: name}
+        %{path: "docs/guides/framework-integration.md", kind: :wire_scheme, name: name}
       end)
 
     Enum.uniq(package ++ wire_modules ++ schemes)

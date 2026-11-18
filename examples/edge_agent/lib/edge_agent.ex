@@ -10,7 +10,7 @@ defmodule EdgeAgent do
   `mix run -e EdgeAgent.run` once the receiver (`EdgeAgent.Receiver.start`) is
   listening.
 
-  ## The request-field contract (consumer-integration.md §3), edge side
+  ## The request-field contract (framework-integration.md §3), edge side
 
   Both the edge and the receiver derive each bound field from the SAME source:
 
@@ -26,7 +26,7 @@ defmodule EdgeAgent do
 
   The raw report body rides as the HTTP request body; the envelope rides as
   `X-BA-Grant` + `X-BA-Proof` headers (presence of BOTH is the scheme
-  discriminator: consumer-integration.md §2).
+  discriminator: framework-integration.md §2).
 
   ## What the demo simplifies
 
@@ -61,7 +61,7 @@ defmodule EdgeAgent do
     {grant_compact, _issuer_pub} = EdgeAgent.DemoIssuer.signed_grant(holder_thumbprint)
 
     # The SAME typed cast_arguments the receiver reconstructs from the raw bytes
-    # (consumer-integration.md §4): both sides V1.Json.decode the SAME body.
+    # (framework-integration.md §4): both sides V1.Json.decode the SAME body.
     raw_body = cfg(:report_body)
     {:ok, cast_arguments} = V1.Json.decode(raw_body)
 

@@ -38,8 +38,8 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       description:
         "Signer for the Bounded Authority Protocol: signs holder proofs, grants, boundary " <>
           "anchors, key transitions and content assertions (Ed25519 and ES256) through your " <>
-          "key handle, over the protocol's deterministic signing inputs. The private key " <>
-          "never enters the library.",
+          "key handle, over the protocol's deterministic signing inputs. Keep private keys " <>
+          "behind caller-owned key callbacks.",
       source_url: @source_url,
       homepage_url: @source_url,
       aliases: aliases()
@@ -81,6 +81,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "test --cover",
         "dialyzer",
         "docs --warnings-as-errors",
+        "cmd python3 scripts/check_doc_links.py doc",
         "hex.audit",
         "deps.audit",
         # The shipped-artifact gate: builds the exact Hex archive, proves its
@@ -91,7 +92,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         # byte (the release-candidate reproducibility gate).
         "run --no-start scripts/check_reproducible.exs",
         # job: example (the workflow's working-directory: examples/edge_agent)
-        "run --no-start scripts/ci_example.exs"
+        "run --no-start scripts/ci_example.exs",
+        "cmd elixir scripts/check_livebooks.exs --local",
+        "cmd elixir scripts/check_livebooks.exs --published"
       ]
     ]
   end
@@ -132,6 +135,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       {:igniter, "~> 0.8", optional: true},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},
+      {:earmark_parser, "~> 1.4", only: :test, runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       # CycloneDX generation uses sbom.generate: mix run --no-start starts only
       # sbom's dependency applications except code-only hex_core, then its
@@ -155,15 +159,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "NOTICE",
         "SECURITY.md",
         "usage-rules.md",
-        "examples/report_envelope_roundtrip.livemd",
         "examples/files/signing-flow.svg",
-        "docs/consumer-integration.md",
-        "docs/errors.md",
-        "docs/getting-started.md",
-        "docs/recipes.md",
-        "docs/security.md",
-        "docs/telemetry.md",
-        "docs/upgrading.md"
+        "docs/guides",
+        "docs/notebooks"
       ],
       licenses: ["Apache-2.0"],
       links: %{
@@ -188,23 +186,71 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # CI builds the docs under MIX_ENV=test, which also compiles test/support/; only the
       # modules compiled from lib/ are documented.
       filter_modules: &documented_module?/2,
+      groups_for_modules: [
+        Signing: [BoundedAuthorityReportAdapter, BoundedAuthorityReportAdapter.V3],
+        "Observe and preflight": [
+          BoundedAuthorityReportAdapter.Telemetry,
+          Mix.Tasks.BoundedAuthorityReportAdapter.Doctor
+        ]
+      ],
+      groups_for_extras: [
+        "Start here": ["README.md", "docs/guides/getting-started.md"],
+        Concepts: [
+          "docs/guides/holder-requests.md",
+          "docs/guides/grants-and-roles.md",
+          "docs/guides/key-custody.md",
+          "docs/guides/anchors-and-rotation.md",
+          "docs/guides/content-assertions.md",
+          "docs/guides/local-loopback.md"
+        ],
+        "Integrate and operate": [
+          "docs/guides/framework-integration.md",
+          "docs/guides/security.md",
+          "docs/guides/operations.md",
+          "docs/guides/telemetry.md",
+          "docs/guides/errors.md",
+          "docs/guides/recipes.md",
+          "docs/guides/testing.md",
+          "docs/guides/upgrading.md"
+        ],
+        Notebooks: ~r/docs\/notebooks\//,
+        Reference: ~r/docs\/guides\/(faq|glossary|cheatsheet)\.md|usage-rules\.md/,
+        Project: ~r/CHANGELOG|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT|LICENSE|NOTICE/
+      ],
       extras: [
         {"README.md", title: "Overview"},
-        {"examples/report_envelope_roundtrip.livemd", title: "Signer Livebook"},
+        "docs/guides/getting-started.md",
+        "docs/guides/holder-requests.md",
+        "docs/guides/grants-and-roles.md",
+        "docs/guides/key-custody.md",
+        "docs/guides/anchors-and-rotation.md",
+        "docs/guides/content-assertions.md",
+        "docs/guides/local-loopback.md",
+        "docs/guides/framework-integration.md",
+        "docs/guides/security.md",
+        "docs/guides/operations.md",
+        "docs/guides/telemetry.md",
+        "docs/guides/errors.md",
+        "docs/guides/recipes.md",
+        "docs/guides/testing.md",
+        "docs/guides/upgrading.md",
+        {"docs/notebooks/holder-request.livemd", filename: "nb-holder-request"},
+        {"docs/notebooks/issuer-grants.livemd", filename: "nb-issuer-grants"},
+        {"docs/notebooks/es256-custody.livemd", filename: "nb-es256-custody"},
+        {"docs/notebooks/anchors-and-rotation.livemd", filename: "nb-anchors-and-rotation"},
+        {"docs/notebooks/content-assertions.livemd", filename: "nb-content-assertions"},
+        {"docs/notebooks/local-loopback.livemd", filename: "nb-local-loopback"},
+        {"docs/notebooks/production-preflight.livemd", filename: "nb-production-preflight"},
+        "docs/guides/faq.md",
+        "docs/guides/glossary.md",
+        "docs/guides/cheatsheet.md",
         "usage-rules.md",
         "CHANGELOG.md",
-        "CODE_OF_CONDUCT.md",
         "CONTRIBUTING.md",
-        "LICENSE",
-        "NOTICE",
         "SECURITY.md",
-        "docs/consumer-integration.md",
-        "docs/errors.md",
-        "docs/getting-started.md",
-        "docs/recipes.md",
-        "docs/security.md",
-        "docs/telemetry.md",
-        "docs/upgrading.md"
+        "CODE_OF_CONDUCT.md",
+        "LICENSE",
+        "NOTICE"
       ]
     ]
   end

@@ -37,6 +37,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     {"coverage floor", "mix test --cover"},
     {"dialyzer", "mix dialyzer"},
     {"docs warnings", "mix docs --warnings-as-errors"},
+    {"rendered links", "python3 scripts/check_doc_links.py doc"},
     {"hex retirement audit", "mix hex.audit"},
     {"dependency advisory audit", "mix deps.audit"},
     {"package boundary check", "mix run --no-start scripts/check_package.exs"},
@@ -104,7 +105,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     [gate_job, _] = String.split(workflow, "\n  example:", parts: 2)
 
     assert gate_job =~
-             ~r|- name: Test \(includes the conformance round-trip\)\s+run: mix test\s+#{workflow_battery_pattern()}|,
+             ~r|#{workflow_battery_pattern()}|,
            "the gate job must run every battery step after the test step, in the canonical " <>
              "order shared with mix ci"
   end
@@ -197,8 +198,8 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
     setup = File.read!(".github/actions/setup-beam/action.yml")
     assert setup =~ "version-type: strict"
-    assert setup =~ "elixir not in versions.get('elixir', [])"
-    assert setup =~ "otp not in versions.get('erlang', [])"
+    assert setup =~ "Elixir build and OTP major differ"
+    assert setup =~ "EXPECTED_OTP"
     assert setup =~ "actual_otp == System.fetch_env!(\"EXPECTED_OTP\")"
     assert setup =~ "System.version() == version"
   end
@@ -281,6 +282,21 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
            "ci.yml skips some paths, but the tests read the Markdown guides and docs/"
   end
 
+  test "both notebook modes and rendered links are qualification requirements" do
+    workflow = File.read!(".github/workflows/ci.yml")
+    aliases = File.read!("mix.exs")
+    [_, qualified] = String.split(workflow, "\n  qualified:", parts: 2)
+
+    for mode <- ["local", "published"] do
+      assert workflow =~ "  notebooks-#{mode}:"
+      assert workflow =~ "run: elixir scripts/check_livebooks.exs --#{mode}"
+      assert qualified =~ "notebooks-#{mode}"
+      assert aliases =~ "cmd elixir scripts/check_livebooks.exs --#{mode}"
+    end
+
+    assert workflow =~ "run: python3 scripts/check_doc_links.py doc"
+  end
+
   defp workflows, do: Path.wildcard(".github/workflows/*.yml")
 
   # Full-line comments (the alias's step annotations, the workflow's battery
@@ -291,6 +307,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   # The alias spells a battery command as a bare task name (no `mix ` prefix
   # the cross-platform, env(1)-free shape).
   defp alias_form("mix " <> rest), do: rest
+  defp alias_form(command), do: "cmd " <> command
 
   # The mix ci alias shape: comma-quoted bare task names, in battery order
   # (each entry carries its own quotes; the join is just comma + whitespace).

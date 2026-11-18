@@ -3,7 +3,7 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
   The telemetry surface suite: the closed event pair, the value-free metadata
   invariant (exact-key assertions + the shape validator's refusal), the
   full class × object coverage driven through the REAL signing entry points,
-  and the docs/telemetry.md table parity (the acceptance tie).
+  and the docs/guides/telemetry.md table parity (the acceptance tie).
 
   The value-free tripwire (the ticket's named mutation) is a SLICE red-proof,
   quoted in the closeout rather than shipped: planting a value-carrying key
@@ -302,17 +302,17 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
 
   # --- docs parity (the acceptance tie) ---------------------------------------------
 
-  test "docs/telemetry.md enumerates exactly the emitter's classes and objects" do
-    doc = File.read!("docs/telemetry.md")
+  test "docs/guides/telemetry.md enumerates exactly the emitter's classes and objects" do
+    doc = File.read!("docs/guides/telemetry.md")
 
     for class <- Telemetry.classes() do
       assert doc =~ "| `:#{class}`",
-             "docs/telemetry.md must enumerate the class :#{class}"
+             "docs/guides/telemetry.md must enumerate the class :#{class}"
     end
 
     for object <- Telemetry.objects() do
       assert doc =~ "| `:#{object}`",
-             "docs/telemetry.md must enumerate the object :#{object}"
+             "docs/guides/telemetry.md must enumerate the object :#{object}"
     end
 
     # Vice versa, BOTH tables, phantom-capable: the reverse scans enumerate
@@ -322,10 +322,10 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
     doc_objects = section_atoms(doc, "Objects (one per object kind):")
 
     assert Enum.sort(doc_classes) == Enum.sort(Telemetry.classes()),
-           "phantom or missing classes in docs/telemetry.md: #{inspect(doc_classes)}"
+           "phantom or missing classes in docs/guides/telemetry.md: #{inspect(doc_classes)}"
 
     assert Enum.sort(doc_objects) == Enum.sort(Telemetry.objects()),
-           "phantom or missing objects in docs/telemetry.md: #{inspect(doc_objects)}"
+           "phantom or missing objects in docs/guides/telemetry.md: #{inspect(doc_objects)}"
   end
 
   # The doc segment from `marker` to the next paragraph break: one table's

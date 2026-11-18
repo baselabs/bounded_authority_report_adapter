@@ -1,11 +1,10 @@
-# Consuming an envelope from this adapter
+# Framework and runtime integration
 
 This guide is the verifier side of the contract: how any service consumes a `{grant, proof}`
 envelope produced by `BoundedAuthorityReportAdapter.sign_report/3`. The verifier depends
 **only on the public `bounded_authority_protocol` package**, never on this adapter.
 
-> **Runnable reference:** the repository's `examples/edge_agent` app implements this whole
-> contract end to end: a Plug receiver on Bandit (`EdgeAgent.Receiver`) that retains the raw
+> **Tested transport example:** the repository's `examples/edge_agent` app demonstrates the cryptographic transport stages: a Plug receiver on Bandit (`EdgeAgent.Receiver`) that retains the raw
 > body, runs the single `with` from §4, binds the holder to the configured identity (§8),
 > and dedupes nonces (§9). Its tests run it over real HTTP.
 
@@ -61,9 +60,9 @@ Notes:
 - **`operation` is part of the contract.** The issuer must mint grants for the same
   operation name the verifier expects; a mismatch fails closed.
 
-## 4. Call the verifier: one `with`, fail closed
+## 4. Verify and bind identity
 
-This module is the complete path, including the identity binding from §8. A verifier that
+This module performs pure envelope verification and the identity binding from §8. It does not authorize or execute a request. A verifier that
 copies only the `check_envelope/2` call, without the binding, is open to cross-identity
 replay. The `config` map carries the values your service configures and validates at boot,
 including the contract-major it accepts: 1 (Ed25519 keys, `BoundedAuthorityProtocol.V1`)
@@ -81,13 +80,14 @@ defmodule MyApp.EnvelopeVerifier do
   point for contract-major 3. Returns `{:ok, facts}` or `:invalid`.
   """
   def verify(raw_body, headers, identity_public_key, config) do
-    with {:ok, grant} <- Map.fetch(headers, "x-ba-grant"),
+    with {:ok, protocol} <- protocol(config),
+         {:ok, grant} <- Map.fetch(headers, "x-ba-grant"),
          {:ok, proof} <- Map.fetch(headers, "x-ba-proof"),
          {:ok, invocation_id} <- Map.fetch(headers, "x-ba-invocation-id"),
          {:ok, nonce} <- Map.fetch(headers, "x-ba-nonce"),
          {:ok, cast_arguments} <- V1.Json.decode(raw_body),
          {:ok, facts} <-
-           protocol(config).check_envelope(
+           protocol.check_envelope(
              %V1.Credentials{grant: grant, proof: proof},
              %V1.ExpectedRequest{
                trusted_issuer: %V1.TrustedIssuer{
@@ -117,8 +117,11 @@ defmodule MyApp.EnvelopeVerifier do
     end
   end
 
-  defp protocol(%{contract_major: 3}), do: BoundedAuthorityProtocol.V3
-  defp protocol(_config), do: V1
+  defp protocol(%{contract_major: 3}), do: {:ok, BoundedAuthorityProtocol.V3}
+  defp protocol(%{contract_major: 1}), do: {:ok, V1}
+  defp protocol(config) when not is_map_key(config, :contract_major), do: {:ok, V1}
+
+  defp protocol(_config), do: :error
 
   # Returns :ok or {:error, _}, not a boolean: a boolean never matches `:ok <-`.
   defp bind_holder_to_identity(bound_holder_thumbprint, identity_public_key) do
@@ -164,11 +167,13 @@ so a malformed configuration also ends in `:invalid` instead of a crash.
 
 During a migration, requests may arrive under an existing authentication scheme or with an
 envelope. Choose the path by the envelope's presence: both `X-BA-Grant` and `X-BA-Proof`
-present means the envelope path; anything else takes the existing path, unchanged. The
-remaining attack is availability, not bypass: stripping the envelope headers routes a
-request to the existing path, where it has no valid credential and is rejected; adding a
-stray envelope header routes a request to the envelope path, where it fails verification.
-Requiring both headers keeps that surface small.
+present is the normal envelope form. **Any** envelope-specific header, including a partial,
+empty or repeated grant/proof, selects the envelope path and must fail closed if malformed.
+Only a request with no envelope-specific headers may enter the existing scheme, and only
+on routes that explicitly permit that scheme. Never fall back to the existing scheme after
+an envelope failure. On envelope-only routes, reject missing envelope headers too.
+The selected route or registered client selects the contract-major at boot; never try
+another verifier after rejection. The adapter also requires a grant of the selected major.
 
 ## 7. Record which scheme verified a request
 
@@ -195,13 +200,19 @@ the protocol package's `V1.Jwk.encode_public/2` and `V1.Jwk.thumbprint/2` (for P
 
 Do not accept envelopes without this binding.
 
-## 9. Dedupe nonces (a replay ledger)
+## 9. Reserve replay identities
 
 `check_envelope/2` checks that the proof's nonce equals the nonce you expect. It is
 stateless and does not remember nonces, so a byte-identical captured request is accepted
-again until `proof_max_age` expires. Keep a replay ledger, for example a unique constraint
-on `(identity, nonce)`, and reject a nonce you have seen. This is the verifier's job, as
-the §8 binding is.
+again until `proof_max_age` expires. The host must atomically reserve both the proof/challenge replay identity and the execution
+identity `(trusted issuer, grant id, invocation id)` in shared durable storage. Keep a nonce
+claim through its whole acceptance window plus skew. Keep the execution claim through grant
+expiry plus the maximum allowed skew, or longer in an authoritative execution record. A
+fresh proof and nonce must not execute the same invocation again. A uniqueness constraint
+or equivalent atomic insert decides concurrent races; a read followed by a write does not.
+A store timeout or uncertain result refuses execution. Key every claim by the trusted
+security context, not a caller-selected identity. Identity binding is required separately.
+See [Security](security.md#replay-and-first-arrival) for the first-arrival limit.
 
 ## 10. The local-loopback profile (development listeners)
 
@@ -217,10 +228,11 @@ Sections 2 to 9 apply unchanged, with three additions:
 
 1. **The nonce is mandatory, and the listener chooses it.** Mint a fresh single-use
    challenge per request, hand it to the signer, and verify with
-   `nonce: {:required, challenge}` while consuming the challenge atomically (for example
-   `:ets.take/2`). The profile verifier rejects `:not_required`. A server-minted single-use
-   challenge closes the first-use replay race that a client-chosen nonce leaves open on a
-   transport without TLS.
+   `nonce: {:required, challenge}` and consume the challenge atomically after verification and host policy checks (for
+   example `:ets.take/2` in a single-VM demonstration). The profile verifier rejects `:not_required`. A server-minted single-use
+   challenge limits successful consumption to one arrival. It does not authenticate the
+   first arrival: an interceptor can submit a captured valid request first and deny the
+   legitimate sender. Single-use is not protection from first-arrival interception.
 2. **Derive the target from the listener, and refuse to boot otherwise.** The expected
    `target_uri` comes from the address your listener bound (`http://127.0.0.1:PORT/PATH`
    or `http://[::1]:PORT/PATH`), never from a `Host` or `X-Forwarded-*` header. A loopback
@@ -231,3 +243,96 @@ Sections 2 to 9 apply unchanged, with three additions:
 
 The runnable version is the example receiver's `profile: :local_loopback` mode, driven by
 `EdgeAgent.run_local_loopback/1`.
+
+## 11. Complete host admission before any effect
+
+These obligations apply to all hosts: HTTP endpoints, message consumers, scheduled workers,
+command handlers and embedded processes. Phoenix and Plug are examples of HTTP hosts,
+not the boundary of supported integrations.
+
+1. Authenticate the caller using the host's transport/session trust model. Select the
+   accepted scheme, profile, expected operation, trusted issuer and canonical endpoint from
+   host configuration or registered context. Bound sizes before parsing; reject repeated
+   credential headers rather than collapsing them into a map.
+2. Preserve the raw input before a framework parser consumes it. Decode it with the protocol's
+   tagged JSON decoder and verify against the actual method and configured target. If host
+   casting changes an argument, verify the value actually executed; do not verify one value
+   and execute a differently cast one. JSON whitespace is not a signed byte identity: the
+   proof binds typed values. Exact-content assertions bind exact bytes.
+3. Bind verified holder facts to the authenticated identity's enrolled key.
+4. Apply host authorization for that principal, operation and resource. Facts have
+   `authorization: :not_evaluated`; a signature does not override access policy.
+5. Check current grant/key revocation in the authority that owns it. Unavailable, stale or
+   ambiguous state refuses admission. Coordinate this with policy and admission so a revoked
+   grant cannot race a stale allow decision into an effect.
+6. Atomically reserve challenge/proof and invocation replay identities as §9 specifies,
+   then execute only under the resulting host admission. Couple admission and local effects
+   transactionally; for external effects persist an execution state machine and recovery
+   protocol. Verification facts are never a transferable execution credential.
+
+In a Plug endpoint, install the raw-body reader with `Plug.Parsers`' `body_reader:` option
+before parsers run. Keep retention limited to the protected routes and bounded total bytes;
+handle `{:more, partial, conn}` as oversize or collect bounded chunks, never silently discard
+chunks. An isolated route can read directly, as the example does. In Phoenix the endpoint
+parser runs before router pipelines, so a router plug is too late to retain the raw body.
+For queues, preserve the original payload and supply the registered operation and consumer
+context rather than inventing HTTP identity from untrusted message fields. Bound custody
+calls, backpressure and concurrency in every host.
+
+The following HTTP entry point is a complete handoff: `authorize`, `revocation`, and `admit`
+are required host functions, each returning `:ok` only on success. `admit` owns the shared
+durable replay transaction and execution record; it cannot be replaced by a boolean pre-read.
+The example app's tests supply a real local policy and ETS store, with authorization,
+revocation, identity and replay refusals. Production storage must survive restarts.
+
+<!-- doc-runtime: http -->
+
+```elixir
+defmodule MyApp.ReportPlug do
+  @behaviour Plug
+  @headers ["x-ba-grant", "x-ba-proof", "x-ba-invocation-id", "x-ba-nonce"]
+
+  @impl true
+  def init(config), do: config
+
+  @impl true
+  def call(%{method: "POST"} = conn, config) do
+    case Plug.Conn.read_body(conn, length: 1_000_000) do
+      {:ok, raw_body, conn} -> verify_and_admit(conn, raw_body, config)
+      {:more, _partial, conn} -> Plug.Conn.send_resp(conn, 401, "invalid")
+      {:error, _reason} -> Plug.Conn.send_resp(conn, 401, "invalid")
+    end
+  end
+
+  def call(conn, _config), do: Plug.Conn.send_resp(conn, 401, "invalid")
+
+  defp verify_and_admit(conn, raw_body, config) do
+    with true <- conn.request_path == URI.parse(config.target_uri).path,
+         true <- conn.query_string == "",
+         {:ok, identity} <- Map.fetch(conn.assigns, :identity_public_key),
+         {:ok, headers} <- envelope_headers(conn),
+         {:ok, facts} <- MyApp.EnvelopeVerifier.verify(raw_body, headers, identity, config),
+         :ok <- config.authorize.(facts, identity),
+         :ok <- config.revocation.(facts),
+         :ok <- config.admit.(facts, headers["x-ba-invocation-id"], headers["x-ba-nonce"]) do
+      # Admission succeeded. The host executes only through its admitted execution record.
+      Plug.Conn.send_resp(conn, 200, "accepted")
+    else
+      _ -> Plug.Conn.send_resp(conn, 401, "invalid")
+    end
+  end
+
+  defp envelope_headers(conn) do
+    Enum.reduce_while(@headers, {:ok, %{}}, fn name, {:ok, headers} ->
+      case Plug.Conn.get_req_header(conn, name) do
+        [value] when value != "" -> {:cont, {:ok, Map.put(headers, name, value)}}
+        _ -> {:halt, :invalid}
+      end
+    end)
+  end
+end
+```
+
+Use the same admission boundary in non-HTTP hosts. Only the transport extraction changes;
+policy, revocation and replay ownership do not. The [operations runbook](operations.md)
+covers unavailable stores, key rotation, custody failures and incident response.

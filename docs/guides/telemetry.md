@@ -115,16 +115,22 @@ MyApp.SignTelemetry.attach()
 
 Keep handlers total: see [If your handler raises](#if-your-handler-raises).
 
-Or report through `Telemetry.Metrics` (a separate package; this is a fragment of a
-reporter's metric list):
+A metrics reporter can summarize the stop event's `duration` in milliseconds and tag only
+`object` and `result_class`. The reporter belongs to the host and is a separate dependency.
+Detach the demonstration handler when the session ends:
 
-<!-- doc-sample: fragment -->
 ```elixir
-Telemetry.Metrics.summary("bounded_authority_report_adapter.sign.stop.duration",
-  unit: {:native, :millisecond},
-  tags: [:object, :result_class]
-)
+:telemetry.detach("my-app-sign-telemetry")
+#=> :ok
 ```
+
+## Host observability
+
+The package emits signing start/stop events only. It emits no authorization, revocation,
+replay-store, HTTP, queue, execution or durable audit events. Measure those at the host's
+admission and execution boundaries, including policy refusals, revocation freshness, replay
+conflicts, uncertain commits and recovery outcomes. Keep credentials and signed content out
+of logs and metric labels. Measure custody timeouts in the handle, which owns its deadline.
 
 ## Why no spans
 

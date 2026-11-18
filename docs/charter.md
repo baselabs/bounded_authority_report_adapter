@@ -84,4 +84,4 @@ Choosing whether to use anchors and trusting a historical key are application de
   and transport dependencies in the library.
 - Transport remains a separate application concern. The edge-agent example has its own
   Mix project and transport dependencies.
-- The [stability contract](upgrading.md#stability-contract) has applied since 1.0.0.
+- The [stability contract](guides/upgrading.md#stability-contract) has applied since 1.0.0.

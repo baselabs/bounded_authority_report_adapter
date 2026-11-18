@@ -43,6 +43,7 @@ defmodule EdgeAgent.MixProject do
 
   defp deps do
     [
+      {:earmark_parser, "~> 1.4", only: :test, runtime: false},
       # The holder signing glue. Path-relative so the example tracks the working
       # tree of this repo; transitively resolves `bounded_authority_protocol`.
       {:bounded_authority_report_adapter, path: "../.."},

@@ -19,7 +19,7 @@ defmodule BoundedAuthorityReportAdapter.ProtocolPrivateApiTest do
 
   alias BoundedAuthorityReportAdapter.DocsChunk
 
-  @roots ["lib", "scripts", "examples", "test"]
+  @roots ["lib", "scripts", "examples", "test", "docs/notebooks"]
   @protocol_app :bounded_authority_protocol
 
   test "no file calls an undocumented bounded_authority_protocol function" do

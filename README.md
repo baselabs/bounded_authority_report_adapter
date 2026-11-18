@@ -9,7 +9,8 @@ The Elixir signer for the [Bounded Authority Protocol](https://hex.pm/packages/b
 The protocol package builds the exact bytes to sign for every protocol object, verifies
 them, and never signs. This library does the signing: you give it a key handle that
 reaches your own key custody (an HSM, a KMS, or an in-process key for development) and it
-returns the signed compact form. **The private key never enters the library.**
+returns the signed compact form. The handle must contain only an opaque reference; never
+put private key bytes in it.
 
 Use it when an agent or service must prove, per request, that it holds the key an issuer
 granted authority to: the holder signs a proof over the issuer's grant and the exact
@@ -18,11 +19,21 @@ signs the issuer's grants, chain checkpoints, key rotations and content assertio
 
 Verifiers depend only on the protocol package, never on this one.
 
+## What this is not
+
+- **Not a general credential verifier.** The protocol package verifies envelopes and evidence.
+  This adapter self-verifies its signatures and can verify an optional Ed25519 role attestation.
+- **Not an issuer runtime.** It signs a grant for an issuer that keeps its key behind a
+  handle; issuing, tracking and revoking grants belong to your authority service.
+- **Not a transport or a store.** It returns compact strings; carrying and persisting them
+  is yours.
+- **Not key custody.** It calls your handle. Keep private keys behind that callback;
+  the library cannot inspect or sanitize the opaque term you supply.
+
 ## Installation
 
 Add the package to `deps/0` in `mix.exs`:
 
-<!-- doc-sample: fragment -->
 ```elixir
 def deps do
   [
@@ -153,9 +164,10 @@ raw_body = ~s({"document":"minutes-2026-10-01.pdf"})
 
 `check_envelope/2` returns cryptographic facts, never an authorization decision
 (`authorization: :not_evaluated`): whether to act on a verified request is the
-verifier's policy. A real verifier also binds the holder to the identity it authenticated
-and keeps a nonce ledger; see [Consumer integration](docs/consumer-integration.md).
-[Getting started](docs/getting-started.md) walks this loop step by step.
+host's policy. Before any effect, the host binds the holder to its authenticated identity,
+applies authorization, checks current revocation, and atomically admits nonce and invocation
+replay identities through its durable execution record. See [Framework integration](docs/guides/framework-integration.md).
+[Getting started](docs/guides/getting-started.md) walks this loop step by step.
 
 ## What it signs
 
@@ -170,123 +182,65 @@ and keeps a nonce ledger; see [Consumer integration](docs/consumer-integration.m
 
 These take Ed25519 keys (contract-major 1). `BoundedAuthorityReportAdapter.V3` provides
 `sign_report/3`, `sign_grant/3`, `sign_anchor/3` and `sign_key_transition/3` for the ES256
-suite (contract-major 3) with P-256 keys. The key's shape selects the suite: a 32-byte
-Ed25519 public key for the functions above, a 65-byte uncompressed P-256 point for `V3`.
+suite (contract-major 3) with P-256 keys. Select the module explicitly: the main surface
+requires a 32-byte Ed25519 public key; `V3` requires a 65-byte uncompressed P-256 point.
 Verify functions are in the protocol package (`BoundedAuthorityProtocol.*`).
 
 Every signing function returns `{:ok, map}` or `{:error, reason}` with a closed set of
 reasons and no values in errors. The `public_key_thumbprint/1` helper returns
-`{:ok, <<_::256>>}` or `{:error, :invalid}`. See [Errors](docs/errors.md).
+`{:ok, <<_::256>>}` or `{:error, :invalid}`. See [Errors](docs/guides/errors.md).
 
 ## Safety properties
 
 - **Key custody stays with you.** Every handle callback may reach a remote custodian.
 - **Wrong-key guard.** Every signature is verified against the handle's public key before
   it is returned; a custodian that signs with the wrong key fails as `:signing_failed`.
-- **Role gate.** `sign_grant/3` signs only when the handle declares the issuer role, so a
-  holder handle cannot mint its own capability. It can additionally require a role
-  attestation signed by the authority.
+- **Role gate.** `sign_grant/3` requires `:issuer` from the caller-provided
+  `signing_identity/1` callback. This is a local
+  consistency gate, not independent issuer authorization. For Ed25519 it can additionally
+  verify a role attestation against an explicitly trusted attestor.
 - **Explicit profiles.** The local-loopback and content-assertion profiles are selected by
   calling their functions; nothing is inferred from URIs, headers or the environment.
 - **Signing and verification are never authorization.** Pure verification returns facts.
   Execution depends on the verifying service's authorization policy, including trusted
   keys, identity binding, replay reservation and revocation.
 
-## Content assertions
-
-`sign_content_assertion/3` signs a standalone assertion that binds the SHA-256 digest of
-exact content bytes to an issuer, audience, lineage subject, semantic profile, validity
-window and predecessor. It grants nothing. Continuing the quick start:
-
-```elixir
-alias BoundedAuthorityProtocol.ContentAssertion
-
-publisher = {MyApp.DevKey, {:holder, "publisher-key-1"}}
-content = ~s({"station":"riverside","pm25":[8.1,7.9,8.4]})
-{:ok, content_digest} = ContentAssertion.V1.content_digest(content, %{})
-profile_digest = :crypto.hash(:sha256, "air-quality schema, version 1")
-
-{:ok, %{content_assertion: assertion}} =
-  BoundedAuthorityReportAdapter.sign_content_assertion(
-    %{
-      jti: "urn:example:assertion:riverside-1",
-      iss: "urn:example:publisher",
-      aud: "urn:example:archive",
-      sub: "urn:example:dataset:riverside-air-quality",
-      profile: "urn:example:profile:air-quality/1",
-      profile_digest: profile_digest,
-      content_digest: content_digest,
-      gen: 1,
-      prev: <<0::256>>,
-      iat: now,
-      nbf: now,
-      exp: now + 3600
-    },
-    publisher
-  )
-
-# The consumer hashes the bytes it holds and verifies against the publisher's key.
-{:ok, publisher_public_key} = MyApp.DevKey.public_key({:holder, "publisher-key-1"})
-
-{:ok, assertion_facts} =
-  ContentAssertion.V1.verify_assertion(assertion, %ContentAssertion.V1.ExpectedContentAssertion{
-    attestor: %V1.HistoricalPublicKey{
-      key_id: "publisher-key-1",
-      public_key: publisher_public_key,
-      valid_from: now - 60,
-      valid_before: now + 3600
-    },
-    issuer: "urn:example:publisher",
-    audience: "urn:example:archive",
-    subject: "urn:example:dataset:riverside-air-quality",
-    profile: "urn:example:profile:air-quality/1",
-    profile_digest: profile_digest,
-    content_digest: content_digest,
-    now: now,
-    bounds: V1.Bounds.maximum()
-  })
-
-assertion_facts.verification
-#=> :signature_and_window
-```
-
-The first assertion in a lineage has `gen: 1` and an all-zero `prev`. The signer does not
-read or interpret the content.
-
-## Telemetry
-
-Each signing call emits `[:bounded_authority_report_adapter, :sign, :start | :stop]` with
-atom-only metadata: the object kind and a result class. No key material, message bytes or
-content appears. A sustained `:signing_failed` rate means custody is misconfigured. See
-[Telemetry](docs/telemetry.md).
-
 ## Documentation
 
-- [Signer Livebook](examples/report_envelope_roundtrip.livemd): run every signer with public Hex packages.
-- [Getting started](docs/getting-started.md): first sign, then a production key handle.
-- [Usage rules](usage-rules.md): the integration contract as a checklist.
-- [Errors](docs/errors.md): every error reason and what to check.
-- [Recipes](docs/recipes.md): HSM and KMS handles (Ed25519, and ES256 over DER), grants with selectors, an attested issuer role, key rotation, error handling with telemetry alerts, a Plug consumer, the loopback listener.
-- [Security model](docs/security.md): trust boundaries and named misuses.
-- [Telemetry](docs/telemetry.md): events, result classes and alerting.
-- [Consumer integration](docs/consumer-integration.md): the verifier side of the contract.
-- [Upgrading](docs/upgrading.md): per-version migration notes.
-- [Changelog](CHANGELOG.md): release notes.
-- [Contributing](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md).
+Read the guides in this order:
 
-Runnable examples live in the repository's `examples/` directory: a Livebook that runs every
-signing entry point, including the ES256 surface, and plays issuer, holder and verifier (the
-test suite executes it), and an `edge_agent` app that runs the full loop over HTTP.
+- [Getting started](docs/guides/getting-started.md).
+- [Holder requests](docs/guides/holder-requests.md).
+- [Grants and roles](docs/guides/grants-and-roles.md).
+- [Key custody](docs/guides/key-custody.md).
+- [Anchors and rotation](docs/guides/anchors-and-rotation.md).
+- [Content assertions](docs/guides/content-assertions.md).
+- [Local loopback](docs/guides/local-loopback.md).
+- [Framework integration](docs/guides/framework-integration.md).
+- [Security](docs/guides/security.md).
+- [Operations](docs/guides/operations.md).
+- [Telemetry](docs/guides/telemetry.md).
+- [Errors](docs/guides/errors.md).
+- [Recipes](docs/guides/recipes.md).
+- [Testing](docs/guides/testing.md).
+- [Upgrading](docs/guides/upgrading.md).
+- [FAQ](docs/guides/faq.md).
+- [Glossary](docs/guides/glossary.md).
+- [Cheatsheet](docs/guides/cheatsheet.md).
 
-## What this is not
+Runnable notebooks (each installs the exact public release):
 
-- **Not a verifier.** Verification is the protocol package's job, in every party.
-- **Not an issuer runtime.** It signs a grant for an issuer that keeps its key behind a
-  handle; issuing, tracking and revoking grants belong to your authority service.
-- **Not a transport or a store.** It returns compact strings; carrying and persisting them
-  is yours.
-- **Not key custody.** It calls your handle; it never generates, stores or receives a
-  private key.
+- [Holder request](docs/notebooks/holder-request.livemd).
+- [Issuer grants](docs/notebooks/issuer-grants.livemd).
+- [ES256 custody](docs/notebooks/es256-custody.livemd).
+- [Anchors and rotation](docs/notebooks/anchors-and-rotation.livemd).
+- [Content assertions](docs/notebooks/content-assertions.livemd).
+- [Local loopback](docs/notebooks/local-loopback.livemd).
+- [Production preflight](docs/notebooks/production-preflight.livemd).
+
+- [Usage rules](usage-rules.md), [Changelog](CHANGELOG.md), [Contributing](CONTRIBUTING.md),
+  [Security reporting](SECURITY.md), and [Code of conduct](CODE_OF_CONDUCT.md).
+- [Tested HTTP example](https://github.com/baselabs/bounded_authority_report_adapter/tree/master/examples/edge_agent).
 
 ## Development
 
@@ -297,8 +251,8 @@ MIX_ENV=test mix ci
 
 `mix ci` runs the same checks as CI: formatting, compilation with warnings as errors,
 Credo, the test suite (including a conformance round-trip against the protocol's
-published vectors, the Livebook, and every runnable code sample in these docs), coverage,
-Dialyzer, documentation, advisory audits, and the package and reproducibility checks, for
+published vectors, the notebook registry, and the recursively discovered code samples in these docs), coverage,
+Dialyzer, documentation, rendered links, both notebook modes, advisory audits, and the package and reproducibility checks, for
 the library and the example app. It runs the steps in order and exits non-zero if any step
 failed. Not every failing step ends the run: a failing test suite, for one, lets the later
 steps run, so read the whole output.

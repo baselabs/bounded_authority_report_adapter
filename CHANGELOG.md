@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Reorganize integrator guides and seven executable journey notebooks; qualify both checkout
+  and exact published-package runs, recursive samples, source links and rendered links.
+- Correct issuer-role, key-custody, return-shape and first-arrival replay claims. Document the
+  host authorization, live revocation and durable replay/execution handoff.
+- Reject duplicate or empty credential headers and mismatched methods, paths and queries
+  in the HTTP demonstration.
+
 - Audit the example project with both dependency feeds; add `mix_audit` as development and test tooling.
 
 ### Documentation
@@ -12,8 +19,8 @@
 - Distinguish pure verification facts from the verifying service's authorization policy.
 - Keep tracked public prose focused on the technical contract and use plain US English.
 - Check type documentation, result contracts and public-text hygiene automatically.
-- Compile custodian-specific recipe fragments without substituting local signers for remote
-  services; run the P-256 selector example with an explicit development-only key handle.
+- Execute custody callback examples using real local cryptography and opaque references;
+  run the P-256 selector example with an explicit development-only key handle.
 
 ## [1.0.0]: 2026-11-10
 
@@ -120,7 +127,7 @@ A minor release: options that were silently ignored now apply or are refused.
   release. The dependency wall asserts the range shape (floor, ceiling, locked version) and
   fails on a requirement that admits 0.7.x, on an exact pin, and on a range that crosses the
   ceiling.
-- The Livebook (`examples/report_envelope_roundtrip.livemd`) now covers every signing entry
+- The Livebook (`docs/notebooks/holder-request.livemd`) now covers every signing entry
   point: `sign_report/3`, `sign_local_loopback_report/3`, `sign_grant/3` (with and without the
   role-attestation gate), `sign_anchor/3`, `sign_key_transition/3`, `sign_content_assertion/3`
   and the four ES256 entry points in `BoundedAuthorityReportAdapter.V3`, including low-S output
@@ -238,7 +245,7 @@ A minor release: options that were silently ignored now apply or are refused.
   The `Telemetry` functions have doctests.
 - Corrected: a malformed `invocation_id` is refused at signing time as
   `{:producer_error, :invalid}` (the getting-started guide said the verifier would reject
-  it); `docs/errors.md` now lists the wrong-major `:invalid_report` case, the full set of
+  it); `docs/guides/errors.md` now lists the wrong-major `:invalid_report` case, the full set of
   error types, and the `V3` differences, including `V3.sign_grant/3` refusing the
   `:role_attestation` option; the stability contract, telemetry and usage-rules pages
   cover `sign_content_assertion/3` and the `V3` entry points; usage rule 11 describes the
@@ -387,7 +394,7 @@ dependency-requirement changes.
 
 ## [0.8.1]: 2026-09-23
 
-Documentation-truth patch: the 0.8.0 package SHIPPED docs/getting-started.md still
+Documentation-truth patch: the 0.8.0 package SHIPPED docs/guides/getting-started.md still
 showing the `~> 0.7.0` install pin (the version-literal sweep for 0.8.0 missed it.
 its grep died on a non-matching glob and reported nothing; the tag's supply-chain
 evidence lane caught the drift at `docs_currency_test`'s getting-started pin check,
@@ -472,7 +479,7 @@ every existing verdict are unchanged. V3's
   with `{:error, :invalid_report}` at the producer, instead of emitting an
   envelope that fails downstream at `check_envelope/2`. The v1 signing
   path is byte-identical for valid v1 inputs (pinned by a byte-identity
-  suite captured before the change). See `docs/upgrading.md`.
+  suite captured before the change). See `docs/guides/upgrading.md`.
 
 
 ## [0.6.3]: 2026-09-17
@@ -668,7 +675,7 @@ every existing verdict are unchanged. V3's
 
 This historical pre-1.0 feature release preceded the stable contract. At the time it required
 real consumer use and the surface settles;
-the stability contract in [upgrading.md](docs/upgrading.md) stands as the
+the stability contract in [upgrading.md](docs/guides/upgrading.md) stands as the
 PROPOSED freeze that 1.0 will publish, not an operative one. Everything the
 contract enumerates is in this release and pinned by the doc-currency tripwire:
 the four signing functions, the closed error sets, the key-handle behavior, the
@@ -725,7 +732,7 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   surgical-pathspec discipline, red-first + mutation-proof expectations, the bump
   policy pointer), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) (Contributor Covenant v2.1,
   the canonical text with the reporting contact substituted),
-  [docs/upgrading.md](docs/upgrading.md) (per-version notes newest-first + the **1.0
+  [docs/guides/upgrading.md](docs/guides/upgrading.md) (per-version notes newest-first + the **1.0
   stability contract**: the public surface enumerated: the four signing functions and
   their return shapes, the four closed error sets, the key-handle behavior, the
   telemetry surface, the dependency posture: with reserved break-rights and the
@@ -734,7 +741,7 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   reporting, a report-content checklist, acknowledgment ≤7 days + weekly status as a
   best-effort cadence, not an SLA). All four shipped in the package and extras.
 
-- [Recipes](docs/recipes.md) and a [security model](docs/security.md), shipped in the
+- [Recipes](docs/guides/recipes.md) and a [security model](docs/guides/security.md), shipped in the
   package and indexed: compile-paste-verified integration shapes for a network-HSM handle
   (with the timeout-to-safe_callback exit-catch posture), a KMS handle (why
   `key_identity/1` must be ONE atomic version snapshot), and a condensed Plug consumer;
@@ -748,7 +755,7 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   Livebook: the round-trip notebook now commits its expected cell outputs
   (`persist_outputs`; verdicts and counts pinned: volatile bytes like thumbprints
   and sizes deliberately excluded and annotated). The tripwire suite diffs
-  docs/errors.md's atoms against the lib's error `@type`s both directions (generic
+  docs/guides/errors.md's atoms against the lib's error `@type`s both directions (generic
   scans: a future atom the docs don't cover reds), resolves every backticked
   `fun/arity` in usage-rules.md against the adapter's exports and behavior callbacks
   (arity-exact), checks the README Documentation index against the ex_doc extras both
@@ -760,10 +767,10 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
 - Core DX guides, shipped in the package and indexed from the README:
   [usage-rules.md](usage-rules.md) (12 flat rules, exact identifiers, reasons folded
   in: the rule that the issuer-role gate only rejects declarations leads),
-  [docs/errors.md](docs/errors.md)
+  [docs/guides/errors.md](docs/guides/errors.md)
   (all four closed-atom error sets as atom → meaning → what to check → recovery, authored
   to be mechanically checkable against the `@type`s), and
-  [docs/getting-started.md](docs/getting-started.md) (first sign in minutes with a
+  [docs/guides/getting-started.md](docs/guides/getting-started.md) (first sign in minutes with a
   self-contained dev handle, then the path to a production handle).
 - Value-free sign telemetry: the four signing entry points now emit a closed two-event
   surface (`[:bounded_authority_report_adapter, :sign, :start|:stop]`) with monotonic
@@ -774,7 +781,7 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   `{:error, :telemetry_invalid}` instead of emitted: the mechanical value-free
   guarantee, tripwire-proven by planting a key id into the metadata and watching the
   stop event vanish), telemetry never alters a signer's return, and a raise inside the
-  signer still propagates. `docs/telemetry.md` documents the event/class tables, the
+  signer still propagates. `docs/guides/telemetry.md` documents the event/class tables, the
   alerting guidance, and the attach example; a docs-parity test diffs the tables
   against the emitter's closed sets. Adds `:telemetry` (~> 1.3, zero transitive deps)
   as the first runtime dependency besides the protocol package itself.

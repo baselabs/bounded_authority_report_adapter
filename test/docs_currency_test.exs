@@ -2,7 +2,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
   @moduledoc """
   Doc-currency tripwires: the guides cannot drift from the code they describe.
 
-    * every error atom in docs/errors.md exists in a lib @type error set and
+    * every error atom in docs/guides/errors.md exists in a lib @type error set and
       vice versa;
     * every backticked `fun/arity` identifier in usage-rules.md resolves
       against the adapter's exported functions, its behavior callbacks, or a
@@ -26,9 +26,9 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     :content_assertion_sign_error
   ]
 
-  test "every docs/errors.md table atom exists in a lib error @type and vice versa" do
+  test "every docs/guides/errors.md table atom exists in a lib error @type and vice versa" do
     lib_source = File.read!("lib/bounded_authority_report_adapter.ex")
-    doc = File.read!("docs/errors.md")
+    doc = File.read!("docs/guides/errors.md")
 
     lib_atoms =
       for type <- @error_types,
@@ -58,13 +58,13 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
            "the producer tuple's fixed shape must be documented verbatim"
   end
 
-  test "every backticked fun/arity in usage-rules.md, docs/recipes.md, and docs/upgrading.md resolves" do
+  test "every backticked fun/arity in usage-rules.md, docs/guides/recipes.md, and docs/guides/upgrading.md resolves" do
     doc =
       File.read!("usage-rules.md") <>
         "\n" <>
-        File.read!("docs/recipes.md") <>
+        File.read!("docs/guides/recipes.md") <>
         "\n" <>
-        File.read!("docs/upgrading.md")
+        File.read!("docs/guides/upgrading.md")
 
     # `Module.Sub.fun/arity` or bare `fun/arity` in backticks.
     identifiers =
@@ -161,7 +161,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
   test "the dep requirements in getting-started and the README accept the current version" do
     version = Mix.Project.config()[:version]
 
-    for path <- ["docs/getting-started.md", "README.md"] do
+    for path <- ["docs/guides/getting-started.md", "README.md"] do
       doc = File.read!(path)
 
       [_, requirement] = Regex.run(~r/\{:bounded_authority_report_adapter, "~> ([\d.]+)"\}/, doc)
@@ -241,7 +241,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
            "the CHANGELOG still says a non-map options value keeps the defaults"
 
     [_before, upgrading] =
-      String.split(File.read!("docs/upgrading.md"), "## 0.11.0", parts: 2)
+      String.split(File.read!("docs/guides/upgrading.md"), "## 0.11.0", parts: 2)
 
     [upgrading, _older] = String.split(upgrading, "\n## ", parts: 2)
     upgrading = String.replace(upgrading, ~r/\s+/, " ")
@@ -310,6 +310,34 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
              "site/index.html shows hex #{shown} but mix.exs is #{version}; move the badge " <>
                "in the release commit"
     end
+  end
+
+  test "README fits registry rendering and every guide and notebook is an ExDoc extra" do
+    readme = File.read!("README.md")
+    assert byte_size(readme) < 65_536
+    config = Mix.Project.config()[:docs]
+
+    extras =
+      Enum.map(config[:extras], fn
+        {path, _options} -> path
+        path -> path
+      end)
+
+    for path <- Path.wildcard("docs/guides/*.md") ++ Path.wildcard("docs/notebooks/*.livemd") do
+      assert path in extras, "#{path} is missing from ExDoc"
+      assert readme =~ "](#{path})", "#{path} is missing from README"
+    end
+
+    groups = Enum.map(Keyword.keys(config[:groups_for_extras]), &Atom.to_string/1)
+
+    assert groups == [
+             "Start here",
+             "Concepts",
+             "Integrate and operate",
+             "Notebooks",
+             "Reference",
+             "Project"
+           ]
   end
 
   ## helpers

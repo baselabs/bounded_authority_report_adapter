@@ -10,7 +10,7 @@ if Code.ensure_loaded?(Igniter) do
     by accident: there is no road to a working key-in-process default (the same
     posture as the package's test-support reference handle, which does not ship).
     The commented sketches show the shape a real HSM/KMS/key-server wiring takes;
-    see docs/getting-started.md and docs/recipes.md for the full contracts.
+    see docs/guides/getting-started.md and docs/guides/key-custody.md for the full contracts.
     """
 
     use Igniter.Mix.Task
@@ -50,7 +50,8 @@ if Code.ensure_loaded?(Igniter) do
         The holder's key handle: the ONLY place this application touches key material.
 
         Implement each callback against your real custody store (HSM, KMS, key
-        server). The adapter calls THESE functions and never sees the private key.
+        server). Keep private bytes behind these callbacks, never in the handle term.
+        The adapter does not inspect or sanitize that opaque term.
 
         Two suite surfaces share this behavior: the major-1
         surface (BoundedAuthorityReportAdapter: Ed25519, 32-byte keys) and
@@ -77,7 +78,7 @@ if Code.ensure_loaded?(Igniter) do
         @behaviour BoundedAuthorityReportAdapter
 
         # The handle term is whatever YOUR callbacks understand: a key reference,
-        # never key bytes (see docs/security.md: the contract is the guarantee).
+        # never key bytes (see docs/guides/security.md: the contract is the guarantee).
         #
         # The params are underscored below (the raising bodies use nothing); when
         # you wire a real implementation, rename _handle -> handle.
@@ -94,7 +95,7 @@ if Code.ensure_loaded?(Igniter) do
           # (s <- n - s when s > n/2), and re-encode as two padded 32-byte
           # big-endian integers. The adapter ALSO normalizes low-S, and
           # rejects DER (a 71-byte return is :signing_failed).
-          raise "wire #{inspect(module)}.sign/2 to your custody store: see docs/recipes.md"
+          raise "wire #{inspect(module)}.sign/2 to your custody store: see docs/guides/key-custody.md"
         end
 
         def sign(_message, _handle), do: {:error, :invalid_handle}
@@ -117,7 +118,7 @@ if Code.ensure_loaded?(Igniter) do
         @impl true
         def key_identity(_handle) do
           # ONE atomic {key_id, public_key} snapshot: a split snapshot can sign
-          # the wrong kid into an anchor header (docs/recipes.md, the KMS recipe).
+          # the wrong kid into an anchor header (docs/guides/key-custody.md, immutable key identities).
           #   {:ok, {key_id, public_key}} = MyKms.current_version(_handle)
           raise "wire #{inspect(module)}.key_identity/1 as ONE atomic snapshot"
         end
@@ -126,7 +127,7 @@ if Code.ensure_loaded?(Igniter) do
         def signing_identity(_handle) do
           # {role, key_id, public_key}; :issuer ONLY if this key really is the
           # issuer's: the adapter rejects non-issuer declarations, it does not
-          # verify them (docs/security.md).
+          # verify them (docs/guides/security.md).
           #   {:ok, {:holder, key_id, public_key}} = ...
           raise "wire #{inspect(module)}.signing_identity/1"
         end

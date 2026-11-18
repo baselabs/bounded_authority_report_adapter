@@ -26,34 +26,30 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   # The exact payload census (what contents.tar.gz must carry: the consumer's
   # actual file set). Keep in lockstep with mix.exs `files:`; the exact-set
   # check reds in BOTH directions the moment either side drifts.
-  @expected_files MapSet.new([
-                    ".formatter.exs",
-                    "CHANGELOG.md",
-                    "CODE_OF_CONDUCT.md",
-                    "CONTRIBUTING.md",
-                    "LICENSE",
-                    "NOTICE",
-                    "README.md",
-                    "SECURITY.md",
-                    "usage-rules.md",
-                    "docs/consumer-integration.md",
-                    "docs/errors.md",
-                    "docs/getting-started.md",
-                    "docs/recipes.md",
-                    "docs/security.md",
-                    "docs/telemetry.md",
-                    "docs/upgrading.md",
-                    "lib/bounded_authority_report_adapter.ex",
-                    "lib/bounded_authority_report_adapter/optional_callbacks.ex",
-                    "lib/bounded_authority_report_adapter/options.ex",
-                    "lib/bounded_authority_report_adapter/telemetry.ex",
-                    "lib/bounded_authority_report_adapter/v3.ex",
-                    "lib/mix/tasks/bounded_authority_report_adapter.doctor.ex",
-                    "lib/mix/tasks/bounded_authority_report_adapter.install.ex",
-                    "examples/report_envelope_roundtrip.livemd",
-                    "examples/files/signing-flow.svg",
-                    "mix.exs"
-                  ])
+  @expected_files MapSet.new(
+                    Path.wildcard("docs/guides/*.md") ++
+                      Path.wildcard("docs/notebooks/*") ++
+                      [
+                        ".formatter.exs",
+                        "CHANGELOG.md",
+                        "CODE_OF_CONDUCT.md",
+                        "CONTRIBUTING.md",
+                        "LICENSE",
+                        "NOTICE",
+                        "README.md",
+                        "SECURITY.md",
+                        "usage-rules.md",
+                        "lib/bounded_authority_report_adapter.ex",
+                        "lib/bounded_authority_report_adapter/optional_callbacks.ex",
+                        "lib/bounded_authority_report_adapter/options.ex",
+                        "lib/bounded_authority_report_adapter/telemetry.ex",
+                        "lib/bounded_authority_report_adapter/v3.ex",
+                        "lib/mix/tasks/bounded_authority_report_adapter.doctor.ex",
+                        "lib/mix/tasks/bounded_authority_report_adapter.install.ex",
+                        "examples/files/signing-flow.svg",
+                        "mix.exs"
+                      ]
+                  )
 
   # The consumer smoke's pinned time + request fields (the conformance
   # round-trip's adapter-coherent bar, mirrored self-contained).

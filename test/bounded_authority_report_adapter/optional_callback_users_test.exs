@@ -165,7 +165,7 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
     tables = [
       {"moduledoc", moduledoc},
       {"README.md", File.read!("README.md")},
-      {"docs/getting-started.md", File.read!("docs/getting-started.md")}
+      {"docs/guides/getting-started.md", File.read!("docs/guides/getting-started.md")}
     ]
 
     for {source, text} <- tables,

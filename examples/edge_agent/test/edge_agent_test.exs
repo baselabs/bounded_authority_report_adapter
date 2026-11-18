@@ -60,6 +60,30 @@ defmodule EdgeAgentTest do
   end
 
   describe "rejection — the crypto is real" do
+    test "headers and request route are unambiguous before replay admission", %{url: url} do
+      {grant, proof, invocation_id, nonce} = signed_envelope()
+      valid_headers = headers(grant, proof, invocation_id, nonce)
+
+      for invalid_headers <- [
+            [{"x-ba-proof", proof} | valid_headers],
+            List.keyreplace(valid_headers, "x-ba-proof", 0, {"x-ba-proof", ""})
+          ] do
+        assert {:ok, %{status: 401, body: "invalid"}} =
+                 Req.post(url, headers: invalid_headers, body: @body)
+      end
+
+      for target <- [String.replace_suffix(url, "/report", "/other"), url <> "?extra=1"] do
+        assert {:ok, %{status: 401, body: "invalid"}} =
+                 Req.post(target, headers: valid_headers, body: @body)
+      end
+
+      assert {:ok, %{status: 401, body: "invalid"}} =
+               Req.get(url, headers: valid_headers)
+
+      assert {:ok, %{status: 200, body: "accepted"}} =
+               Req.post(url, headers: valid_headers, body: @body)
+    end
+
     test "a tampered proof is rejected (401)", %{url: url} do
       {grant, proof, invocation_id, nonce} = signed_envelope()
 

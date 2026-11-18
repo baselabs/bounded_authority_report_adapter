@@ -28,7 +28,7 @@ defmodule BoundedAuthorityReportAdapter.DocsContractTest do
   end
 
   test "the errors reference covers every public signer function and its typespec result" do
-    reference = File.read!("docs/errors.md")
+    reference = File.read!("docs/guides/errors.md")
 
     matches = Regex.scan(~r/^\| `([^`]+\/\d+)` \| `([^`]+)` \| `([^`]+)` \|$/m, reference)
 
@@ -76,7 +76,7 @@ defmodule BoundedAuthorityReportAdapter.DocsContractTest do
   end
 
   test "the errors reference covers every other documented public helper result" do
-    reference = File.read!("docs/errors.md")
+    reference = File.read!("docs/guides/errors.md")
 
     rows =
       for [_, function, result] <-

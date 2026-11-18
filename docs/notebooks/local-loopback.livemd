@@ -1,0 +1,479 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Local-loopback development listener
+
+Open this `.livemd` file in [Livebook](https://livebook.dev) and choose **Run all**.
+Requires Elixir 1.18–1.20 and OTP 27–29 with access to public Hex. No secrets or external services are needed.
+
+Use the explicit literal-loopback HTTP profile, a listener-issued challenge, and atomic single-use consumption. A captured request can still win the first arrival.
+
+This notebook installs the exact published adapter 1.0.0. The adapter self-verifies every signature it produces and optionally verifies a role attestation; envelope verification is the protocol package’s job. Verification is not authorization.
+
+```elixir
+Mix.install([{:bounded_authority_report_adapter, "== 1.0.0"}])
+
+"1.0.0" = to_string(Application.spec(:bounded_authority_report_adapter, :vsn))
+:installed
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:installed
+```
+
+## Local key custody
+
+This is an actual OTP process holding freshly generated demonstration keys. Handles carry public metadata and opaque process/key references; private bytes never enter an adapter call. It demonstrates callbacks and conversion, not a remote HSM’s security or availability. Every key is discarded when the process stops.
+
+```elixir
+semantic_output = (
+  defmodule Demo.Custody do
+    use GenServer
+
+    def start_link, do: GenServer.start_link(__MODULE__, %{})
+    def new(pid, suite, key_id, role), do: GenServer.call(pid, {:new, suite, key_id, role})
+    def sign(key, message), do: GenServer.call(key.custody, {:sign, key.reference, message}, 5_000)
+
+    @impl true
+    def init(keys), do: {:ok, keys}
+
+    @impl true
+    def handle_call({:new, suite, key_id, role}, _from, keys) do
+      {public, private} =
+        case suite do
+          :ed25519 -> :crypto.generate_key(:eddsa, :ed25519)
+          :p256 -> :crypto.generate_key(:ecdh, :prime256v1)
+        end
+
+      reference = make_ref()
+      key = %{custody: self(), reference: reference, key_id: key_id, role: role, public: public}
+      {:reply, key, Map.put(keys, reference, {suite, private})}
+    end
+
+    def handle_call({:sign, reference, message}, _from, keys) do
+      signature =
+        case Map.fetch!(keys, reference) do
+          {:ed25519, private} -> :crypto.sign(:eddsa, :none, message, [private, :ed25519])
+          {:p256, private} -> :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
+        end
+
+      {:reply, {:ok, signature}, keys}
+    end
+  end
+
+  defmodule Demo.Ed25519Handle do
+    @behaviour BoundedAuthorityReportAdapter
+    @impl true
+    def sign(message, key), do: Demo.Custody.sign(key, message)
+    @impl true
+    def public_key(key), do: {:ok, key.public}
+    @impl true
+    def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
+    @impl true
+    def key_identity(key), do: {:ok, {key.key_id, key.public}}
+    @impl true
+    def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+  end
+
+  defmodule Demo.P256Handle do
+    @behaviour BoundedAuthorityReportAdapter
+    @n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+    @impl true
+    def sign(message, key) do
+      with {:ok, der} <- Demo.Custody.sign(key, message),
+           {:ok, <<r::unsigned-big-256, s::unsigned-big-256>>} <-
+             BoundedAuthorityProtocol.Es256.der_to_raw(der) do
+        # Exercise the adapter's normalization with a valid high-S signature.
+        high_s = if s > div(@n, 2), do: s, else: @n - s
+        {:ok, <<r::unsigned-big-256, high_s::unsigned-big-256>>}
+      end
+    end
+
+    @impl true
+    def public_key(key), do: {:ok, key.public}
+    @impl true
+    def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
+    @impl true
+    def key_identity(key), do: {:ok, {key.key_id, key.public}}
+    @impl true
+    def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+  end
+
+  {:ok, custody} = Demo.Custody.start_link()
+  :local_custody_started
+)
+
+true = semantic_output == :local_custody_started
+semantic_output
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:local_custody_started
+```
+
+```elixir
+semantic_output = (
+  alias BoundedAuthorityProtocol.V1
+  alias BoundedAuthorityProtocol.V3
+  alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopback
+  alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertion
+  alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestation
+  alias BoundedAuthorityReportAdapter, as: Adapter
+
+  :aliases_ready
+)
+
+true = semantic_output == :aliases_ready
+semantic_output
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:aliases_ready
+```
+
+```elixir
+semantic_output = (
+  now = System.system_time(:second)
+
+  ed25519_key = fn key_id, role ->
+    Demo.Custody.new(custody, :ed25519, key_id, role)
+  end
+
+  p256_key = fn key_id, role ->
+    Demo.Custody.new(custody, :p256, key_id, role)
+  end
+
+  # Ed25519 keys (contract-major 1 and the content-assertion profile).
+  issuer = ed25519_key.("issuer-key-1", :issuer)
+  holder = ed25519_key.("holder-key-1", :holder)
+  attestor = ed25519_key.("attestor-key-1", :attestor)
+  chain_key = ed25519_key.("chain-key-1", :chain)
+  next_chain_key = ed25519_key.("chain-key-2", :chain)
+  publisher = ed25519_key.("publisher-key-1", :publisher)
+
+  # P-256 keys (contract-major 3, ES256).
+  ec_issuer = p256_key.("issuer-ec-key-1", :issuer)
+  ec_holder = p256_key.("holder-ec-key-1", :holder)
+  ec_chain_key = p256_key.("chain-ec-key-1", :chain)
+  ec_next_chain_key = p256_key.("chain-ec-key-2", :chain)
+
+  # What a verifier is told about a key: its id, its public half, and when it is valid.
+  validity = fn key ->
+    %V1.HistoricalPublicKey{
+      key_id: key.key_id,
+      public_key: key.public,
+      valid_from: now - 3_600,
+      valid_before: now + 3_600
+    }
+  end
+
+  # Selected fields of a result, in a fixed order (a map would print in no fixed order).
+  facts_of = fn struct, keys -> Enum.map(keys, &{&1, Map.fetch!(struct, &1)}) end
+
+  # Flip one bit in the first byte of a compact's signature segment.
+  flip_one_byte = fn compact ->
+    [header, payload, signature] = String.split(compact, ".")
+    <<first, rest::binary>> = Base.url_decode64!(signature, padding: false)
+    flipped = Base.url_encode64(<<Bitwise.bxor(first, 1), rest::binary>>, padding: false)
+    Enum.join([header, payload, flipped], ".")
+  end
+
+  [
+    ed25519_public_key_bytes: byte_size(holder.public),
+    p256_public_key_bytes: byte_size(ec_holder.public)
+  ]
+)
+
+true = semantic_output == [ed25519_public_key_bytes: 32, p256_public_key_bytes: 65]
+semantic_output
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[ed25519_public_key_bytes: 32, p256_public_key_bytes: 65]
+```
+
+## Local-loopback development listener
+
+```elixir
+semantic_output = (
+  issuer_handle = {Demo.Ed25519Handle, issuer}
+  holder_handle = {Demo.Ed25519Handle, holder}
+  {:ok, holder_thumbprint} = Demo.Ed25519Handle.thumbprint(holder)
+
+  grant_input = %{
+    issuer: "https://issuer.example",
+    grant_id: "urn:example:grant:greenhouse-1",
+    audiences: ["https://telemetry.example"],
+    issued_at: now - 60,
+    not_before: now - 60,
+    expires_at: now + 3_600,
+    holder_thumbprint: holder_thumbprint,
+    operations: [
+      %V1.Operation{name: "submit_reading", selectors: [:all]},
+      %V1.Operation{name: "run_local_tool", selectors: [:all]}
+    ]
+  }
+
+  {:ok, %{grant: grant}} = Adapter.sign_grant(grant_input, issuer_handle)
+
+  trusted_issuer = %V1.TrustedIssuer{key_id: issuer.key_id, public_key: issuer.public}
+
+  expected_grant = %V1.ExpectedGrant{
+    issuer: "https://issuer.example",
+    audience: "https://telemetry.example",
+    evaluation_time: now,
+    clock_skew: 60,
+    bounds: V1.Bounds.maximum()
+  }
+
+  {:ok, grant_facts} = V1.verify_grant(grant, trusted_issuer, expected_grant)
+  facts_of.(grant_facts, [:version, :grant_id, :matched_audience, :authorization])
+)
+
+true = semantic_output == [
+  version: 1,
+  grant_id: "urn:example:grant:greenhouse-1",
+  matched_audience: "https://telemetry.example",
+  authorization: :not_evaluated
+]
+semantic_output
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  version: 1,
+  grant_id: "urn:example:grant:greenhouse-1",
+  matched_audience: "https://telemetry.example",
+  authorization: :not_evaluated
+]
+```
+
+```elixir
+semantic_output = (
+  reading = {:object, [{"sensor", {:string, "greenhouse-4"}}, {"celsius", {:integer, 21}}]}
+
+  report = %{
+    grant_compact: grant,
+    operation: "submit_reading",
+    method: "POST",
+    target_uri: "https://telemetry.example/readings",
+    invocation_id: "6f1c2a3b-4d5e-4f60-8a71-92b3c4d5e6f7",
+    # The request body in the protocol's tagged JSON form. A real consumer gets this with
+    # V1.Json.decode(raw_body_bytes), on both sides, from the same bytes.
+    cast_arguments: reading,
+    nonce: "nonce-reading-1"
+  }
+
+  {:ok, %{grant: ^grant, proof: proof}} =
+    Adapter.sign_report(report, holder_handle, %{issued_at: now - 5})
+
+  # Decoding is not verifying; this only shows what the proof binds.
+  {:ok, decoded_proof} = V1.decode_proof(proof, %{})
+
+  facts_of.(decoded_proof, [:operation, :method, :target_uri, :nonce, :verification]) ++
+    [holder_matches_grant: decoded_proof.holder_thumbprint == holder_thumbprint]
+)
+
+true = semantic_output == [
+  operation: "submit_reading",
+  method: "POST",
+  target_uri: "https://telemetry.example/readings",
+  nonce: "nonce-reading-1",
+  verification: :not_evaluated,
+  holder_matches_grant: true
+]
+semantic_output
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  operation: "submit_reading",
+  method: "POST",
+  target_uri: "https://telemetry.example/readings",
+  nonce: "nonce-reading-1",
+  verification: :not_evaluated,
+  holder_matches_grant: true
+]
+```
+
+```elixir
+semantic_output = (
+  credentials = %V1.Credentials{grant: grant, proof: proof}
+
+  expected = %V1.ExpectedRequest{
+    trusted_issuer: trusted_issuer,
+    issuer: "https://issuer.example",
+    audience: "https://telemetry.example",
+    method: "POST",
+    target_uri: "https://telemetry.example/readings",
+    invocation_id: "6f1c2a3b-4d5e-4f60-8a71-92b3c4d5e6f7",
+    operation: "submit_reading",
+    cast_arguments: reading,
+    evaluation_time: now,
+    clock_skew: 60,
+    proof_max_age: 300,
+    nonce: {:required, "nonce-reading-1"},
+    bounds: V1.Bounds.maximum()
+  }
+
+  {:ok, envelope_facts} = V1.check_envelope(credentials, expected)
+  facts_of.(envelope_facts, [:version, :operation, :matched_audience, :authorization])
+)
+
+true = semantic_output == [
+  version: 1,
+  operation: "submit_reading",
+  matched_audience: "https://telemetry.example",
+  authorization: :not_evaluated
+]
+semantic_output
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  version: 1,
+  operation: "submit_reading",
+  matched_audience: "https://telemetry.example",
+  authorization: :not_evaluated
+]
+```
+
+```elixir
+semantic_output = (
+  local_report = %{
+    report
+    | operation: "run_local_tool",
+      target_uri: "http://127.0.0.1:4000/tools/summarize",
+      invocation_id: "0b9d8c7e-6f5a-4b3c-9d2e-1f0a9b8c7d6e",
+      cast_arguments: {:object, [{"file", {:string, "notes.txt"}}]},
+      nonce: "nonce-local-1"
+  }
+
+  {:ok, %{proof: local_proof}} =
+    Adapter.sign_local_loopback_report(local_report, holder_handle, %{issued_at: now - 5})
+
+  local_credentials = %V1.Credentials{grant: grant, proof: local_proof}
+
+  local_expected = %{
+    expected
+    | operation: "run_local_tool",
+      target_uri: "http://127.0.0.1:4000/tools/summarize",
+      invocation_id: "0b9d8c7e-6f5a-4b3c-9d2e-1f0a9b8c7d6e",
+      cast_arguments: {:object, [{"file", {:string, "notes.txt"}}]},
+      nonce: {:required, "nonce-local-1"}
+  }
+
+  {:ok, local_facts} = LocalLoopback.check_envelope(local_credentials, local_expected)
+
+  [
+    verified: facts_of.(local_facts, [:operation, :target_uri, :authorization]),
+    wrong_nonce:
+      LocalLoopback.check_envelope(
+        local_credentials,
+        %{local_expected | nonce: {:required, "nonce-local-2"}}
+      ),
+    standard_verifier: V1.check_envelope(local_credentials, local_expected),
+    localhost_name:
+      Adapter.sign_local_loopback_report(
+        %{local_report | target_uri: "http://localhost:4000/tools/summarize"},
+        holder_handle
+      ),
+    missing_nonce: Adapter.sign_local_loopback_report(%{local_report | nonce: nil}, holder_handle)
+  ]
+)
+
+true = semantic_output == [
+  verified: [
+    operation: "run_local_tool",
+    target_uri: "http://127.0.0.1:4000/tools/summarize",
+    authorization: :not_evaluated
+  ],
+  wrong_nonce: {:error, :invalid},
+  standard_verifier: {:error, :invalid},
+  localhost_name: {:error, {:producer_error, :invalid}},
+  missing_nonce: {:error, :invalid_report}
+]
+semantic_output
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  verified: [
+    operation: "run_local_tool",
+    target_uri: "http://127.0.0.1:4000/tools/summarize",
+    authorization: :not_evaluated
+  ],
+  wrong_nonce: {:error, :invalid},
+  standard_verifier: {:error, :invalid},
+  localhost_name: {:error, {:producer_error, :invalid}},
+  missing_nonce: {:error, :invalid_report}
+]
+```
+
+## Single-use is not first-arrival authentication
+
+The store below is real ETS, limited to this runtime. Either concurrent arrival can consume the challenge. A captured valid request can arrive first and deny the legitimate sender; single-use consumption rejects subsequent spends, not the attacker’s first arrival. Consume only after verification and identity/policy checks. A production host also needs current revocation and durable invocation admission through grant expiry plus skew. Use authenticated confidential transport when first-arrival interception is in the threat model. Loopback HTTP provides neither confidentiality nor server authentication or process isolation.
+
+```elixir
+semantic_output = (
+  challenges = :ets.new(:notebook_challenges, [:set, :public])
+  try do
+    challenge = :crypto.strong_rand_bytes(24) |> Base.url_encode64(padding: false)
+    true = :ets.insert_new(challenges, {challenge, true})
+    signed_request = %{local_report | nonce: challenge}
+    {:ok, %{proof: challenged}} = Adapter.sign_local_loopback_report(signed_request, holder_handle)
+    checked = %{local_expected | nonce: {:required, challenge}}
+    {:ok, _facts} = LocalLoopback.check_envelope(%{local_credentials | proof: challenged}, checked)
+    [{^challenge, true}] = :ets.take(challenges, challenge)
+    [] = :ets.take(challenges, challenge)
+    :one_spend_not_first_arrival_protection
+   after
+    true = :ets.delete(challenges)
+  end
+)
+
+true = semantic_output == :one_spend_not_first_arrival_protection
+semantic_output
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:one_spend_not_first_arrival_protection
+```
+
+## Clean up
+
+```elixir
+semantic_output = (
+  GenServer.stop(custody)
+  false = Process.alive?(custody)
+  :clean
+)
+
+true = semantic_output == :clean
+semantic_output
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:clean
+```
+
+Continue with [Getting started](../guides/getting-started.md), [Framework and runtime integration](../guides/framework-integration.md), and [Operations](../guides/operations.md).

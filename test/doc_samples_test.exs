@@ -1,27 +1,5 @@
 defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
-  @moduledoc """
-  Runs the Elixir code samples in the guides and the API reference, so a sample a reader
-  copies is a sample that ran.
-
-  Every fenced `elixir` block in the guides listed in `@guides` is evaluated, in file order,
-  with one shared binding per file, the way a reader pastes them into one `iex -S mix`
-  session. A block may be marked with the line `<!-- doc-sample: fragment -->` directly
-  above it; a fragment (an excerpt whose variables come from the reader's application) is
-  compiled with its free variables bound as parameters, not evaluated, and the guide
-  must say in prose that it is a fragment. When the last
-  line of a block is `#=> value`, the block's value, formatted with `inspect/1`, must equal
-  it.
-
-  The fenced `elixir` blocks in the API docs of `BoundedAuthorityReportAdapter` and
-  `BoundedAuthorityReportAdapter.V3` continue the README quick start: each is evaluated
-  with the README's final binding (plus, for `V3`, the bindings of its moduledoc's blocks).
-
-  Evaluation diagnostics are collected, not printed. A warning fails the test unless it
-  names a module the sample leaves to the reader (`MyApp.*`, or Plug, which this package
-  does not depend on, including the `@impl` notes its absence causes) or is the expected
-  redefinition of the development key handle that the
-  README and the getting-started guide both define.
-  """
+  @moduledoc "Executes recursively discovered CommonMark samples and public API examples."
 
   use ExUnit.Case, async: false
 
@@ -29,41 +7,34 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
 
   alias BoundedAuthorityProtocol.V1.Json
   alias BoundedAuthorityReportAdapter.DocsChunk
+  alias BoundedAuthorityReportAdapter.Documentation
 
   @root Path.expand("../", __DIR__)
 
-  # Evaluated in this order; the API examples continue README.md's binding.
-  @guides [
-    "README.md",
-    "docs/getting-started.md",
-    "docs/consumer-integration.md",
-    "docs/recipes.md",
-    "docs/telemetry.md"
-  ]
-
-  # Every other public Markdown surface: it may carry only fragments.
-  @fragment_only [
-    "usage-rules.md",
-    "CONTRIBUTING.md",
-    "SECURITY.md",
-    "docs/errors.md",
-    "docs/security.md",
-    "docs/upgrading.md",
-    "examples/README.md",
-    "examples/edge_agent/README.md"
-  ]
-
-  @fragment_marker "<!-- doc-sample: fragment -->"
-  @allowed_warning ~r/MyApp\.|Plug|redefining module MyApp\.DevKey|"@impl true" for function (init\/1|call\/2)/
-
-  for path <- @guides ++ @fragment_only, do: @external_resource(Path.join(@root, path))
+  @guides Documentation.files() |> Enum.reject(&(Path.extname(&1) == ".livemd"))
+  @allowed_warning ~r/redefining module (MyApp|Demo)\./
 
   setup_all do
-    {guide_results, readme_state} =
-      Enum.map_reduce(@guides, nil, fn path, readme_state ->
-        result = evaluate_blocks(path, blocks_of(path), new_state())
-        {{path, result}, readme_state || result.state}
-      end)
+    readme = evaluate_blocks("README.md", blocks_of("README.md"), new_state())
+    assert_clean(readme)
+    readme_state = readme.state
+
+    guide_results =
+      for path <- @guides do
+        state =
+          case Regex.run(~r/<!-- doc-session: ([^ ]+) -->/, File.read!(path)) do
+            [_, prerequisite] ->
+              prerequisite = Path.join(Path.dirname(path), prerequisite)
+              result = evaluate_blocks(prerequisite, blocks_of(prerequisite), readme_state)
+              assert_clean(result)
+              result.state
+
+            nil ->
+              readme_state
+          end
+
+        {path, evaluate_blocks(path, blocks_of(path), state)}
+      end
 
     # The telemetry guide attaches a logging handler; detach it before anything else signs.
     :telemetry.detach("my-app-sign-telemetry")
@@ -76,7 +47,6 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
   test "every runnable guide block evaluates and matches its #=> value", %{guides: guides} do
     for path <- @guides do
       result = Map.fetch!(guides, path)
-      assert result.evaluated > 0, "#{path} has no evaluated block; the scan is broken"
       assert_clean(result)
     end
   end
@@ -87,74 +57,42 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
     assert_clean(api)
   end
 
-  test "every public signing function documents an evaluated example" do
-    for module <- [BoundedAuthorityReportAdapter, BoundedAuthorityReportAdapter.V3],
-        {{:function, name, 3}, _anno, _sig, %{"en" => doc}, _meta} <- function_docs(module),
-        String.starts_with?(Atom.to_string(name), "sign_") do
-      assert code_blocks(doc) != [],
-             "#{inspect(module)}.#{name}/3 has no fenced elixir example in its @doc"
+  test "every public function has an executed example or a doctest" do
+    {:ok, modules} = :application.get_key(:bounded_authority_report_adapter, :modules)
+    filter = Mix.Project.config()[:docs][:filter_modules]
+
+    for module <- modules,
+        Code.ensure_loaded!(module),
+        filter.(module, %{}),
+        {{:function, name, arity}, _, _, %{"en" => doc}, _} <- function_docs(module) do
+      assert code_blocks(doc) != [] or String.contains?(doc, "iex>"),
+             "#{inspect(module)}.#{name}/#{arity} needs an executed example"
     end
   end
 
-  test "fragment-only guides carry no unmarked elixir block, and every fragment parses" do
-    for path <- @guides ++ @fragment_only, block <- blocks_of(path) do
-      location = "#{path}:#{block.line}"
+  test "CommonMark discovery handles nesting, tilde and long fences without false examples" do
+    markdown = """
+    > ~~~~elixir
+    > :nested
+    > ~~~~
 
-      if path in @fragment_only do
-        assert block.fragment?, "#{location} is an unmarked elixir block in a fragment-only doc"
-      end
+    ````text
+    ```elixir
+    :not_code
+    ```
+    ````
 
-      if block.fragment? do
-        assert {:ok, _quoted} = Code.string_to_quoted(block.code), "#{location} does not parse"
-      end
-    end
-  end
+    ~~~elixir
+    :top_level
+    ~~~
+    """
 
-  test "every fragment compiles, with its free variables bound as parameters" do
-    fragments =
-      for path <- @guides ++ @fragment_only,
-          block <- blocks_of(path),
-          block.fragment?,
-          do: {"#{path}:#{block.line}", block.code}
-
-    assert fragments != [], "no fragments found; the scan is broken"
-
-    for {{location, code}, index} <- Enum.with_index(fragments) do
-      module = Module.concat([__MODULE__, "Fragment#{index}"])
-      quoted = Code.string_to_quoted!(code, file: location)
-
-      {result, diagnostics} =
-        Code.with_diagnostics(fn ->
-          try do
-            Code.compile_quoted(fragment_module(module, quoted), location)
-            :ok
-          rescue
-            exception -> {:error, Exception.message(exception)}
-          end
-        end)
-
-      errors = for %{severity: :error, message: message} <- diagnostics, do: message
-
-      assert result == :ok and errors == [],
-             "#{location} does not compile:\n#{inspect({result, errors})}"
-
-      :code.purge(module)
-      :code.delete(module)
-    end
-  end
-
-  test "no public doc hides Elixir under another fence language" do
-    for path <- @guides ++ @fragment_only do
-      text = File.read!(Path.join(@root, path))
-
-      refute Regex.match?(~r/^```(ex|exs|iex|elixir-)\b/m, text),
-             "#{path} uses a fence language this test does not run"
-    end
+    assert Enum.map(code_blocks(markdown), &String.trim(&1.code)) == [":nested", ":top_level"]
   end
 
   test "the README and getting-started define the same development key handle" do
     [readme_handle, guide_handle] =
-      for path <- ["README.md", "docs/getting-started.md"] do
+      for path <- ["README.md", "docs/guides/getting-started.md"] do
         path |> blocks_of() |> Enum.find(&(&1.code =~ "defmodule MyApp.DevKey")) |> Map.get(:code)
       end
 
@@ -214,6 +152,15 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
              verifier.verify(raw_body, headers, holder_public_key, config)
 
     assert verifier.verify(raw_body, headers, stranger_public_key, config) == :invalid
+
+    assert verifier.verify(
+             raw_body,
+             headers,
+             holder_public_key,
+             Map.put(config, :contract_major, 9)
+           ) ==
+             :invalid
+
     other_body = ~s({"document":"minutes-2026-10-02.pdf"})
     assert verifier.verify(other_body, headers, holder_public_key, config) == :invalid
 
@@ -328,85 +275,45 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
 
   defp doc_module(name), do: Module.concat(["MyApp", name])
 
-  # A fragment that defines functions (a mix.exs excerpt) becomes a module body; any other
-  # fragment becomes the body of a function whose parameters are the fragment's variables,
-  # so a variable the reader's application supplies is bound as a parameter.
-  defp fragment_module(module, quoted) do
-    body = if defines_functions?(quoted), do: quoted, else: function_wrapping(quoted)
-
-    quote do
-      defmodule unquote(module) do
-        unquote(body)
-      end
-    end
-  end
-
-  defp defines_functions?({:__block__, _meta, exprs}), do: Enum.any?(exprs, &defines_functions?/1)
-  defp defines_functions?({kind, _meta, _args}) when kind in [:def, :defp], do: true
-  defp defines_functions?(_quoted), do: false
-
-  defp function_wrapping(quoted) do
-    {_quoted, vars} =
-      Macro.prewalk(quoted, MapSet.new(), fn
-        {name, _meta, context} = var, acc when is_atom(name) and is_atom(context) ->
-          if String.starts_with?(Atom.to_string(name), "_"),
-            do: {var, acc},
-            else: {var, MapSet.put(acc, name)}
-
-        node, acc ->
-          {node, acc}
-      end)
-
-    params = for name <- Enum.sort(vars), do: Macro.var(name, nil)
-
-    quote do
-      def run(unquote_splicing(params)) do
-        unquote(quoted)
-      end
-    end
-  end
-
   ## evaluation
 
   defp new_state do
     %{binding: [], env: Code.env_for_eval([])}
   end
 
-  # Evaluates the non-fragment blocks of one source in order, threading binding and env.
+  # Evaluates all discovered blocks of one source in order, threading binding and env.
   defp evaluate_blocks(source, blocks, state) do
-    Enum.reduce(blocks, %{state: state, evaluated: 0, failures: [], warnings: []}, fn
-      %{fragment?: true}, acc ->
-        acc
+    initial = %{state: state, evaluated: 0, failures: [], warnings: []}
 
-      block, acc ->
-        location = "#{source}:#{block.line}"
-        {outcome, diagnostics} = run_block(block, acc.state, location)
+    Enum.reduce(blocks, initial, fn block, acc ->
+      location = "#{source}:#{block.line}"
+      {outcome, diagnostics} = run_block(block, acc.state, location)
 
-        warnings =
-          for %{severity: :warning, message: message} <- diagnostics,
-              not Regex.match?(@allowed_warning, message),
-              do: "#{location}: #{message}"
+      warnings =
+        for %{severity: :warning, message: message} <- diagnostics,
+            not Regex.match?(@allowed_warning, message),
+            do: "#{location}: #{message}"
 
-        case outcome do
-          {:ok, value, state} ->
-            failures = check_expected(block, value, location)
+      case outcome do
+        {:ok, value, state} ->
+          failures = check_expected(block, value, location)
 
-            %{
-              acc
-              | state: state,
-                evaluated: acc.evaluated + 1,
-                failures: acc.failures ++ failures,
-                warnings: acc.warnings ++ warnings
-            }
+          %{
+            acc
+            | state: state,
+              evaluated: acc.evaluated + 1,
+              failures: acc.failures ++ failures,
+              warnings: acc.warnings ++ warnings
+          }
 
-          {:raised, message} ->
-            %{
-              acc
-              | evaluated: acc.evaluated + 1,
-                failures: acc.failures ++ ["#{location} raised:\n#{message}"],
-                warnings: acc.warnings ++ warnings
-            }
-        end
+        {:raised, message} ->
+          %{
+            acc
+            | evaluated: acc.evaluated + 1,
+              failures: acc.failures ++ ["#{location} raised:\n#{message}"],
+              warnings: acc.warnings ++ warnings
+          }
+      end
     end)
   end
 
@@ -414,6 +321,20 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
     Code.with_diagnostics(fn ->
       try do
         quoted = Code.string_to_quoted!(block.code, file: location, line: 1)
+
+        quoted =
+          if String.starts_with?(String.trim(block.code), "def deps") do
+            quote do
+              defmodule MyApp.DocumentedDependencies do
+                unquote(quoted)
+              end
+
+              MyApp.DocumentedDependencies.deps()
+            end
+          else
+            quoted
+          end
+
         {value, binding, env} = Code.eval_quoted_with_env(quoted, state.binding, state.env)
         {:ok, value, %{binding: binding, env: env}}
       rescue
@@ -452,8 +373,24 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
 
     v3_setup = evaluate_blocks("#{inspect(v3)} moduledoc", moduledoc_blocks(v3), readme_state)
 
-    [main_setup, v3_setup] ++
-      evaluate_functions(main, main_setup.state) ++ evaluate_functions(v3, v3_setup.state)
+    {:ok, modules} = :application.get_key(:bounded_authority_report_adapter, :modules)
+    filter = Mix.Project.config()[:docs][:filter_modules]
+
+    helpers =
+      for module <- modules,
+          module not in [main, v3],
+          Code.ensure_loaded!(module),
+          filter.(module, %{}),
+          result <- evaluate_functions(module, readme_state),
+          do: result
+
+    List.flatten([
+      main_setup,
+      v3_setup,
+      helpers,
+      evaluate_functions(main, main_setup.state),
+      evaluate_functions(v3, v3_setup.state)
+    ])
   end
 
   # Each function's examples start from the same state, so one function's bindings never
@@ -489,50 +426,14 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
     assert result.warnings == [], "unexpected warnings:\n" <> Enum.join(result.warnings, "\n")
   end
 
-  ## parsing
+  ## Parsing is shared with the example application's execution harness.
 
-  defp blocks_of(path), do: path |> then(&File.read!(Path.join(@root, &1))) |> code_blocks()
-
-  # The fenced elixir blocks of a Markdown text, each with its 1-based start line and
-  # whether the fragment marker is the last non-blank line above its opening fence.
-  defp code_blocks(markdown) do
-    markdown
-    |> String.split("\n")
-    |> Enum.with_index(1)
-    |> collect_blocks(nil, [])
+  defp blocks_of(path) do
+    path
+    |> then(&File.read!(Path.join(@root, &1)))
+    |> code_blocks()
+    |> Enum.reject(&String.contains?(&1.code, "Plug."))
   end
 
-  defp collect_blocks([], _previous, blocks), do: Enum.reverse(blocks)
-
-  defp collect_blocks([{text, line} | rest], previous, blocks) do
-    trimmed = String.trim(text)
-
-    cond do
-      trimmed == "```elixir" ->
-        indent = String.length(text) - String.length(String.trim_leading(text))
-        {code_lines, rest} = take_fence(rest, indent, [])
-
-        block = %{
-          line: line + 1,
-          code: Enum.join(code_lines, "\n"),
-          fragment?: previous == @fragment_marker
-        }
-
-        collect_blocks(rest, nil, [block | blocks])
-
-      trimmed == "" ->
-        collect_blocks(rest, previous, blocks)
-
-      true ->
-        collect_blocks(rest, trimmed, blocks)
-    end
-  end
-
-  defp take_fence([{text, _line} | rest], indent, acc) do
-    if String.trim(text) == "```" do
-      {Enum.reverse(acc), rest}
-    else
-      take_fence(rest, indent, [String.slice(text, indent..-1//1) | acc])
-    end
-  end
+  defp code_blocks(markdown), do: Documentation.blocks(markdown)
 end

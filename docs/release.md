@@ -16,8 +16,8 @@ One commit on `master` carries:
 - `@version "X.Y.Z"` in `mix.exs`;
 - the CHANGELOG's `[Unreleased]` section renamed to `[X.Y.Z]: YYYY-MM-DD`;
 - the upgrading notes for anything a caller must change;
-- the install lines in the README and `docs/getting-started.md` (`~> X.Y`), the Livebook's
-  `Mix.install` line and version sentence, and the landing page's Hex badge
+- the install lines in the README and `docs/guides/getting-started.md` (`~> X.Y`), every notebook's exact
+  `Mix.install` pin and version assertion, and the landing page's Hex badge
   (`site/index.html`). The docs-currency and Livebook tests fail until these agree with
   `mix.exs`.
 
@@ -34,8 +34,7 @@ commit edits:
   `test/bounded_authority_report_adapter/selector_float_refusal_test.exs`, and any new
   certified corpus in `test/bounded_authority_report_adapter/conformance_corpus_test.exs`
   (both files mark the line);
-- the CHANGELOG line "The protocol dependency moves from `x` to `y`", which the Livebook
-  test reads.
+- the CHANGELOG line "The protocol dependency moves from `x` to `y`", which documents the dependency boundary.
 
 ## 2. Gates before publication
 
@@ -50,16 +49,16 @@ Run each and keep its output.
    ```
 
 2. **Qualification and landing.** Land `SHA` with
-   `kimosabe-land --repo . --sha <full sha>`. Its `kci/**` push runs the complete
-   qualification suite; `qualified` must be green before `master` moves. The project
-   session stops at the default branch and sends infra the commit, version and green run.
-3. **Publication authorization.** Infra requests the owner’s authorization for dispatching
-   `publish.yml` from `master`, with no inputs, in environment `publish`. Only `corepay` and `palermo-git` may be
+   the maintainer-controlled landing process. A `kci/**` push runs the complete
+   qualification suite; `qualified` must be green before `master` moves to that exact
+   commit. Contributors prepare commits; maintainers own landing and publication.
+3. **Publication authorization.** The release maintainer obtains publication authorization for dispatching
+   `publish.yml` from `master`, with no inputs, in environment `publish`. Only accounts allowlisted in the workflow may be
    both the actor and triggering actor. The workflow refuses any other ref, installs
    the exact toolchain and pinned Hex client, fetches with `mix deps.get --check-locked`,
    and refuses an existing version tag or Hex release. It relies on the default-branch
    ruleset for qualification and does not rerun CI.
-4. **Supply-chain attestation of `SHA`.** Infra runs `supply-chain.yml` on `master` while the release
+4. **Supply-chain attestation of `SHA`.** A release maintainer runs `supply-chain.yml` on `master` while the release
    commit is its head. The workflow attests the head of the ref it is started on and takes no
    commit input; the evidence artifact is named after that head commit. Wait for it:
 
@@ -83,9 +82,9 @@ Run each and keep its output.
 
 ## 3. Publish and tag
 
-6. After the gates above, the owner dispatches `publish.yml`; infra reads the run to
+6. After the gates above, an authorized release maintainer dispatches `publish.yml` and reads the run to
    completion. The workflow creates no tag or GitHub release. Hex's one-hour revert window starts at publication.
-7. Infra verifies the published bytes against the supply-chain evidence below, then
+7. The release maintainer verifies the published bytes against the supply-chain evidence below, then
    creates `vX.Y.Z` on the published `SHA`. The tag's supply-chain run must attest
    the same digest as step 4; a tag push does not publish a package.
 
@@ -100,12 +99,12 @@ Run each and keep its output.
 9. HexDocs renders the release: `https://hexdocs.pm/bounded_authority_report_adapter/X.Y.Z`.
 10. A fresh consumer compiles: `mix new` a scratch project, add
     `{:bounded_authority_report_adapter, "~> X.Y"}`, then `mix deps.get && mix compile`.
-11. The Livebook runs from Hex: its `Mix.install` cell installs `~> X.Y.Z`, and every cell
-    returns its pinned output.
+11. Every notebook runs unchanged from Hex: `elixir scripts/check_livebooks.exs --published`
+    installs `== X.Y.Z`, checks version and registry origin, and compares every semantic output.
 12. `examples/edge_agent` runs against the published package: in a scratch copy, replace
     the `path: "../.."` dependency with `"~> X.Y"`, then `mix deps.get && mix test`.
 
-If any read-back fails inside the hour, infra asks the owner before reverting the
+If any read-back fails inside the hour, a release maintainer obtains authorization before reverting the
 publication, then fixes the release and starts again from step 1. After the hour, fix
 forward as `X.Y.(Z+1)`.
 

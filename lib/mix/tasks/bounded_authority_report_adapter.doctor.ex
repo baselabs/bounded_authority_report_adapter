@@ -126,6 +126,16 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   advisories: [String.t()]}`: no printing, no exits, no side effects beyond the
   callbacks it probes. The keys and each finding's classification are stable; the
   message text is not (see "Stability" above).
+
+  Continuing the README development key handle:
+
+  ```elixir
+  report = Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.check(
+    MyApp.DevKey, {:holder, "holder-key-1"}, false
+  )
+  {report.fatals, is_list(report.advisories)}
+  #=> {[], true}
+  ```
   """
   @spec check(module(), term(), boolean()) :: %{fatals: [String.t()], advisories: [String.t()]}
   def check(module, ref, live?), do: check(module, ref, live?, nil)
@@ -134,6 +144,14 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   The pure preflight with an optional strict major gate (`1` or `3`): the
   default accepts either valid key shape and reports which surfaces it
   unlocks; a major applies that surface's key-type gate as a fatal.
+
+  ```elixir
+  report = Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.check(
+    MyApp.DevKey, {:holder, "holder-key-1"}, true, 1
+  )
+  {report.fatals, is_list(report.advisories)}
+  #=> {[], true}
+  ```
   """
   @spec check(module(), term(), boolean(), 1 | 3 | nil) :: %{
           fatals: [String.t()],
@@ -357,6 +375,12 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   it in default mode as info; the pure `check/4` carries it as an advisory
   only under `--major`, so a fully-wired handle of either type still
   reports clean.
+  ```elixir
+  alias Mix.Tasks.BoundedAuthorityReportAdapter.Doctor
+  true = is_binary(Doctor.shape_report(MyApp.DevKey, {:holder, "holder-key-1"}, 1))
+  Doctor.shape_report(MyApp.DevKey, {:holder, "holder-key-1"}, 3)
+  #=> nil
+  ```
   """
   @spec shape_report(module(), term(), 1 | 3 | nil) :: String.t() | nil
 

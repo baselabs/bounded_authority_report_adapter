@@ -7,7 +7,6 @@ the test suite runs them the same way.
 
 ## Install
 
-<!-- doc-sample: fragment -->
 ```elixir
 {:bounded_authority_report_adapter, "~> 1.0"}
 ```
@@ -28,7 +27,7 @@ store, so it cannot sign anything by accident.
 
 ## The shape of the thing
 
-The adapter never sees your private key. You pass a `{module, term}` key handle: the module
+Keep private keys behind callbacks and out of handle terms. You pass a `{module, term}` key handle: the module
 implements the `BoundedAuthorityReportAdapter` behavior, and the term is a key reference
 only that module understands. The adapter asks the handle for its public key, asks it to
 sign the exact bytes the protocol package produced, checks the signature against that
@@ -37,7 +36,8 @@ public key, and assembles the compact form.
 Holders use it to sign proofs. Issuers can use it to sign grants. Any key holder can use it
 to sign boundary anchors, key transitions and content assertions. Verifying is the protocol
 package's job (`BoundedAuthorityProtocol.V1.check_envelope/2` and the other verify
-functions); this adapter never verifies a credential.
+functions); this adapter is not a general credential verifier. It self-verifies its signatures and
+can verify an optional Ed25519 role attestation.
 
 ## 1. A development key handle
 
@@ -220,12 +220,12 @@ adapter's contract does not change. Two rules:
   adapter verifies every signature against the resolved public key, and a mismatch is
   `:signing_failed`.
 - Never pass key bytes to the adapter. If your integration does, it is wrong
-  ([Usage rules](../usage-rules.md), rule 2).
+  ([Usage rules](../../usage-rules.md), rule 2).
 
 For grants, `signing_identity/1` must return `{:issuer, key_id, public_key}`. The adapter
 rejects any other declared role, but it cannot check that the declaration is true; keep
 issuer keys in issuer custody, or require a role attestation
-([Usage rules](../usage-rules.md), rule 3).
+([Usage rules](../../usage-rules.md), rule 3).
 
 Check a handle module against the contract before you use it:
 
@@ -233,18 +233,35 @@ Check a handle module against the contract before you use it:
 mix bounded_authority_report_adapter.doctor --handle MyApp.DevKey --ref '{:holder, "holder-key-1"}' --live
 ```
 
-For an ES256 (P-256) handle, see `BoundedAuthorityReportAdapter.V3` and the P-256 notes in
-[Recipes](recipes.md).
+For an ES256 (P-256) handle, see `BoundedAuthorityReportAdapter.V3` and [Key custody](key-custody.md).
+
+## Host admission before effects
+
+The successful verification above is deliberately `authorization: :not_evaluated`.
+Authenticate and bind the holder, apply host policy, consult current revocation, then
+atomically reserve nonce and invocation identities in a durable execution record before
+any effect. The [framework guide](framework-integration.md) gives the complete handoff.
 
 ## Where to next
 
-- [Usage rules](../usage-rules.md): the integration contract as a checklist.
-- [Errors](errors.md): every error, what it means, what to check.
-- [Recipes](recipes.md): HSM and KMS handles, a Plug consumer, the loopback listener.
-- [Telemetry](telemetry.md): the value-free signing events and the custody alarm.
-- [Consumer integration](consumer-integration.md): the verifier side, including identity
-  binding and the nonce ledger.
-- The repository's [edge-agent example app](https://github.com/baselabs/bounded_authority_report_adapter/tree/master/examples/edge_agent)
-  runs sign, POST and verify over HTTP, and its
-  [Livebook](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/examples/report_envelope_roundtrip.livemd)
-  runs every signing entry point.
+Read [holder requests](holder-requests.md), [grants and roles](grants-and-roles.md),
+[key custody](key-custody.md), [anchors and rotation](anchors-and-rotation.md),
+[content assertions](content-assertions.md) and [local loopback](local-loopback.md).
+Then use [framework integration](framework-integration.md), [security](security.md),
+[operations](operations.md), [telemetry](telemetry.md), [errors](errors.md),
+[recipes](recipes.md), [testing](testing.md), and [upgrading](upgrading.md).
+[FAQ](faq.md), [glossary](glossary.md) and [cheatsheet](cheatsheet.md) are quick references.
+
+Run each journey independently in Livebook:
+
+- [Holder request](../notebooks/holder-request.livemd)
+- [Issuer grants](../notebooks/issuer-grants.livemd)
+- [ES256 custody](../notebooks/es256-custody.livemd)
+- [Anchors and rotation](../notebooks/anchors-and-rotation.livemd)
+- [Content assertions](../notebooks/content-assertions.livemd)
+- [Local loopback](../notebooks/local-loopback.livemd)
+- [Production preflight](../notebooks/production-preflight.livemd)
+
+The [tested example app](https://github.com/baselabs/bounded_authority_report_adapter/tree/master/examples/edge_agent)
+runs the cryptographic transport loop over HTTP. It is not a production authorization or
+revocation service.

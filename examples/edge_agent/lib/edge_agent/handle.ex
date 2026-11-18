@@ -14,9 +14,9 @@ defmodule EdgeAgent.Handle do
   A `{pub, priv}` tuple puts the private key in process memory as a recoverable
   BEAM binary. That posture is fine for a runnable example, but a PRODUCTION
   edge agent must implement these callbacks against proper key custody: an HSM,
-  the OS keychain, or a key server: so the private key is never extractable as a
-  BEAM binary (the adapter's `docs/strategy.md` §4: once the signing key is in the
-  app, extracting it is a re-architecture, not a refactor). The whole point of the
+  the OS keychain, or a key server. Keep private bytes behind the callbacks and
+  out of handle terms; any non-exportability or isolation guarantee comes from the
+  configured provider and host, not the adapter. The whole point of the
   `{module(), term()}` handle contract is that THIS module is the only place a real
   deployment swaps in custody; everything else stays identical.
   """

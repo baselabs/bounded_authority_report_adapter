@@ -6,7 +6,7 @@ and POSTs it over HTTP to a **receiver** that verifies the envelope via
 `BoundedAuthorityProtocol.V1.check_envelope/2`. No database, no Docker, no other
 project running: the whole capability loop runs in one app.
 
-The Livebook (`../report_envelope_roundtrip.livemd`) plays all three roles
+The Livebook ([holder-request notebook](../../docs/notebooks/holder-request.livemd)) plays all three roles
 in-process; THIS app adds the piece the Livebook does not: **real HTTP
 transport** between an edge signer and a consumer.
 
@@ -73,10 +73,10 @@ returns.
 `check_envelope/2` against the published demo issuer key, bound the verified
 holder to the configured identity and claimed the nonce. Every step passed.
 
-## What the receiver actually checks (the complete safe path)
+## What the receiver checks (cryptographic transport demonstration)
 
 The receiver (`EdgeAgent.Receiver`) runs ONE `with` that fails closed to a uniform
-`401 invalid`, following `docs/consumer-integration.md`:
+`401 invalid`, following `docs/guides/framework-integration.md`:
 
 1. **`V1.Json.decode(raw_body)`**: the request's RAW bytes → BAP's tagged
    `cast_arguments`. A BAP-strict decode failure (a Jason-valid-but-BAP-invalid
@@ -99,11 +99,13 @@ function, so `cast_arguments` agrees by construction.
 mix test
 ```
 
-`test/edge_agent_test.exs` has six tests: the happy path (via `EdgeAgent.run/1` and a
+`test/edge_agent_test.exs` covers the happy path (via `EdgeAgent.run/1` and a
 hand-built envelope) plus the four rejection classes that prove the defenses are real, not vacuous: a
 tampered proof, a stranger's proof, a wrong identity (the §8 binding catches an
 envelope `check_envelope` would otherwise accept), and a replayed nonce (the §9
-ledger catches a second identical request). `test/local_loopback_test.exs` runs the
+ledger catches a second request with the same nonce). It also rejects repeated/empty
+credential headers and a mismatched method, path or query before claiming replay state.
+`test/local_loopback_test.exs` runs the
 loopback profile flow over real IPv4 and IPv6 listeners, and
 `test/protocol_lock_parity_test.exs` keeps this app's protocol lock equal to the library's.
 
@@ -138,10 +140,26 @@ See [Contributing](../../CONTRIBUTING.md) for project layout and validation comm
   memory. A production edge agent implements the handle callbacks against an HSM,
   the OS keychain, or a key server: that swap is the ONE place custody enters.
 - **Not a production replay ledger.** `NonceLedger` is an in-memory ETS table. A
-  production consumer keys a durable unique constraint on `(identity, nonce)`.
+  production consumer atomically reserves nonce and `(trusted issuer, grant id, invocation
+  id)` identities in shared durable storage, with retention through their acceptance windows.
 - **The receiver uses the protocol package for verification.** It does not call the
   adapter; Req, Bandit and Plug provide the application's transport. That is the dependency-direction wall: the verifier consumes the public
   protocol package; the adapter is the holder-side signing glue the agent uses.
 
-See [`docs/consumer-integration.md`](../../docs/consumer-integration.md) for the
-full universal consumer contract this app implements.
+See [`docs/guides/framework-integration.md`](../../docs/guides/framework-integration.md) for the
+full consumer contract a production host must implement.
+
+## Host authorization and revocation
+
+The HTTP receiver demonstrates signing, verification, identity binding and in-memory nonce
+rejection. Its 200 response is transport acceptance only; it authorizes no business effect.
+Production hosts must authenticate and bind identity, apply operation/resource policy,
+consult current revocation, atomically reserve both nonce and invocation in durable shared
+storage, and coordinate admission with execution and recovery. Fail closed on uncertainty.
+The [framework guide](../../docs/guides/framework-integration.md) shows that handoff;
+`test/plug_recipe_test.exs` executes it against real keys, a local policy and ETS store.
+
+A single-use challenge rejects subsequent consumption. It cannot identify the legitimate
+first sender: an interceptor can win the race and deny that sender. Use authenticated
+confidential transport and local process isolation when interception is a threat. ETS
+state is lost at restart; the demo is not a production replay or revocation store.
