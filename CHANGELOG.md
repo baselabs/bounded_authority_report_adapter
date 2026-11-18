@@ -1,6 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.1]: 2026-11-18
+
+1.0.1 is a patch release: the public API and signed bytes are unchanged, and it ships the
+reorganized guides and Livebooks.
 
 - Attest checked package archives during qualification. Publish those exact bytes from an
   isolated Hex upload process, resume held package and docs uploads without replacement,

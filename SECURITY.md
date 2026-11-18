@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-Security fixes land in the latest release of the current major. Version 1.0.0 is released;
-the [stability contract](docs/guides/upgrading.md#stability-contract) has applied since that release.
+Security fixes land in the latest release of the current major. Version 1.0.1 is released;
+the [stability contract](docs/guides/upgrading.md#stability-contract) has applied since 1.0.0.
 Wire compatibility follows the protocol package's contract-major discipline.
 
 ## Security invariants (what a report is measured against)
