@@ -26,85 +26,90 @@ example of the callback contract, not an HSM security claim. The handle contains
 public metadata and opaque process/key references.
 
 ```elixir
-semantic_output = (
-  defmodule Demo.Custody do
-    use GenServer
+defmodule Demo.Custody do
+  use GenServer
 
-    def start_link, do: GenServer.start_link(__MODULE__, %{})
-    def new(pid, suite, key_id, role), do: GenServer.call(pid, {:new, suite, key_id, role})
-    def sign(key, message), do: GenServer.call(key.custody, {:sign, key.reference, message}, 5_000)
+  def start_link, do: GenServer.start_link(__MODULE__, %{})
+  def new(pid, suite, key_id, role), do: GenServer.call(pid, {:new, suite, key_id, role})
+  def sign(key, message), do: GenServer.call(key.custody, {:sign, key.reference, message}, 5_000)
 
-    @impl true
-    def init(keys), do: {:ok, keys}
+  @impl true
+  def init(keys), do: {:ok, keys}
 
-    @impl true
-    def handle_call({:new, suite, key_id, role}, _from, keys) do
-      {public, private} =
-        case suite do
-          :ed25519 -> :crypto.generate_key(:eddsa, :ed25519)
-          :p256 -> :crypto.generate_key(:ecdh, :prime256v1)
-        end
-
-      reference = make_ref()
-      key = %{custody: self(), reference: reference, key_id: key_id, role: role, public: public}
-      {:reply, key, Map.put(keys, reference, {suite, private})}
-    end
-
-    def handle_call({:sign, reference, message}, _from, keys) do
-      signature =
-        case Map.fetch!(keys, reference) do
-          {:ed25519, private} -> :crypto.sign(:eddsa, :none, message, [private, :ed25519])
-          {:p256, private} -> :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
-        end
-
-      {:reply, {:ok, signature}, keys}
-    end
-  end
-
-  defmodule Demo.Ed25519Handle do
-    @behaviour BoundedAuthorityReportAdapter
-    @impl true
-    def sign(message, key), do: Demo.Custody.sign(key, message)
-    @impl true
-    def public_key(key), do: {:ok, key.public}
-    @impl true
-    def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
-    @impl true
-    def key_identity(key), do: {:ok, {key.key_id, key.public}}
-    @impl true
-    def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
-  end
-
-  defmodule Demo.P256Handle do
-    @behaviour BoundedAuthorityReportAdapter
-    @n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-    @impl true
-    def sign(message, key) do
-      with {:ok, der} <- Demo.Custody.sign(key, message),
-           {:ok, <<r::unsigned-big-256, s::unsigned-big-256>>} <-
-             BoundedAuthorityProtocol.Es256.der_to_raw(der) do
-        # Exercise the adapter's normalization with a valid high-S signature.
-        high_s = if s > div(@n, 2), do: s, else: @n - s
-        {:ok, <<r::unsigned-big-256, high_s::unsigned-big-256>>}
+  @impl true
+  def handle_call({:new, suite, key_id, role}, _from, keys) do
+    {public, private} =
+      case suite do
+        :ed25519 -> :crypto.generate_key(:eddsa, :ed25519)
+        :p256 -> :crypto.generate_key(:ecdh, :prime256v1)
       end
-    end
 
-    @impl true
-    def public_key(key), do: {:ok, key.public}
-    @impl true
-    def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
-    @impl true
-    def key_identity(key), do: {:ok, {key.key_id, key.public}}
-    @impl true
-    def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+    reference = make_ref()
+    key = %{custody: self(), reference: reference, key_id: key_id, role: role, public: public}
+    {:reply, key, Map.put(keys, reference, {suite, private})}
   end
 
-  {:ok, custody} = Demo.Custody.start_link()
-  :local_custody_started
-)
+  def handle_call({:sign, reference, message}, _from, keys) do
+    signature =
+      case Map.fetch!(keys, reference) do
+        {:ed25519, private} -> :crypto.sign(:eddsa, :none, message, [private, :ed25519])
+        {:p256, private} -> :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
+      end
 
-true = semantic_output == :local_custody_started
-semantic_output
+    {:reply, {:ok, signature}, keys}
+  end
+end
+
+defmodule Demo.Ed25519Handle do
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  def sign(message, key), do: Demo.Custody.sign(key, message)
+
+  @impl true
+  def public_key(key), do: {:ok, key.public}
+
+  @impl true
+  def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
+
+  @impl true
+  def key_identity(key), do: {:ok, {key.key_id, key.public}}
+
+  @impl true
+  def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+end
+
+defmodule Demo.P256Handle do
+  @behaviour BoundedAuthorityReportAdapter
+
+  @n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+
+  @impl true
+  def sign(message, key) do
+    with {:ok, der} <- Demo.Custody.sign(key, message),
+         {:ok, <<r::unsigned-big-256, s::unsigned-big-256>>} <-
+           BoundedAuthorityProtocol.Es256.der_to_raw(der) do
+      # Exercise the adapter's normalization with a valid high-S signature.
+      high_s = if s > div(@n, 2), do: s, else: @n - s
+      {:ok, <<r::unsigned-big-256, high_s::unsigned-big-256>>}
+    end
+  end
+
+  @impl true
+  def public_key(key), do: {:ok, key.public}
+
+  @impl true
+  def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
+
+  @impl true
+  def key_identity(key), do: {:ok, {key.key_id, key.public}}
+
+  @impl true
+  def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+end
+
+{:ok, custody} = Demo.Custody.start_link()
+[Demo.Custody, Demo.Ed25519Handle, Demo.P256Handle]
 ```
 
 Sign with the process, check the result and refuse a mismatched key:
@@ -120,8 +125,6 @@ ec_key = Demo.Custody.new(custody, :p256, "local-ec-holder", :holder)
 64 = byte_size(raw)
 :ok = GenServer.stop(custody)
 false = Process.alive?(custody)
-:custody_checked_and_stopped
-#=> :custody_checked_and_stopped
 ```
 
 The [ES256 custody notebook](../notebooks/es256-custody.livemd) exercises ES256 grant and

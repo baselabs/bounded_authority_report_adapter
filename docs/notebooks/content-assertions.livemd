@@ -27,170 +27,175 @@ Mix.install([{:bounded_authority_report_adapter, "== 1.0.0"}])
 This is an actual OTP process holding freshly generated demonstration keys. Handles carry public metadata and opaque process/key references; private bytes never enter an adapter call. It demonstrates callbacks and conversion, not a remote HSM’s security or availability. Every key is discarded when the process stops.
 
 ```elixir
-semantic_output = (
-  defmodule Demo.Custody do
-    use GenServer
+defmodule Demo.Custody do
+  use GenServer
 
-    def start_link, do: GenServer.start_link(__MODULE__, %{})
-    def new(pid, suite, key_id, role), do: GenServer.call(pid, {:new, suite, key_id, role})
-    def sign(key, message), do: GenServer.call(key.custody, {:sign, key.reference, message}, 5_000)
+  def start_link, do: GenServer.start_link(__MODULE__, %{})
+  def new(pid, suite, key_id, role), do: GenServer.call(pid, {:new, suite, key_id, role})
+  def sign(key, message), do: GenServer.call(key.custody, {:sign, key.reference, message}, 5_000)
 
-    @impl true
-    def init(keys), do: {:ok, keys}
+  @impl true
+  def init(keys), do: {:ok, keys}
 
-    @impl true
-    def handle_call({:new, suite, key_id, role}, _from, keys) do
-      {public, private} =
-        case suite do
-          :ed25519 -> :crypto.generate_key(:eddsa, :ed25519)
-          :p256 -> :crypto.generate_key(:ecdh, :prime256v1)
-        end
-
-      reference = make_ref()
-      key = %{custody: self(), reference: reference, key_id: key_id, role: role, public: public}
-      {:reply, key, Map.put(keys, reference, {suite, private})}
-    end
-
-    def handle_call({:sign, reference, message}, _from, keys) do
-      signature =
-        case Map.fetch!(keys, reference) do
-          {:ed25519, private} -> :crypto.sign(:eddsa, :none, message, [private, :ed25519])
-          {:p256, private} -> :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
-        end
-
-      {:reply, {:ok, signature}, keys}
-    end
-  end
-
-  defmodule Demo.Ed25519Handle do
-    @behaviour BoundedAuthorityReportAdapter
-    @impl true
-    def sign(message, key), do: Demo.Custody.sign(key, message)
-    @impl true
-    def public_key(key), do: {:ok, key.public}
-    @impl true
-    def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
-    @impl true
-    def key_identity(key), do: {:ok, {key.key_id, key.public}}
-    @impl true
-    def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
-  end
-
-  defmodule Demo.P256Handle do
-    @behaviour BoundedAuthorityReportAdapter
-    @n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-    @impl true
-    def sign(message, key) do
-      with {:ok, der} <- Demo.Custody.sign(key, message),
-           {:ok, <<r::unsigned-big-256, s::unsigned-big-256>>} <-
-             BoundedAuthorityProtocol.Es256.der_to_raw(der) do
-        # Exercise the adapter's normalization with a valid high-S signature.
-        high_s = if s > div(@n, 2), do: s, else: @n - s
-        {:ok, <<r::unsigned-big-256, high_s::unsigned-big-256>>}
+  @impl true
+  def handle_call({:new, suite, key_id, role}, _from, keys) do
+    {public, private} =
+      case suite do
+        :ed25519 -> :crypto.generate_key(:eddsa, :ed25519)
+        :p256 -> :crypto.generate_key(:ecdh, :prime256v1)
       end
+
+    reference = make_ref()
+    key = %{custody: self(), reference: reference, key_id: key_id, role: role, public: public}
+    {:reply, key, Map.put(keys, reference, {suite, private})}
+  end
+
+  def handle_call({:sign, reference, message}, _from, keys) do
+    signature =
+      case Map.fetch!(keys, reference) do
+        {:ed25519, private} -> :crypto.sign(:eddsa, :none, message, [private, :ed25519])
+        {:p256, private} -> :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
+      end
+
+    {:reply, {:ok, signature}, keys}
+  end
+end
+
+defmodule Demo.Ed25519Handle do
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  def sign(message, key), do: Demo.Custody.sign(key, message)
+
+  @impl true
+  def public_key(key), do: {:ok, key.public}
+
+  @impl true
+  def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
+
+  @impl true
+  def key_identity(key), do: {:ok, {key.key_id, key.public}}
+
+  @impl true
+  def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+end
+
+defmodule Demo.P256Handle do
+  @behaviour BoundedAuthorityReportAdapter
+
+  @n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+
+  @impl true
+  def sign(message, key) do
+    with {:ok, der} <- Demo.Custody.sign(key, message),
+         {:ok, <<r::unsigned-big-256, s::unsigned-big-256>>} <-
+           BoundedAuthorityProtocol.Es256.der_to_raw(der) do
+      # Exercise the adapter's normalization with a valid high-S signature.
+      high_s = if s > div(@n, 2), do: s, else: @n - s
+      {:ok, <<r::unsigned-big-256, high_s::unsigned-big-256>>}
     end
-
-    @impl true
-    def public_key(key), do: {:ok, key.public}
-    @impl true
-    def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
-    @impl true
-    def key_identity(key), do: {:ok, {key.key_id, key.public}}
-    @impl true
-    def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
   end
 
-  {:ok, custody} = Demo.Custody.start_link()
-  :local_custody_started
-)
+  @impl true
+  def public_key(key), do: {:ok, key.public}
 
-true = semantic_output == :local_custody_started
-semantic_output
+  @impl true
+  def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
+
+  @impl true
+  def key_identity(key), do: {:ok, {key.key_id, key.public}}
+
+  @impl true
+  def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+end
+
+{:ok, custody} = Demo.Custody.start_link()
+[Demo.Custody, Demo.Ed25519Handle, Demo.P256Handle]
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-:local_custody_started
+[Demo.Custody, Demo.Ed25519Handle, Demo.P256Handle]
 ```
 
 ```elixir
-semantic_output = (
-  alias BoundedAuthorityProtocol.V1
-  alias BoundedAuthorityProtocol.V3
-  alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopback
-  alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertion
-  alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestation
-  alias BoundedAuthorityReportAdapter, as: Adapter
+alias BoundedAuthorityProtocol.V1
+alias BoundedAuthorityProtocol.V3
+alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopback
+alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertion
+alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestation
+alias BoundedAuthorityReportAdapter, as: Adapter
 
-  :aliases_ready
-)
-
-true = semantic_output == :aliases_ready
-semantic_output
+[V1, V3, LocalLoopback, ContentAssertion, RoleAttestation, Adapter]
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-:aliases_ready
+[
+  BoundedAuthorityProtocol.V1,
+  BoundedAuthorityProtocol.V3,
+  BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1,
+  BoundedAuthorityProtocol.ContentAssertion.V1,
+  BoundedAuthorityProtocol.RoleAttestation.V1,
+  BoundedAuthorityReportAdapter
+]
 ```
 
 ```elixir
-semantic_output = (
-  now = System.system_time(:second)
+now = System.system_time(:second)
 
-  ed25519_key = fn key_id, role ->
-    Demo.Custody.new(custody, :ed25519, key_id, role)
-  end
+ed25519_key = fn key_id, role ->
+  Demo.Custody.new(custody, :ed25519, key_id, role)
+end
 
-  p256_key = fn key_id, role ->
-    Demo.Custody.new(custody, :p256, key_id, role)
-  end
+p256_key = fn key_id, role ->
+  Demo.Custody.new(custody, :p256, key_id, role)
+end
 
-  # Ed25519 keys (contract-major 1 and the content-assertion profile).
-  issuer = ed25519_key.("issuer-key-1", :issuer)
-  holder = ed25519_key.("holder-key-1", :holder)
-  attestor = ed25519_key.("attestor-key-1", :attestor)
-  chain_key = ed25519_key.("chain-key-1", :chain)
-  next_chain_key = ed25519_key.("chain-key-2", :chain)
-  publisher = ed25519_key.("publisher-key-1", :publisher)
+# Ed25519 keys (contract-major 1 and the content-assertion profile).
+issuer = ed25519_key.("issuer-key-1", :issuer)
+holder = ed25519_key.("holder-key-1", :holder)
+attestor = ed25519_key.("attestor-key-1", :attestor)
+chain_key = ed25519_key.("chain-key-1", :chain)
+next_chain_key = ed25519_key.("chain-key-2", :chain)
+publisher = ed25519_key.("publisher-key-1", :publisher)
 
-  # P-256 keys (contract-major 3, ES256).
-  ec_issuer = p256_key.("issuer-ec-key-1", :issuer)
-  ec_holder = p256_key.("holder-ec-key-1", :holder)
-  ec_chain_key = p256_key.("chain-ec-key-1", :chain)
-  ec_next_chain_key = p256_key.("chain-ec-key-2", :chain)
+# P-256 keys (contract-major 3, ES256).
+ec_issuer = p256_key.("issuer-ec-key-1", :issuer)
+ec_holder = p256_key.("holder-ec-key-1", :holder)
+ec_chain_key = p256_key.("chain-ec-key-1", :chain)
+ec_next_chain_key = p256_key.("chain-ec-key-2", :chain)
 
-  # What a verifier is told about a key: its id, its public half, and when it is valid.
-  validity = fn key ->
-    %V1.HistoricalPublicKey{
-      key_id: key.key_id,
-      public_key: key.public,
-      valid_from: now - 3_600,
-      valid_before: now + 3_600
-    }
-  end
+# What a verifier is told about a key: its id, its public half, and when it is valid.
+validity = fn key ->
+  %V1.HistoricalPublicKey{
+    key_id: key.key_id,
+    public_key: key.public,
+    valid_from: now - 3_600,
+    valid_before: now + 3_600
+  }
+end
 
-  # Selected fields of a result, in a fixed order (a map would print in no fixed order).
-  facts_of = fn struct, keys -> Enum.map(keys, &{&1, Map.fetch!(struct, &1)}) end
+# Selected fields of a result, in a fixed order (a map would print in no fixed order).
+facts_of = fn struct, keys -> Enum.map(keys, &{&1, Map.fetch!(struct, &1)}) end
 
-  # Flip one bit in the first byte of a compact's signature segment.
-  flip_one_byte = fn compact ->
-    [header, payload, signature] = String.split(compact, ".")
-    <<first, rest::binary>> = Base.url_decode64!(signature, padding: false)
-    flipped = Base.url_encode64(<<Bitwise.bxor(first, 1), rest::binary>>, padding: false)
-    Enum.join([header, payload, flipped], ".")
-  end
+# Flip one bit in the first byte of a compact's signature segment.
+flip_one_byte = fn compact ->
+  [header, payload, signature] = String.split(compact, ".")
+  <<first, rest::binary>> = Base.url_decode64!(signature, padding: false)
+  flipped = Base.url_encode64(<<Bitwise.bxor(first, 1), rest::binary>>, padding: false)
+  Enum.join([header, payload, flipped], ".")
+end
 
-  [
-    ed25519_public_key_bytes: byte_size(holder.public),
-    p256_public_key_bytes: byte_size(ec_holder.public)
-  ]
-)
+32 = byte_size(holder.public)
+65 = byte_size(ec_holder.public)
 
-true = semantic_output == [ed25519_public_key_bytes: 32, p256_public_key_bytes: 65]
-semantic_output
+[
+  ed25519_public_key_bytes: byte_size(holder.public),
+  p256_public_key_bytes: byte_size(ec_holder.public)
+]
 ```
 
 <!-- livebook:{"output":true} -->
@@ -202,53 +207,43 @@ semantic_output
 ## Content assertions
 
 ```elixir
-semantic_output = (
-  dataset = ~s({"station":"riverside","pm25":[8.1,7.9,8.4]})
-  {:ok, content_digest} = ContentAssertion.content_digest(dataset, %{})
-  profile_digest = :crypto.hash(:sha256, "urn:example:profile:air-quality/1 schema")
-  publisher_handle = {Demo.Ed25519Handle, publisher}
+dataset = ~s({"station":"riverside","pm25":[8.1,7.9,8.4]})
+{:ok, content_digest} = ContentAssertion.content_digest(dataset, %{})
+profile_digest = :crypto.hash(:sha256, "urn:example:profile:air-quality/1 schema")
+publisher_handle = {Demo.Ed25519Handle, publisher}
 
-  assertion_input = %{
-    jti: "urn:example:assertion:riverside-1",
-    iss: "urn:example:publisher",
-    aud: "urn:example:archive",
-    sub: "urn:example:dataset:riverside-air-quality",
-    profile: "urn:example:profile:air-quality/1",
-    profile_digest: profile_digest,
-    content_digest: content_digest,
-    gen: 1,
-    prev: <<0::256>>,
-    iat: now - 60,
-    nbf: now - 60,
-    exp: now + 3_600
-  }
-
-  {:ok, %{content_assertion: assertion}} =
-    Adapter.sign_content_assertion(assertion_input, publisher_handle)
-
-  expected_assertion = %ContentAssertion.ExpectedContentAssertion{
-    attestor: validity.(publisher),
-    issuer: "urn:example:publisher",
-    audience: "urn:example:archive",
-    subject: "urn:example:dataset:riverside-air-quality",
-    profile: "urn:example:profile:air-quality/1",
-    profile_digest: profile_digest,
-    content_digest: content_digest,
-    now: now,
-    bounds: V1.Bounds.maximum()
-  }
-
-  {:ok, assertion_facts} = ContentAssertion.verify_assertion(assertion, expected_assertion)
-  facts_of.(assertion_facts, [:sub, :gen, :verification, :trust])
-)
-
-true = semantic_output == [
+assertion_input = %{
+  jti: "urn:example:assertion:riverside-1",
+  iss: "urn:example:publisher",
+  aud: "urn:example:archive",
   sub: "urn:example:dataset:riverside-air-quality",
+  profile: "urn:example:profile:air-quality/1",
+  profile_digest: profile_digest,
+  content_digest: content_digest,
   gen: 1,
-  verification: :signature_and_window,
-  trust: :not_evaluated
-]
-semantic_output
+  prev: <<0::256>>,
+  iat: now - 60,
+  nbf: now - 60,
+  exp: now + 3_600
+}
+
+{:ok, %{content_assertion: assertion}} =
+  Adapter.sign_content_assertion(assertion_input, publisher_handle)
+
+expected_assertion = %ContentAssertion.ExpectedContentAssertion{
+  attestor: validity.(publisher),
+  issuer: "urn:example:publisher",
+  audience: "urn:example:archive",
+  subject: "urn:example:dataset:riverside-air-quality",
+  profile: "urn:example:profile:air-quality/1",
+  profile_digest: profile_digest,
+  content_digest: content_digest,
+  now: now,
+  bounds: V1.Bounds.maximum()
+}
+
+{:ok, assertion_facts} = ContentAssertion.verify_assertion(assertion, expected_assertion)
+facts_of.(assertion_facts, [:sub, :gen, :verification, :trust])
 ```
 
 <!-- livebook:{"output":true} -->
@@ -263,65 +258,50 @@ semantic_output
 ```
 
 ```elixir
-semantic_output = (
-  {:ok, edited_digest} = ContentAssertion.content_digest(dataset <> " ", %{})
+{:ok, edited_digest} = ContentAssertion.content_digest(dataset <> " ", %{})
 
-  [
-    tampered_assertion:
-      ContentAssertion.verify_assertion(flip_one_byte.(assertion), expected_assertion),
-    edited_content:
-      ContentAssertion.verify_assertion(assertion, %{
-        expected_assertion
-        | content_digest: edited_digest
-      }),
-    wrong_publisher_key:
-      ContentAssertion.verify_assertion(assertion, %{
-        expected_assertion
-        | attestor: %{validity.(publisher) | public_key: holder.public}
-      }),
-    wrong_audience:
-      ContentAssertion.verify_assertion(assertion, %{
-        expected_assertion
-        | audience: "urn:example:other-archive"
-      }),
-    missing_field:
-      Adapter.sign_content_assertion(Map.delete(assertion_input, :content_digest), publisher_handle)
-  ]
-)
+# Tampered assertion.
+{:error, :invalid} =
+  ContentAssertion.verify_assertion(flip_one_byte.(assertion), expected_assertion)
 
-true = semantic_output == [
-  tampered_assertion: {:error, :invalid},
-  edited_content: {:error, :invalid},
-  wrong_publisher_key: {:error, :invalid},
-  wrong_audience: {:error, :invalid},
-  missing_field: {:error, :invalid_content_assertion}
-]
-semantic_output
+# Edited content.
+{:error, :invalid} =
+  ContentAssertion.verify_assertion(assertion, %{
+    expected_assertion
+    | content_digest: edited_digest
+  })
+
+# Wrong publisher key.
+{:error, :invalid} =
+  ContentAssertion.verify_assertion(assertion, %{
+    expected_assertion
+    | attestor: %{validity.(publisher) | public_key: holder.public}
+  })
+
+# Wrong audience.
+{:error, :invalid} =
+  ContentAssertion.verify_assertion(assertion, %{
+    expected_assertion
+    | audience: "urn:example:other-archive"
+  })
+
+# Missing field.
+{:error, :invalid_content_assertion} =
+  Adapter.sign_content_assertion(Map.delete(assertion_input, :content_digest), publisher_handle)
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-[
-  tampered_assertion: {:error, :invalid},
-  edited_content: {:error, :invalid},
-  wrong_publisher_key: {:error, :invalid},
-  wrong_audience: {:error, :invalid},
-  missing_field: {:error, :invalid_content_assertion}
-]
+{:error, :invalid_content_assertion}
 ```
 
 ## Clean up
 
 ```elixir
-semantic_output = (
-  GenServer.stop(custody)
-  false = Process.alive?(custody)
-  :clean
-)
-
-true = semantic_output == :clean
-semantic_output
+:ok = GenServer.stop(custody)
+false = Process.alive?(custody)
+:clean
 ```
 
 <!-- livebook:{"output":true} -->

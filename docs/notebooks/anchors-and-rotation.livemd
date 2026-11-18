@@ -27,170 +27,175 @@ Mix.install([{:bounded_authority_report_adapter, "== 1.0.0"}])
 This is an actual OTP process holding freshly generated demonstration keys. Handles carry public metadata and opaque process/key references; private bytes never enter an adapter call. It demonstrates callbacks and conversion, not a remote HSM’s security or availability. Every key is discarded when the process stops.
 
 ```elixir
-semantic_output = (
-  defmodule Demo.Custody do
-    use GenServer
+defmodule Demo.Custody do
+  use GenServer
 
-    def start_link, do: GenServer.start_link(__MODULE__, %{})
-    def new(pid, suite, key_id, role), do: GenServer.call(pid, {:new, suite, key_id, role})
-    def sign(key, message), do: GenServer.call(key.custody, {:sign, key.reference, message}, 5_000)
+  def start_link, do: GenServer.start_link(__MODULE__, %{})
+  def new(pid, suite, key_id, role), do: GenServer.call(pid, {:new, suite, key_id, role})
+  def sign(key, message), do: GenServer.call(key.custody, {:sign, key.reference, message}, 5_000)
 
-    @impl true
-    def init(keys), do: {:ok, keys}
+  @impl true
+  def init(keys), do: {:ok, keys}
 
-    @impl true
-    def handle_call({:new, suite, key_id, role}, _from, keys) do
-      {public, private} =
-        case suite do
-          :ed25519 -> :crypto.generate_key(:eddsa, :ed25519)
-          :p256 -> :crypto.generate_key(:ecdh, :prime256v1)
-        end
-
-      reference = make_ref()
-      key = %{custody: self(), reference: reference, key_id: key_id, role: role, public: public}
-      {:reply, key, Map.put(keys, reference, {suite, private})}
-    end
-
-    def handle_call({:sign, reference, message}, _from, keys) do
-      signature =
-        case Map.fetch!(keys, reference) do
-          {:ed25519, private} -> :crypto.sign(:eddsa, :none, message, [private, :ed25519])
-          {:p256, private} -> :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
-        end
-
-      {:reply, {:ok, signature}, keys}
-    end
-  end
-
-  defmodule Demo.Ed25519Handle do
-    @behaviour BoundedAuthorityReportAdapter
-    @impl true
-    def sign(message, key), do: Demo.Custody.sign(key, message)
-    @impl true
-    def public_key(key), do: {:ok, key.public}
-    @impl true
-    def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
-    @impl true
-    def key_identity(key), do: {:ok, {key.key_id, key.public}}
-    @impl true
-    def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
-  end
-
-  defmodule Demo.P256Handle do
-    @behaviour BoundedAuthorityReportAdapter
-    @n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-    @impl true
-    def sign(message, key) do
-      with {:ok, der} <- Demo.Custody.sign(key, message),
-           {:ok, <<r::unsigned-big-256, s::unsigned-big-256>>} <-
-             BoundedAuthorityProtocol.Es256.der_to_raw(der) do
-        # Exercise the adapter's normalization with a valid high-S signature.
-        high_s = if s > div(@n, 2), do: s, else: @n - s
-        {:ok, <<r::unsigned-big-256, high_s::unsigned-big-256>>}
+  @impl true
+  def handle_call({:new, suite, key_id, role}, _from, keys) do
+    {public, private} =
+      case suite do
+        :ed25519 -> :crypto.generate_key(:eddsa, :ed25519)
+        :p256 -> :crypto.generate_key(:ecdh, :prime256v1)
       end
+
+    reference = make_ref()
+    key = %{custody: self(), reference: reference, key_id: key_id, role: role, public: public}
+    {:reply, key, Map.put(keys, reference, {suite, private})}
+  end
+
+  def handle_call({:sign, reference, message}, _from, keys) do
+    signature =
+      case Map.fetch!(keys, reference) do
+        {:ed25519, private} -> :crypto.sign(:eddsa, :none, message, [private, :ed25519])
+        {:p256, private} -> :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
+      end
+
+    {:reply, {:ok, signature}, keys}
+  end
+end
+
+defmodule Demo.Ed25519Handle do
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  def sign(message, key), do: Demo.Custody.sign(key, message)
+
+  @impl true
+  def public_key(key), do: {:ok, key.public}
+
+  @impl true
+  def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
+
+  @impl true
+  def key_identity(key), do: {:ok, {key.key_id, key.public}}
+
+  @impl true
+  def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+end
+
+defmodule Demo.P256Handle do
+  @behaviour BoundedAuthorityReportAdapter
+
+  @n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+
+  @impl true
+  def sign(message, key) do
+    with {:ok, der} <- Demo.Custody.sign(key, message),
+         {:ok, <<r::unsigned-big-256, s::unsigned-big-256>>} <-
+           BoundedAuthorityProtocol.Es256.der_to_raw(der) do
+      # Exercise the adapter's normalization with a valid high-S signature.
+      high_s = if s > div(@n, 2), do: s, else: @n - s
+      {:ok, <<r::unsigned-big-256, high_s::unsigned-big-256>>}
     end
-
-    @impl true
-    def public_key(key), do: {:ok, key.public}
-    @impl true
-    def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
-    @impl true
-    def key_identity(key), do: {:ok, {key.key_id, key.public}}
-    @impl true
-    def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
   end
 
-  {:ok, custody} = Demo.Custody.start_link()
-  :local_custody_started
-)
+  @impl true
+  def public_key(key), do: {:ok, key.public}
 
-true = semantic_output == :local_custody_started
-semantic_output
+  @impl true
+  def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
+
+  @impl true
+  def key_identity(key), do: {:ok, {key.key_id, key.public}}
+
+  @impl true
+  def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+end
+
+{:ok, custody} = Demo.Custody.start_link()
+[Demo.Custody, Demo.Ed25519Handle, Demo.P256Handle]
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-:local_custody_started
+[Demo.Custody, Demo.Ed25519Handle, Demo.P256Handle]
 ```
 
 ```elixir
-semantic_output = (
-  alias BoundedAuthorityProtocol.V1
-  alias BoundedAuthorityProtocol.V3
-  alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopback
-  alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertion
-  alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestation
-  alias BoundedAuthorityReportAdapter, as: Adapter
+alias BoundedAuthorityProtocol.V1
+alias BoundedAuthorityProtocol.V3
+alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopback
+alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertion
+alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestation
+alias BoundedAuthorityReportAdapter, as: Adapter
 
-  :aliases_ready
-)
-
-true = semantic_output == :aliases_ready
-semantic_output
+[V1, V3, LocalLoopback, ContentAssertion, RoleAttestation, Adapter]
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-:aliases_ready
+[
+  BoundedAuthorityProtocol.V1,
+  BoundedAuthorityProtocol.V3,
+  BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1,
+  BoundedAuthorityProtocol.ContentAssertion.V1,
+  BoundedAuthorityProtocol.RoleAttestation.V1,
+  BoundedAuthorityReportAdapter
+]
 ```
 
 ```elixir
-semantic_output = (
-  now = System.system_time(:second)
+now = System.system_time(:second)
 
-  ed25519_key = fn key_id, role ->
-    Demo.Custody.new(custody, :ed25519, key_id, role)
-  end
+ed25519_key = fn key_id, role ->
+  Demo.Custody.new(custody, :ed25519, key_id, role)
+end
 
-  p256_key = fn key_id, role ->
-    Demo.Custody.new(custody, :p256, key_id, role)
-  end
+p256_key = fn key_id, role ->
+  Demo.Custody.new(custody, :p256, key_id, role)
+end
 
-  # Ed25519 keys (contract-major 1 and the content-assertion profile).
-  issuer = ed25519_key.("issuer-key-1", :issuer)
-  holder = ed25519_key.("holder-key-1", :holder)
-  attestor = ed25519_key.("attestor-key-1", :attestor)
-  chain_key = ed25519_key.("chain-key-1", :chain)
-  next_chain_key = ed25519_key.("chain-key-2", :chain)
-  publisher = ed25519_key.("publisher-key-1", :publisher)
+# Ed25519 keys (contract-major 1 and the content-assertion profile).
+issuer = ed25519_key.("issuer-key-1", :issuer)
+holder = ed25519_key.("holder-key-1", :holder)
+attestor = ed25519_key.("attestor-key-1", :attestor)
+chain_key = ed25519_key.("chain-key-1", :chain)
+next_chain_key = ed25519_key.("chain-key-2", :chain)
+publisher = ed25519_key.("publisher-key-1", :publisher)
 
-  # P-256 keys (contract-major 3, ES256).
-  ec_issuer = p256_key.("issuer-ec-key-1", :issuer)
-  ec_holder = p256_key.("holder-ec-key-1", :holder)
-  ec_chain_key = p256_key.("chain-ec-key-1", :chain)
-  ec_next_chain_key = p256_key.("chain-ec-key-2", :chain)
+# P-256 keys (contract-major 3, ES256).
+ec_issuer = p256_key.("issuer-ec-key-1", :issuer)
+ec_holder = p256_key.("holder-ec-key-1", :holder)
+ec_chain_key = p256_key.("chain-ec-key-1", :chain)
+ec_next_chain_key = p256_key.("chain-ec-key-2", :chain)
 
-  # What a verifier is told about a key: its id, its public half, and when it is valid.
-  validity = fn key ->
-    %V1.HistoricalPublicKey{
-      key_id: key.key_id,
-      public_key: key.public,
-      valid_from: now - 3_600,
-      valid_before: now + 3_600
-    }
-  end
+# What a verifier is told about a key: its id, its public half, and when it is valid.
+validity = fn key ->
+  %V1.HistoricalPublicKey{
+    key_id: key.key_id,
+    public_key: key.public,
+    valid_from: now - 3_600,
+    valid_before: now + 3_600
+  }
+end
 
-  # Selected fields of a result, in a fixed order (a map would print in no fixed order).
-  facts_of = fn struct, keys -> Enum.map(keys, &{&1, Map.fetch!(struct, &1)}) end
+# Selected fields of a result, in a fixed order (a map would print in no fixed order).
+facts_of = fn struct, keys -> Enum.map(keys, &{&1, Map.fetch!(struct, &1)}) end
 
-  # Flip one bit in the first byte of a compact's signature segment.
-  flip_one_byte = fn compact ->
-    [header, payload, signature] = String.split(compact, ".")
-    <<first, rest::binary>> = Base.url_decode64!(signature, padding: false)
-    flipped = Base.url_encode64(<<Bitwise.bxor(first, 1), rest::binary>>, padding: false)
-    Enum.join([header, payload, flipped], ".")
-  end
+# Flip one bit in the first byte of a compact's signature segment.
+flip_one_byte = fn compact ->
+  [header, payload, signature] = String.split(compact, ".")
+  <<first, rest::binary>> = Base.url_decode64!(signature, padding: false)
+  flipped = Base.url_encode64(<<Bitwise.bxor(first, 1), rest::binary>>, padding: false)
+  Enum.join([header, payload, flipped], ".")
+end
 
-  [
-    ed25519_public_key_bytes: byte_size(holder.public),
-    p256_public_key_bytes: byte_size(ec_holder.public)
-  ]
-)
+32 = byte_size(holder.public)
+65 = byte_size(ec_holder.public)
 
-true = semantic_output == [ed25519_public_key_bytes: 32, p256_public_key_bytes: 65]
-semantic_output
+[
+  ed25519_public_key_bytes: byte_size(holder.public),
+  p256_public_key_bytes: byte_size(ec_holder.public)
+]
 ```
 
 <!-- livebook:{"output":true} -->
@@ -202,100 +207,96 @@ semantic_output
 ## Anchors and rotation
 
 ```elixir
-semantic_output = (
-  holder_handle = {Demo.Ed25519Handle, holder}
-  chain_handle = {Demo.Ed25519Handle, chain_key}
-  {:ok, chain_fingerprint} = Demo.Ed25519Handle.thumbprint(chain_key)
-  {:ok, next_chain_fingerprint} = Demo.Ed25519Handle.thumbprint(next_chain_key)
+holder_handle = {Demo.Ed25519Handle, holder}
+chain_handle = {Demo.Ed25519Handle, chain_key}
+{:ok, chain_fingerprint} = Demo.Ed25519Handle.thumbprint(chain_key)
+{:ok, next_chain_fingerprint} = Demo.Ed25519Handle.thumbprint(next_chain_key)
 
-  anchor_input = %{
-    anchor_id: "urn:example:anchor:audit-log-42",
-    chain_id: "urn:example:chain:audit-log",
-    sequence: 42,
-    chain_hash: :crypto.hash(:sha256, "audit log entries 1 through 42")
-  }
+anchor_input = %{
+  anchor_id: "urn:example:anchor:audit-log-42",
+  chain_id: "urn:example:chain:audit-log",
+  sequence: 42,
+  chain_hash: :crypto.hash(:sha256, "audit log entries 1 through 42")
+}
 
-  {:ok, %{anchor: anchor}} = Adapter.sign_anchor(anchor_input, chain_handle, %{anchored_at: now})
+{:ok, %{anchor: anchor}} = Adapter.sign_anchor(anchor_input, chain_handle, %{anchored_at: now})
 
-  expected_anchor = %V1.ExpectedAnchor{
-    anchor_id: "urn:example:anchor:audit-log-42",
-    anchored_at: now,
-    chain_id: "urn:example:chain:audit-log",
-    sequence: 42,
-    chain_hash: anchor_input.chain_hash,
-    key_id: chain_key.key_id,
-    key_fingerprint: chain_fingerprint,
-    bounds: V1.Bounds.maximum()
-  }
+expected_anchor = %V1.ExpectedAnchor{
+  anchor_id: "urn:example:anchor:audit-log-42",
+  anchored_at: now,
+  chain_id: "urn:example:chain:audit-log",
+  sequence: 42,
+  chain_hash: anchor_input.chain_hash,
+  key_id: chain_key.key_id,
+  key_fingerprint: chain_fingerprint,
+  bounds: V1.Bounds.maximum()
+}
 
-  transition_input = %{
-    transition_id: "urn:example:transition:audit-log-1",
-    chain_id: "urn:example:chain:audit-log",
-    effective_at: now,
-    next_key_id: next_chain_key.key_id,
-    next_public_key: next_chain_key.public
-  }
+transition_input = %{
+  transition_id: "urn:example:transition:audit-log-1",
+  chain_id: "urn:example:chain:audit-log",
+  effective_at: now,
+  next_key_id: next_chain_key.key_id,
+  next_public_key: next_chain_key.public
+}
 
-  {:ok, %{key_transition: transition}} = Adapter.sign_key_transition(transition_input, chain_handle)
+{:ok, %{key_transition: transition}} = Adapter.sign_key_transition(transition_input, chain_handle)
 
-  expected_transition = %V1.ExpectedKeyTransition{
-    transition_id: "urn:example:transition:audit-log-1",
-    chain_id: "urn:example:chain:audit-log",
-    effective_at: now,
-    current_key_id: chain_key.key_id,
-    current_key_fingerprint: chain_fingerprint,
-    next_key_id: next_chain_key.key_id,
-    next_key_fingerprint: next_chain_fingerprint,
-    bounds: V1.Bounds.maximum()
-  }
+expected_transition = %V1.ExpectedKeyTransition{
+  transition_id: "urn:example:transition:audit-log-1",
+  chain_id: "urn:example:chain:audit-log",
+  effective_at: now,
+  current_key_id: chain_key.key_id,
+  current_key_fingerprint: chain_fingerprint,
+  next_key_id: next_chain_key.key_id,
+  next_key_fingerprint: next_chain_fingerprint,
+  bounds: V1.Bounds.maximum()
+}
 
-  {:ok, anchor_facts} = V1.verify_historical_anchor(anchor, validity.(chain_key), expected_anchor)
+{:ok, anchor_facts} = V1.verify_historical_anchor(anchor, validity.(chain_key), expected_anchor)
 
-  {:ok, transition_facts} =
-    V1.verify_key_transition(
-      transition,
-      validity.(chain_key),
-      validity.(next_chain_key),
-      expected_transition
-    )
+{:ok, transition_facts} =
+  V1.verify_key_transition(
+    transition,
+    validity.(chain_key),
+    validity.(next_chain_key),
+    expected_transition
+  )
 
-  later_hash = :crypto.hash(:sha256, "audit log entries 1 through 43")
+later_hash = :crypto.hash(:sha256, "audit log entries 1 through 43")
 
-  [
-    anchor_verified: facts_of.(anchor_facts, [:sequence, :verification, :trust]),
-    tampered_anchor:
-      V1.verify_historical_anchor(flip_one_byte.(anchor), validity.(chain_key), expected_anchor),
-    different_chain_hash:
-      V1.verify_historical_anchor(
-        anchor,
-        validity.(chain_key),
-        %{expected_anchor | chain_hash: later_hash}
-      ),
-    transition_verified: facts_of.(transition_facts, [:verification, :trust]),
-    wrong_successor:
-      V1.verify_key_transition(
-        transition,
-        validity.(chain_key),
-        %{validity.(next_chain_key) | public_key: holder.public},
-        expected_transition
-      ),
-    rotation_to_itself:
-      Adapter.sign_key_transition(
-        %{transition_input | next_key_id: chain_key.key_id, next_public_key: chain_key.public},
-        chain_handle
-      )
-  ]
-)
+# Tampered anchor.
+{:error, :invalid} =
+  V1.verify_historical_anchor(flip_one_byte.(anchor), validity.(chain_key), expected_anchor)
 
-true = semantic_output == [
-  anchor_verified: [sequence: 42, verification: :signature_and_window, trust: :not_evaluated],
-  tampered_anchor: {:error, :invalid},
-  different_chain_hash: {:error, :invalid},
-  transition_verified: [verification: :authenticated_transition, trust: :not_evaluated],
-  wrong_successor: {:error, :invalid},
-  rotation_to_itself: {:error, {:producer_error, :invalid}}
+# Different chain hash.
+{:error, :invalid} =
+  V1.verify_historical_anchor(
+    anchor,
+    validity.(chain_key),
+    %{expected_anchor | chain_hash: later_hash}
+  )
+
+# Wrong successor.
+{:error, :invalid} =
+  V1.verify_key_transition(
+    transition,
+    validity.(chain_key),
+    %{validity.(next_chain_key) | public_key: holder.public},
+    expected_transition
+  )
+
+# Rotation to itself.
+{:error, {:producer_error, :invalid}} =
+  Adapter.sign_key_transition(
+    %{transition_input | next_key_id: chain_key.key_id, next_public_key: chain_key.public},
+    chain_handle
+  )
+
+[
+  anchor_verified: facts_of.(anchor_facts, [:sequence, :verification, :trust]),
+  transition_verified: facts_of.(transition_facts, [:verification, :trust])
 ]
-semantic_output
 ```
 
 <!-- livebook:{"output":true} -->
@@ -303,34 +304,28 @@ semantic_output
 ```
 [
   anchor_verified: [sequence: 42, verification: :signature_and_window, trust: :not_evaluated],
-  tampered_anchor: {:error, :invalid},
-  different_chain_hash: {:error, :invalid},
-  transition_verified: [verification: :authenticated_transition, trust: :not_evaluated],
-  wrong_successor: {:error, :invalid},
-  rotation_to_itself: {:error, {:producer_error, :invalid}}
+  transition_verified: [verification: :authenticated_transition, trust: :not_evaluated]
 ]
 ```
 
 ```elixir
-semantic_output = (
-  p256_n = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+p256_n = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 
-  low_s? = fn <<_r::binary-size(32), s::unsigned-big-256>> -> s <= div(p256_n, 2) end
+low_s? = fn <<_r::binary-size(32), s::unsigned-big-256>> -> s <= div(p256_n, 2) end
 
-  signature_of = fn compact ->
-    compact |> String.split(".") |> List.last() |> Base.url_decode64!(padding: false)
-  end
+signature_of = fn compact ->
+  compact |> String.split(".") |> List.last() |> Base.url_decode64!(padding: false)
+end
 
-  {:ok, device_signature} = Demo.P256Handle.sign("any message", ec_issuer)
+{:ok, device_signature} = Demo.P256Handle.sign("any message", ec_issuer)
 
-  [
-    device_signature_bytes: byte_size(device_signature),
-    device_signature_low_s: low_s?.(device_signature)
-  ]
-)
+64 = byte_size(device_signature)
+false = low_s?.(device_signature)
 
-true = semantic_output == [device_signature_bytes: 64, device_signature_low_s: false]
-semantic_output
+[
+  device_signature_bytes: byte_size(device_signature),
+  device_signature_low_s: low_s?.(device_signature)
+]
 ```
 
 <!-- livebook:{"output":true} -->
@@ -340,82 +335,78 @@ semantic_output
 ```
 
 ```elixir
-semantic_output = (
-  ec_chain_handle = {Demo.P256Handle, ec_chain_key}
-  {:ok, ec_chain_fingerprint} = Demo.P256Handle.thumbprint(ec_chain_key)
-  {:ok, ec_next_chain_fingerprint} = Demo.P256Handle.thumbprint(ec_next_chain_key)
+ec_chain_handle = {Demo.P256Handle, ec_chain_key}
+{:ok, ec_chain_fingerprint} = Demo.P256Handle.thumbprint(ec_chain_key)
+{:ok, ec_next_chain_fingerprint} = Demo.P256Handle.thumbprint(ec_next_chain_key)
 
-  {:ok, %{anchor: ec_anchor}} =
-    Adapter.V3.sign_anchor(anchor_input, ec_chain_handle, %{anchored_at: now})
+{:ok, %{anchor: ec_anchor}} =
+  Adapter.V3.sign_anchor(anchor_input, ec_chain_handle, %{anchored_at: now})
 
-  ec_expected_anchor = %{
-    expected_anchor
-    | key_id: ec_chain_key.key_id,
-      key_fingerprint: ec_chain_fingerprint
-  }
+ec_expected_anchor = %{
+  expected_anchor
+  | key_id: ec_chain_key.key_id,
+    key_fingerprint: ec_chain_fingerprint
+}
 
-  ec_transition_input = %{
-    transition_input
-    | next_key_id: ec_next_chain_key.key_id,
-      next_public_key: ec_next_chain_key.public
-  }
+ec_transition_input = %{
+  transition_input
+  | next_key_id: ec_next_chain_key.key_id,
+    next_public_key: ec_next_chain_key.public
+}
 
-  {:ok, %{key_transition: ec_transition}} =
-    Adapter.V3.sign_key_transition(ec_transition_input, ec_chain_handle)
+{:ok, %{key_transition: ec_transition}} =
+  Adapter.V3.sign_key_transition(ec_transition_input, ec_chain_handle)
 
-  ec_expected_transition = %{
-    expected_transition
-    | current_key_id: ec_chain_key.key_id,
-      current_key_fingerprint: ec_chain_fingerprint,
-      next_key_id: ec_next_chain_key.key_id,
-      next_key_fingerprint: ec_next_chain_fingerprint
-  }
+ec_expected_transition = %{
+  expected_transition
+  | current_key_id: ec_chain_key.key_id,
+    current_key_fingerprint: ec_chain_fingerprint,
+    next_key_id: ec_next_chain_key.key_id,
+    next_key_fingerprint: ec_next_chain_fingerprint
+}
 
-  {:ok, ec_anchor_facts} =
-    V3.verify_historical_anchor(ec_anchor, validity.(ec_chain_key), ec_expected_anchor)
+{:ok, ec_anchor_facts} =
+  V3.verify_historical_anchor(ec_anchor, validity.(ec_chain_key), ec_expected_anchor)
 
-  {:ok, ec_transition_facts} =
-    V3.verify_key_transition(
-      ec_transition,
-      validity.(ec_chain_key),
-      validity.(ec_next_chain_key),
-      ec_expected_transition
-    )
+{:ok, ec_transition_facts} =
+  V3.verify_key_transition(
+    ec_transition,
+    validity.(ec_chain_key),
+    validity.(ec_next_chain_key),
+    ec_expected_transition
+  )
 
-  [
-    anchor_verified: facts_of.(ec_anchor_facts, [:sequence, :verification]),
-    anchor_signature_low_s: low_s?.(signature_of.(ec_anchor)),
-    tampered_anchor:
-      V3.verify_historical_anchor(
-        flip_one_byte.(ec_anchor),
-        validity.(ec_chain_key),
-        ec_expected_anchor
-      ),
-    transition_verified: facts_of.(ec_transition_facts, [:verification]),
-    wrong_successor:
-      V3.verify_key_transition(
-        ec_transition,
-        validity.(ec_chain_key),
-        %{validity.(ec_next_chain_key) | public_key: ec_holder.public},
-        ec_expected_transition
-      ),
-    ed25519_successor:
-      Adapter.V3.sign_key_transition(
-        %{transition_input | next_public_key: next_chain_key.public},
-        ec_chain_handle
-      )
-  ]
-)
+true = low_s?.(signature_of.(ec_anchor))
 
-true = semantic_output == [
-  anchor_verified: [sequence: 42, verification: :signature_and_window],
-  anchor_signature_low_s: true,
-  tampered_anchor: {:error, :invalid},
-  transition_verified: [verification: :authenticated_transition],
-  wrong_successor: {:error, :invalid},
-  ed25519_successor: {:error, :invalid_transition}
+# Tampered anchor.
+{:error, :invalid} =
+  V3.verify_historical_anchor(
+    flip_one_byte.(ec_anchor),
+    validity.(ec_chain_key),
+    ec_expected_anchor
+  )
+
+# Wrong successor.
+{:error, :invalid} =
+  V3.verify_key_transition(
+    ec_transition,
+    validity.(ec_chain_key),
+    %{validity.(ec_next_chain_key) | public_key: ec_holder.public},
+    ec_expected_transition
+  )
+
+# Ed25519 successor.
+{:error, :invalid_transition} =
+  Adapter.V3.sign_key_transition(
+    %{transition_input | next_public_key: next_chain_key.public},
+    ec_chain_handle
+  )
+
+[
+  anchor_verified: facts_of.(ec_anchor_facts, [:sequence, :verification]),
+  anchor_signature_low_s: low_s?.(signature_of.(ec_anchor)),
+  transition_verified: facts_of.(ec_transition_facts, [:verification])
 ]
-semantic_output
 ```
 
 <!-- livebook:{"output":true} -->
@@ -424,24 +415,16 @@ semantic_output
 [
   anchor_verified: [sequence: 42, verification: :signature_and_window],
   anchor_signature_low_s: true,
-  tampered_anchor: {:error, :invalid},
-  transition_verified: [verification: :authenticated_transition],
-  wrong_successor: {:error, :invalid},
-  ed25519_successor: {:error, :invalid_transition}
+  transition_verified: [verification: :authenticated_transition]
 ]
 ```
 
 ## Clean up
 
 ```elixir
-semantic_output = (
-  GenServer.stop(custody)
-  false = Process.alive?(custody)
-  :clean
-)
-
-true = semantic_output == :clean
-semantic_output
+:ok = GenServer.stop(custody)
+false = Process.alive?(custody)
+:clean
 ```
 
 <!-- livebook:{"output":true} -->

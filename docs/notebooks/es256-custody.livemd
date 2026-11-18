@@ -27,170 +27,175 @@ Mix.install([{:bounded_authority_report_adapter, "== 1.0.0"}])
 This is an actual OTP process holding freshly generated demonstration keys. Handles carry public metadata and opaque process/key references; private bytes never enter an adapter call. It demonstrates callbacks and conversion, not a remote HSM’s security or availability. Every key is discarded when the process stops.
 
 ```elixir
-semantic_output = (
-  defmodule Demo.Custody do
-    use GenServer
+defmodule Demo.Custody do
+  use GenServer
 
-    def start_link, do: GenServer.start_link(__MODULE__, %{})
-    def new(pid, suite, key_id, role), do: GenServer.call(pid, {:new, suite, key_id, role})
-    def sign(key, message), do: GenServer.call(key.custody, {:sign, key.reference, message}, 5_000)
+  def start_link, do: GenServer.start_link(__MODULE__, %{})
+  def new(pid, suite, key_id, role), do: GenServer.call(pid, {:new, suite, key_id, role})
+  def sign(key, message), do: GenServer.call(key.custody, {:sign, key.reference, message}, 5_000)
 
-    @impl true
-    def init(keys), do: {:ok, keys}
+  @impl true
+  def init(keys), do: {:ok, keys}
 
-    @impl true
-    def handle_call({:new, suite, key_id, role}, _from, keys) do
-      {public, private} =
-        case suite do
-          :ed25519 -> :crypto.generate_key(:eddsa, :ed25519)
-          :p256 -> :crypto.generate_key(:ecdh, :prime256v1)
-        end
-
-      reference = make_ref()
-      key = %{custody: self(), reference: reference, key_id: key_id, role: role, public: public}
-      {:reply, key, Map.put(keys, reference, {suite, private})}
-    end
-
-    def handle_call({:sign, reference, message}, _from, keys) do
-      signature =
-        case Map.fetch!(keys, reference) do
-          {:ed25519, private} -> :crypto.sign(:eddsa, :none, message, [private, :ed25519])
-          {:p256, private} -> :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
-        end
-
-      {:reply, {:ok, signature}, keys}
-    end
-  end
-
-  defmodule Demo.Ed25519Handle do
-    @behaviour BoundedAuthorityReportAdapter
-    @impl true
-    def sign(message, key), do: Demo.Custody.sign(key, message)
-    @impl true
-    def public_key(key), do: {:ok, key.public}
-    @impl true
-    def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
-    @impl true
-    def key_identity(key), do: {:ok, {key.key_id, key.public}}
-    @impl true
-    def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
-  end
-
-  defmodule Demo.P256Handle do
-    @behaviour BoundedAuthorityReportAdapter
-    @n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-    @impl true
-    def sign(message, key) do
-      with {:ok, der} <- Demo.Custody.sign(key, message),
-           {:ok, <<r::unsigned-big-256, s::unsigned-big-256>>} <-
-             BoundedAuthorityProtocol.Es256.der_to_raw(der) do
-        # Exercise the adapter's normalization with a valid high-S signature.
-        high_s = if s > div(@n, 2), do: s, else: @n - s
-        {:ok, <<r::unsigned-big-256, high_s::unsigned-big-256>>}
+  @impl true
+  def handle_call({:new, suite, key_id, role}, _from, keys) do
+    {public, private} =
+      case suite do
+        :ed25519 -> :crypto.generate_key(:eddsa, :ed25519)
+        :p256 -> :crypto.generate_key(:ecdh, :prime256v1)
       end
+
+    reference = make_ref()
+    key = %{custody: self(), reference: reference, key_id: key_id, role: role, public: public}
+    {:reply, key, Map.put(keys, reference, {suite, private})}
+  end
+
+  def handle_call({:sign, reference, message}, _from, keys) do
+    signature =
+      case Map.fetch!(keys, reference) do
+        {:ed25519, private} -> :crypto.sign(:eddsa, :none, message, [private, :ed25519])
+        {:p256, private} -> :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
+      end
+
+    {:reply, {:ok, signature}, keys}
+  end
+end
+
+defmodule Demo.Ed25519Handle do
+  @behaviour BoundedAuthorityReportAdapter
+
+  @impl true
+  def sign(message, key), do: Demo.Custody.sign(key, message)
+
+  @impl true
+  def public_key(key), do: {:ok, key.public}
+
+  @impl true
+  def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
+
+  @impl true
+  def key_identity(key), do: {:ok, {key.key_id, key.public}}
+
+  @impl true
+  def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+end
+
+defmodule Demo.P256Handle do
+  @behaviour BoundedAuthorityReportAdapter
+
+  @n 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+
+  @impl true
+  def sign(message, key) do
+    with {:ok, der} <- Demo.Custody.sign(key, message),
+         {:ok, <<r::unsigned-big-256, s::unsigned-big-256>>} <-
+           BoundedAuthorityProtocol.Es256.der_to_raw(der) do
+      # Exercise the adapter's normalization with a valid high-S signature.
+      high_s = if s > div(@n, 2), do: s, else: @n - s
+      {:ok, <<r::unsigned-big-256, high_s::unsigned-big-256>>}
     end
-
-    @impl true
-    def public_key(key), do: {:ok, key.public}
-    @impl true
-    def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
-    @impl true
-    def key_identity(key), do: {:ok, {key.key_id, key.public}}
-    @impl true
-    def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
   end
 
-  {:ok, custody} = Demo.Custody.start_link()
-  :local_custody_started
-)
+  @impl true
+  def public_key(key), do: {:ok, key.public}
 
-true = semantic_output == :local_custody_started
-semantic_output
+  @impl true
+  def thumbprint(key), do: BoundedAuthorityReportAdapter.public_key_thumbprint(key.public)
+
+  @impl true
+  def key_identity(key), do: {:ok, {key.key_id, key.public}}
+
+  @impl true
+  def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
+end
+
+{:ok, custody} = Demo.Custody.start_link()
+[Demo.Custody, Demo.Ed25519Handle, Demo.P256Handle]
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-:local_custody_started
+[Demo.Custody, Demo.Ed25519Handle, Demo.P256Handle]
 ```
 
 ```elixir
-semantic_output = (
-  alias BoundedAuthorityProtocol.V1
-  alias BoundedAuthorityProtocol.V3
-  alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopback
-  alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertion
-  alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestation
-  alias BoundedAuthorityReportAdapter, as: Adapter
+alias BoundedAuthorityProtocol.V1
+alias BoundedAuthorityProtocol.V3
+alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopback
+alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertion
+alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestation
+alias BoundedAuthorityReportAdapter, as: Adapter
 
-  :aliases_ready
-)
-
-true = semantic_output == :aliases_ready
-semantic_output
+[V1, V3, LocalLoopback, ContentAssertion, RoleAttestation, Adapter]
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-:aliases_ready
+[
+  BoundedAuthorityProtocol.V1,
+  BoundedAuthorityProtocol.V3,
+  BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1,
+  BoundedAuthorityProtocol.ContentAssertion.V1,
+  BoundedAuthorityProtocol.RoleAttestation.V1,
+  BoundedAuthorityReportAdapter
+]
 ```
 
 ```elixir
-semantic_output = (
-  now = System.system_time(:second)
+now = System.system_time(:second)
 
-  ed25519_key = fn key_id, role ->
-    Demo.Custody.new(custody, :ed25519, key_id, role)
-  end
+ed25519_key = fn key_id, role ->
+  Demo.Custody.new(custody, :ed25519, key_id, role)
+end
 
-  p256_key = fn key_id, role ->
-    Demo.Custody.new(custody, :p256, key_id, role)
-  end
+p256_key = fn key_id, role ->
+  Demo.Custody.new(custody, :p256, key_id, role)
+end
 
-  # Ed25519 keys (contract-major 1 and the content-assertion profile).
-  issuer = ed25519_key.("issuer-key-1", :issuer)
-  holder = ed25519_key.("holder-key-1", :holder)
-  attestor = ed25519_key.("attestor-key-1", :attestor)
-  chain_key = ed25519_key.("chain-key-1", :chain)
-  next_chain_key = ed25519_key.("chain-key-2", :chain)
-  publisher = ed25519_key.("publisher-key-1", :publisher)
+# Ed25519 keys (contract-major 1 and the content-assertion profile).
+issuer = ed25519_key.("issuer-key-1", :issuer)
+holder = ed25519_key.("holder-key-1", :holder)
+attestor = ed25519_key.("attestor-key-1", :attestor)
+chain_key = ed25519_key.("chain-key-1", :chain)
+next_chain_key = ed25519_key.("chain-key-2", :chain)
+publisher = ed25519_key.("publisher-key-1", :publisher)
 
-  # P-256 keys (contract-major 3, ES256).
-  ec_issuer = p256_key.("issuer-ec-key-1", :issuer)
-  ec_holder = p256_key.("holder-ec-key-1", :holder)
-  ec_chain_key = p256_key.("chain-ec-key-1", :chain)
-  ec_next_chain_key = p256_key.("chain-ec-key-2", :chain)
+# P-256 keys (contract-major 3, ES256).
+ec_issuer = p256_key.("issuer-ec-key-1", :issuer)
+ec_holder = p256_key.("holder-ec-key-1", :holder)
+ec_chain_key = p256_key.("chain-ec-key-1", :chain)
+ec_next_chain_key = p256_key.("chain-ec-key-2", :chain)
 
-  # What a verifier is told about a key: its id, its public half, and when it is valid.
-  validity = fn key ->
-    %V1.HistoricalPublicKey{
-      key_id: key.key_id,
-      public_key: key.public,
-      valid_from: now - 3_600,
-      valid_before: now + 3_600
-    }
-  end
+# What a verifier is told about a key: its id, its public half, and when it is valid.
+validity = fn key ->
+  %V1.HistoricalPublicKey{
+    key_id: key.key_id,
+    public_key: key.public,
+    valid_from: now - 3_600,
+    valid_before: now + 3_600
+  }
+end
 
-  # Selected fields of a result, in a fixed order (a map would print in no fixed order).
-  facts_of = fn struct, keys -> Enum.map(keys, &{&1, Map.fetch!(struct, &1)}) end
+# Selected fields of a result, in a fixed order (a map would print in no fixed order).
+facts_of = fn struct, keys -> Enum.map(keys, &{&1, Map.fetch!(struct, &1)}) end
 
-  # Flip one bit in the first byte of a compact's signature segment.
-  flip_one_byte = fn compact ->
-    [header, payload, signature] = String.split(compact, ".")
-    <<first, rest::binary>> = Base.url_decode64!(signature, padding: false)
-    flipped = Base.url_encode64(<<Bitwise.bxor(first, 1), rest::binary>>, padding: false)
-    Enum.join([header, payload, flipped], ".")
-  end
+# Flip one bit in the first byte of a compact's signature segment.
+flip_one_byte = fn compact ->
+  [header, payload, signature] = String.split(compact, ".")
+  <<first, rest::binary>> = Base.url_decode64!(signature, padding: false)
+  flipped = Base.url_encode64(<<Bitwise.bxor(first, 1), rest::binary>>, padding: false)
+  Enum.join([header, payload, flipped], ".")
+end
 
-  [
-    ed25519_public_key_bytes: byte_size(holder.public),
-    p256_public_key_bytes: byte_size(ec_holder.public)
-  ]
-)
+32 = byte_size(holder.public)
+65 = byte_size(ec_holder.public)
 
-true = semantic_output == [ed25519_public_key_bytes: 32, p256_public_key_bytes: 65]
-semantic_output
+[
+  ed25519_public_key_bytes: byte_size(holder.public),
+  p256_public_key_bytes: byte_size(ec_holder.public)
+]
 ```
 
 <!-- livebook:{"output":true} -->
@@ -202,177 +207,142 @@ semantic_output
 ## ES256 custody
 
 ```elixir
-semantic_output = (
-  issuer_handle = {Demo.Ed25519Handle, issuer}
-  holder_handle = {Demo.Ed25519Handle, holder}
-  {:ok, holder_thumbprint} = Demo.Ed25519Handle.thumbprint(holder)
+issuer_handle = {Demo.Ed25519Handle, issuer}
+holder_handle = {Demo.Ed25519Handle, holder}
+{:ok, holder_thumbprint} = Demo.Ed25519Handle.thumbprint(holder)
 
-  grant_input = %{
-    issuer: "https://issuer.example",
-    grant_id: "urn:example:grant:greenhouse-1",
-    audiences: ["https://telemetry.example"],
-    issued_at: now - 60,
-    not_before: now - 60,
-    expires_at: now + 3_600,
-    holder_thumbprint: holder_thumbprint,
-    operations: [
-      %V1.Operation{name: "submit_reading", selectors: [:all]},
-      %V1.Operation{name: "run_local_tool", selectors: [:all]}
-    ]
-  }
-
-  {:ok, %{grant: grant}} = Adapter.sign_grant(grant_input, issuer_handle)
-
-  trusted_issuer = %V1.TrustedIssuer{key_id: issuer.key_id, public_key: issuer.public}
-
-  expected_grant = %V1.ExpectedGrant{
-    issuer: "https://issuer.example",
-    audience: "https://telemetry.example",
-    evaluation_time: now,
-    clock_skew: 60,
-    bounds: V1.Bounds.maximum()
-  }
-
-  {:ok, grant_facts} = V1.verify_grant(grant, trusted_issuer, expected_grant)
-  facts_of.(grant_facts, [:version, :grant_id, :matched_audience, :authorization])
-)
-
-true = semantic_output == [
-  version: 1,
+grant_input = %{
+  issuer: "https://issuer.example",
   grant_id: "urn:example:grant:greenhouse-1",
-  matched_audience: "https://telemetry.example",
-  authorization: :not_evaluated
-]
-semantic_output
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-[
-  version: 1,
-  grant_id: "urn:example:grant:greenhouse-1",
-  matched_audience: "https://telemetry.example",
-  authorization: :not_evaluated
-]
-```
-
-```elixir
-semantic_output = (
-  attest = fn attestation ->
-    {:ok, input} = RoleAttestation.attestation_signing_input(attestation, %{})
-    {:ok, signature} = Demo.Ed25519Handle.sign(input.message, attestor)
-    {:ok, compact} = RoleAttestation.assemble_compact(input, signature)
-    compact
-  end
-
-  issuer_attestation = %RoleAttestation.RoleAttestation{
-    attestor_key_id: attestor.key_id,
-    jti: "urn:example:attestation:1",
-    key_id: issuer.key_id,
-    public_key: issuer.public,
-    role: "issuer",
-    nbf: now - 60,
-    exp: now + 3_600
-  }
-
-  gate = fn attestation, at ->
-    %{role_attestation: %{compact: attest.(attestation), attestor: validity.(attestor), now: at}}
-  end
-
-  # Valid from ten minutes ago until one minute ago; the attestor key itself is valid throughout.
-  expired_attestation = %{
-    issuer_attestation
-    | jti: "urn:example:attestation:2",
-      nbf: now - 600,
-      exp: now - 60
-  }
-
-  attested_grant =
-    with {:ok, %{grant: attested}} <-
-           Adapter.sign_grant(grant_input, issuer_handle, gate.(issuer_attestation, now)),
-         {:ok, _facts} <- V1.verify_grant(attested, trusted_issuer, expected_grant) do
-      :signed_and_verified
-    end
-
-  [
-    issuer_attested: attested_grant,
-    holder_attested:
-      Adapter.sign_grant(
-        grant_input,
-        issuer_handle,
-        gate.(%{issuer_attestation | role: "holder"}, now)
-      ),
-    attests_another_key:
-      Adapter.sign_grant(
-        grant_input,
-        issuer_handle,
-        gate.(%{issuer_attestation | key_id: holder.key_id, public_key: holder.public}, now)
-      ),
-    attestation_expired:
-      Adapter.sign_grant(grant_input, issuer_handle, gate.(expired_attestation, now)),
-    same_attestation_before_expiry:
-      elem(Adapter.sign_grant(grant_input, issuer_handle, gate.(expired_attestation, now - 120)), 0)
+  audiences: ["https://telemetry.example"],
+  issued_at: now - 60,
+  not_before: now - 60,
+  expires_at: now + 3_600,
+  holder_thumbprint: holder_thumbprint,
+  operations: [
+    %V1.Operation{name: "submit_reading", selectors: [:all]},
+    %V1.Operation{name: "run_local_tool", selectors: [:all]}
   ]
-)
+}
 
-true = semantic_output == [
-  issuer_attested: :signed_and_verified,
-  holder_attested: {:error, :invalid_role_attestation},
-  attests_another_key: {:error, :invalid_role_attestation},
-  attestation_expired: {:error, :invalid_role_attestation},
-  same_attestation_before_expiry: :ok
-]
-semantic_output
+{:ok, %{grant: grant}} = Adapter.sign_grant(grant_input, issuer_handle)
+
+trusted_issuer = %V1.TrustedIssuer{key_id: issuer.key_id, public_key: issuer.public}
+
+expected_grant = %V1.ExpectedGrant{
+  issuer: "https://issuer.example",
+  audience: "https://telemetry.example",
+  evaluation_time: now,
+  clock_skew: 60,
+  bounds: V1.Bounds.maximum()
+}
+
+{:ok, grant_facts} = V1.verify_grant(grant, trusted_issuer, expected_grant)
+facts_of.(grant_facts, [:version, :grant_id, :matched_audience, :authorization])
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
 [
-  issuer_attested: :signed_and_verified,
-  holder_attested: {:error, :invalid_role_attestation},
-  attests_another_key: {:error, :invalid_role_attestation},
-  attestation_expired: {:error, :invalid_role_attestation},
-  same_attestation_before_expiry: :ok
+  version: 1,
+  grant_id: "urn:example:grant:greenhouse-1",
+  matched_audience: "https://telemetry.example",
+  authorization: :not_evaluated
 ]
 ```
 
 ```elixir
-semantic_output = (
-  reading = {:object, [{"sensor", {:string, "greenhouse-4"}}, {"celsius", {:integer, 21}}]}
+attest = fn attestation ->
+  {:ok, input} = RoleAttestation.attestation_signing_input(attestation, %{})
+  {:ok, signature} = Demo.Ed25519Handle.sign(input.message, attestor)
+  {:ok, compact} = RoleAttestation.assemble_compact(input, signature)
+  compact
+end
 
-  report = %{
-    grant_compact: grant,
-    operation: "submit_reading",
-    method: "POST",
-    target_uri: "https://telemetry.example/readings",
-    invocation_id: "6f1c2a3b-4d5e-4f60-8a71-92b3c4d5e6f7",
-    # The request body in the protocol's tagged JSON form. A real consumer gets this with
-    # V1.Json.decode(raw_body_bytes), on both sides, from the same bytes.
-    cast_arguments: reading,
-    nonce: "nonce-reading-1"
-  }
+issuer_attestation = %RoleAttestation.RoleAttestation{
+  attestor_key_id: attestor.key_id,
+  jti: "urn:example:attestation:1",
+  key_id: issuer.key_id,
+  public_key: issuer.public,
+  role: "issuer",
+  nbf: now - 60,
+  exp: now + 3_600
+}
 
-  {:ok, %{grant: ^grant, proof: proof}} =
-    Adapter.sign_report(report, holder_handle, %{issued_at: now - 5})
+gate = fn attestation, at ->
+  %{role_attestation: %{compact: attest.(attestation), attestor: validity.(attestor), now: at}}
+end
 
-  # Decoding is not verifying; this only shows what the proof binds.
-  {:ok, decoded_proof} = V1.decode_proof(proof, %{})
+# Valid from ten minutes ago until one minute ago; the attestor key itself is valid throughout.
+expired_attestation = %{
+  issuer_attestation
+  | jti: "urn:example:attestation:2",
+    nbf: now - 600,
+    exp: now - 60
+}
 
-  facts_of.(decoded_proof, [:operation, :method, :target_uri, :nonce, :verification]) ++
-    [holder_matches_grant: decoded_proof.holder_thumbprint == holder_thumbprint]
-)
+{:ok, %{grant: attested}} =
+  Adapter.sign_grant(grant_input, issuer_handle, gate.(issuer_attestation, now))
 
-true = semantic_output == [
+{:ok, attested_facts} = V1.verify_grant(attested, trusted_issuer, expected_grant)
+
+# Holder attested.
+{:error, :invalid_role_attestation} =
+  Adapter.sign_grant(
+    grant_input,
+    issuer_handle,
+    gate.(%{issuer_attestation | role: "holder"}, now)
+  )
+
+# Attests another key.
+{:error, :invalid_role_attestation} =
+  Adapter.sign_grant(
+    grant_input,
+    issuer_handle,
+    gate.(%{issuer_attestation | key_id: holder.key_id, public_key: holder.public}, now)
+  )
+
+# Attestation expired.
+{:error, :invalid_role_attestation} =
+  Adapter.sign_grant(grant_input, issuer_handle, gate.(expired_attestation, now))
+
+# The same attestation succeeds before its expiry.
+{:ok, %{grant: _before_expiry_grant}} =
+  Adapter.sign_grant(grant_input, issuer_handle, gate.(expired_attestation, now - 120))
+
+facts_of.(attested_facts, [:version, :authorization])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[version: 1, authorization: :not_evaluated]
+```
+
+```elixir
+reading = {:object, [{"sensor", {:string, "greenhouse-4"}}, {"celsius", {:integer, 21}}]}
+
+report = %{
+  grant_compact: grant,
   operation: "submit_reading",
   method: "POST",
   target_uri: "https://telemetry.example/readings",
-  nonce: "nonce-reading-1",
-  verification: :not_evaluated,
-  holder_matches_grant: true
-]
-semantic_output
+  invocation_id: "6f1c2a3b-4d5e-4f60-8a71-92b3c4d5e6f7",
+  # The request body in the protocol's tagged JSON form. A real consumer gets this with
+  # V1.Json.decode(raw_body_bytes), on both sides, from the same bytes.
+  cast_arguments: reading,
+  nonce: "nonce-reading-1"
+}
+
+{:ok, %{grant: ^grant, proof: proof}} =
+  Adapter.sign_report(report, holder_handle, %{issued_at: now - 5})
+
+# Decoding is not verifying; this only shows what the proof binds.
+{:ok, %{holder_thumbprint: ^holder_thumbprint} = decoded_proof} = V1.decode_proof(proof, %{})
+
+facts_of.(decoded_proof, [:operation, :method, :target_uri, :nonce, :verification]) ++
+  [holder_matches_grant: decoded_proof.holder_thumbprint == holder_thumbprint]
 ```
 
 <!-- livebook:{"output":true} -->
@@ -389,25 +359,23 @@ semantic_output
 ```
 
 ```elixir
-semantic_output = (
-  p256_n = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+p256_n = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 
-  low_s? = fn <<_r::binary-size(32), s::unsigned-big-256>> -> s <= div(p256_n, 2) end
+low_s? = fn <<_r::binary-size(32), s::unsigned-big-256>> -> s <= div(p256_n, 2) end
 
-  signature_of = fn compact ->
-    compact |> String.split(".") |> List.last() |> Base.url_decode64!(padding: false)
-  end
+signature_of = fn compact ->
+  compact |> String.split(".") |> List.last() |> Base.url_decode64!(padding: false)
+end
 
-  {:ok, device_signature} = Demo.P256Handle.sign("any message", ec_issuer)
+{:ok, device_signature} = Demo.P256Handle.sign("any message", ec_issuer)
 
-  [
-    device_signature_bytes: byte_size(device_signature),
-    device_signature_low_s: low_s?.(device_signature)
-  ]
-)
+64 = byte_size(device_signature)
+false = low_s?.(device_signature)
 
-true = semantic_output == [device_signature_bytes: 64, device_signature_low_s: false]
-semantic_output
+[
+  device_signature_bytes: byte_size(device_signature),
+  device_signature_low_s: low_s?.(device_signature)
+]
 ```
 
 <!-- livebook:{"output":true} -->
@@ -417,87 +385,77 @@ semantic_output
 ```
 
 ```elixir
-semantic_output = (
-  ec_issuer_handle = {Demo.P256Handle, ec_issuer}
-  ec_holder_handle = {Demo.P256Handle, ec_holder}
-  {:ok, ec_holder_thumbprint} = Demo.P256Handle.thumbprint(ec_holder)
+ec_issuer_handle = {Demo.P256Handle, ec_issuer}
+ec_holder_handle = {Demo.P256Handle, ec_holder}
+{:ok, ec_holder_thumbprint} = Demo.P256Handle.thumbprint(ec_holder)
 
-  ec_grant_input = %{
-    issuer: "https://issuer.example",
-    grant_id: "urn:example:grant:inspection-1",
-    audiences: ["https://maintenance.example"],
-    issued_at: now - 60,
-    not_before: now - 60,
-    expires_at: now + 3_600,
-    holder_thumbprint: ec_holder_thumbprint,
-    operations: [%V3.Operation{name: "schedule_inspection", selectors: [:all]}]
-  }
+ec_grant_input = %{
+  issuer: "https://issuer.example",
+  grant_id: "urn:example:grant:inspection-1",
+  audiences: ["https://maintenance.example"],
+  issued_at: now - 60,
+  not_before: now - 60,
+  expires_at: now + 3_600,
+  holder_thumbprint: ec_holder_thumbprint,
+  operations: [%V3.Operation{name: "schedule_inspection", selectors: [:all]}]
+}
 
-  {:ok, %{grant: ec_grant}} = Adapter.V3.sign_grant(ec_grant_input, ec_issuer_handle)
+{:ok, %{grant: ec_grant}} = Adapter.V3.sign_grant(ec_grant_input, ec_issuer_handle)
 
-  ec_trusted_issuer = %V1.TrustedIssuer{key_id: ec_issuer.key_id, public_key: ec_issuer.public}
+ec_trusted_issuer = %V1.TrustedIssuer{key_id: ec_issuer.key_id, public_key: ec_issuer.public}
 
-  {:ok, ec_grant_facts} =
-    V3.verify_grant(ec_grant, ec_trusted_issuer, %{
-      expected_grant
-      | audience: "https://maintenance.example"
-    })
+{:ok, ec_grant_facts} =
+  V3.verify_grant(ec_grant, ec_trusted_issuer, %{
+    expected_grant
+    | audience: "https://maintenance.example"
+  })
 
-  inspection =
-    {:object, [{"asset", {:string, "pump-station-2"}}, {"window", {:string, "next-week"}}]}
+inspection =
+  {:object, [{"asset", {:string, "pump-station-2"}}, {"window", {:string, "next-week"}}]}
 
-  ec_report = %{
-    grant_compact: ec_grant,
-    operation: "schedule_inspection",
-    method: "POST",
-    target_uri: "https://maintenance.example/inspections",
-    invocation_id: "3e4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7",
-    cast_arguments: inspection,
-    nonce: nil
-  }
+ec_report = %{
+  grant_compact: ec_grant,
+  operation: "schedule_inspection",
+  method: "POST",
+  target_uri: "https://maintenance.example/inspections",
+  invocation_id: "3e4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7",
+  cast_arguments: inspection,
+  nonce: nil
+}
 
-  {:ok, %{grant: ^ec_grant, proof: ec_proof}} =
-    Adapter.V3.sign_report(ec_report, ec_holder_handle, %{issued_at: now - 5})
+{:ok, %{grant: ^ec_grant, proof: ec_proof}} =
+  Adapter.V3.sign_report(ec_report, ec_holder_handle, %{issued_at: now - 5})
 
-  ec_credentials = %V1.Credentials{grant: ec_grant, proof: ec_proof}
+ec_credentials = %V1.Credentials{grant: ec_grant, proof: ec_proof}
 
-  ec_expected = %V1.ExpectedRequest{
-    trusted_issuer: ec_trusted_issuer,
-    issuer: "https://issuer.example",
-    audience: "https://maintenance.example",
-    method: "POST",
-    target_uri: "https://maintenance.example/inspections",
-    invocation_id: "3e4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7",
-    operation: "schedule_inspection",
-    cast_arguments: inspection,
-    evaluation_time: now,
-    clock_skew: 60,
-    proof_max_age: 300,
-    nonce: :not_required,
-    bounds: V1.Bounds.maximum()
-  }
+ec_expected = %V1.ExpectedRequest{
+  trusted_issuer: ec_trusted_issuer,
+  issuer: "https://issuer.example",
+  audience: "https://maintenance.example",
+  method: "POST",
+  target_uri: "https://maintenance.example/inspections",
+  invocation_id: "3e4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7",
+  operation: "schedule_inspection",
+  cast_arguments: inspection,
+  evaluation_time: now,
+  clock_skew: 60,
+  proof_max_age: 300,
+  nonce: :not_required,
+  bounds: V1.Bounds.maximum()
+}
 
-  {:ok, ec_facts} = V3.check_envelope(ec_credentials, ec_expected)
+{:ok, ec_facts} = V3.check_envelope(ec_credentials, ec_expected)
 
-  [
-    grant_verified: facts_of.(ec_grant_facts, [:version, :grant_id, :authorization]),
-    grant_signature_low_s: low_s?.(signature_of.(ec_grant)),
-    envelope_verified: facts_of.(ec_facts, [:version, :operation, :authorization]),
-    proof_signature_low_s: low_s?.(signature_of.(ec_proof))
-  ]
-)
+true = low_s?.(signature_of.(ec_grant))
 
-true = semantic_output == [
-  grant_verified: [
-    version: 3,
-    grant_id: "urn:example:grant:inspection-1",
-    authorization: :not_evaluated
-  ],
-  grant_signature_low_s: true,
-  envelope_verified: [version: 3, operation: "schedule_inspection", authorization: :not_evaluated],
-  proof_signature_low_s: true
+true = low_s?.(signature_of.(ec_proof))
+
+[
+  grant_verified: facts_of.(ec_grant_facts, [:version, :grant_id, :authorization]),
+  grant_signature_low_s: low_s?.(signature_of.(ec_grant)),
+  envelope_verified: facts_of.(ec_facts, [:version, :operation, :authorization]),
+  proof_signature_low_s: low_s?.(signature_of.(ec_proof))
 ]
-semantic_output
 ```
 
 <!-- livebook:{"output":true} -->
@@ -516,112 +474,87 @@ semantic_output
 ```
 
 ```elixir
-semantic_output = (
-  ec_stranger_handle = {Demo.P256Handle, p256_key.("stranger-ec-key-1", :holder)}
+ec_stranger_handle = {Demo.P256Handle, p256_key.("stranger-ec-key-1", :holder)}
 
-  {:ok, %{proof: ec_stranger_proof}} =
-    Adapter.V3.sign_report(ec_report, ec_stranger_handle, %{issued_at: now - 5})
+{:ok, %{proof: ec_stranger_proof}} =
+  Adapter.V3.sign_report(ec_report, ec_stranger_handle, %{issued_at: now - 5})
 
-  [
-    tampered_proof:
-      V3.check_envelope(%{ec_credentials | proof: flip_one_byte.(ec_proof)}, ec_expected),
-    stranger_holder_key:
-      V3.check_envelope(%{ec_credentials | proof: ec_stranger_proof}, ec_expected),
-    wrong_audience:
-      V3.check_envelope(ec_credentials, %{ec_expected | audience: "https://other.example"}),
-    major_1_verifier: V1.check_envelope(ec_credentials, ec_expected),
-    ed25519_handle: Adapter.V3.sign_report(ec_report, holder_handle),
-    major_1_grant: Adapter.V3.sign_report(%{ec_report | grant_compact: grant}, ec_holder_handle),
-    role_attestation_option:
-      Adapter.V3.sign_grant(ec_grant_input, ec_issuer_handle, gate.(issuer_attestation, now))
-  ]
-)
+# Tampered proof.
+{:error, :invalid} =
+  V3.check_envelope(%{ec_credentials | proof: flip_one_byte.(ec_proof)}, ec_expected)
 
-true = semantic_output == [
-  tampered_proof: {:error, :invalid},
-  stranger_holder_key: {:error, :invalid},
-  wrong_audience: {:error, :invalid},
-  major_1_verifier: {:error, :invalid},
-  ed25519_handle: {:error, :invalid_key_handle},
-  major_1_grant: {:error, :invalid_report},
-  role_attestation_option: {:error, :invalid_role_attestation}
-]
-semantic_output
+# Stranger holder key.
+{:error, :invalid} = V3.check_envelope(%{ec_credentials | proof: ec_stranger_proof}, ec_expected)
+
+# Wrong audience.
+{:error, :invalid} =
+  V3.check_envelope(ec_credentials, %{ec_expected | audience: "https://other.example"})
+
+# Major 1 verifier.
+{:error, :invalid} = V1.check_envelope(ec_credentials, ec_expected)
+
+# Ed25519 handle.
+{:error, :invalid_key_handle} = Adapter.V3.sign_report(ec_report, holder_handle)
+
+# Major 1 grant.
+{:error, :invalid_report} =
+  Adapter.V3.sign_report(%{ec_report | grant_compact: grant}, ec_holder_handle)
+
+# Role attestation option.
+{:error, :invalid_role_attestation} =
+  Adapter.V3.sign_grant(ec_grant_input, ec_issuer_handle, gate.(issuer_attestation, now))
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-[
-  tampered_proof: {:error, :invalid},
-  stranger_holder_key: {:error, :invalid},
-  wrong_audience: {:error, :invalid},
-  major_1_verifier: {:error, :invalid},
-  ed25519_handle: {:error, :invalid_key_handle},
-  major_1_grant: {:error, :invalid_report},
-  role_attestation_option: {:error, :invalid_role_attestation}
-]
+{:error, :invalid_role_attestation}
 ```
 
 ```elixir
-semantic_output = (
-  defmodule Demo.P256DerHandle do
-    @moduledoc false
-    @behaviour BoundedAuthorityReportAdapter
+defmodule Demo.P256DerHandle do
+  @moduledoc false
+  @behaviour BoundedAuthorityReportAdapter
 
-    # Returns OTP's native DER signature, which is not an ES256 wire form.
-    @impl true
-    def sign(message, key), do: Demo.Custody.sign(key, message)
+  # Returns OTP's native DER signature, which is not an ES256 wire form.
+  @impl true
+  def sign(message, key), do: Demo.Custody.sign(key, message)
 
-    @impl true
-    def public_key(key), do: Demo.P256Handle.public_key(key)
+  @impl true
+  def public_key(key), do: Demo.P256Handle.public_key(key)
 
-    @impl true
-    def thumbprint(key), do: Demo.P256Handle.thumbprint(key)
-  end
+  @impl true
+  def thumbprint(key), do: Demo.P256Handle.thumbprint(key)
+end
 
-  stranger = ed25519_key.("stranger-key-2", :holder)
-  mismatched_holder = {Demo.Ed25519Handle, %{holder | reference: stranger.reference}}
+stranger = ed25519_key.("stranger-key-2", :holder)
+mismatched_holder = {Demo.Ed25519Handle, %{holder | reference: stranger.reference}}
 
-  ec_stranger = p256_key.("stranger-ec-key-2", :holder)
-  mismatched_ec_holder = {Demo.P256Handle, %{ec_holder | reference: ec_stranger.reference}}
+ec_stranger = p256_key.("stranger-ec-key-2", :holder)
+mismatched_ec_holder = {Demo.P256Handle, %{ec_holder | reference: ec_stranger.reference}}
 
-  [
-    ed25519_signs_with_another_key: Adapter.sign_report(report, mismatched_holder),
-    p256_signs_with_another_key: Adapter.V3.sign_report(ec_report, mismatched_ec_holder),
-    p256_returns_der: Adapter.V3.sign_report(ec_report, {Demo.P256DerHandle, ec_holder})
-  ]
-)
+# Ed25519 signs with another key.
+{:error, :signing_failed} = Adapter.sign_report(report, mismatched_holder)
 
-true = semantic_output == [
-  ed25519_signs_with_another_key: {:error, :signing_failed},
-  p256_signs_with_another_key: {:error, :signing_failed},
-  p256_returns_der: {:error, :signing_failed}
-]
-semantic_output
+# P256 signs with another key.
+{:error, :signing_failed} = Adapter.V3.sign_report(ec_report, mismatched_ec_holder)
+
+# P256 returns der.
+{:error, :signing_failed} = Adapter.V3.sign_report(ec_report, {Demo.P256DerHandle, ec_holder})
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-[
-  ed25519_signs_with_another_key: {:error, :signing_failed},
-  p256_signs_with_another_key: {:error, :signing_failed},
-  p256_returns_der: {:error, :signing_failed}
-]
+{:error, :signing_failed}
 ```
 
 ## Clean up
 
 ```elixir
-semantic_output = (
-  GenServer.stop(custody)
-  false = Process.alive?(custody)
-  :clean
-)
-
-true = semantic_output == :clean
-semantic_output
+:ok = GenServer.stop(custody)
+false = Process.alive?(custody)
+:clean
 ```
 
 <!-- livebook:{"output":true} -->

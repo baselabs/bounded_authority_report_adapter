@@ -99,6 +99,24 @@ defmodule BoundedAuthorityReportAdapter.DocSamplesTest do
     assert readme_handle == guide_handle
   end
 
+  test "the custody guide and notebooks execute the same plain handle setup" do
+    guide =
+      "docs/guides/key-custody.md"
+      |> blocks_of()
+      |> Enum.find(&String.contains?(&1.code, "defmodule Demo.Custody"))
+
+    for path <- Path.wildcard(Path.join(@root, "docs/notebooks/*.livemd")) do
+      setup =
+        path
+        |> File.read!()
+        |> code_blocks()
+        |> Enum.find(&String.contains?(&1.code, "defmodule Demo.Custody"))
+
+      assert String.starts_with?(setup.code, "defmodule Demo.Custody do"), path
+      assert setup.code == guide.code, path
+    end
+  end
+
   test "the consumer-integration verifier accepts a real envelope and rejects the rest",
        %{readme_state: %{binding: binding}} do
     holder = Keyword.fetch!(binding, :holder)

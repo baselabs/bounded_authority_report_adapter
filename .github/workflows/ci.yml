@@ -183,7 +183,7 @@ jobs:
       - name: Test (the end-to-end round-trip + the four rejection classes)
         run: mix test
 
-  notebooks-local:
+  livebooks-local:
     runs-on: ubuntu-24.04
     timeout-minutes: 90 # no green run yet
     steps:
@@ -196,7 +196,7 @@ jobs:
       - name: Execute every notebook against local dependencies
         run: elixir scripts/check_livebooks.exs --local
 
-  notebooks-published:
+  livebooks-published:
     runs-on: ubuntu-24.04
     timeout-minutes: 90 # no green run yet
     steps:
@@ -211,7 +211,7 @@ jobs:
 
   qualified:
     if: always()
-    needs: [toolchain, gate, example, notebooks-local, notebooks-published]
+    needs: [toolchain, gate, example, livebooks-local, livebooks-published]
     runs-on: ubuntu-24.04
     timeout-minutes: 5 # run 44208265114
     steps:
