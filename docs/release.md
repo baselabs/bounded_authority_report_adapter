@@ -4,6 +4,9 @@ How a release of `bounded_authority_report_adapter` goes from a commit on `maste
 Each release checks compatibility, examples, documentation and artifact provenance.
 Publishing is irreversible after Hex's one-hour revert window.
 
+The publication workflow publishes new versions of existing Hex.pm packages only and
+refuses a package name the registry has never had. A first publication is the owner's decision.
+
 Throughout, `X.Y.Z` is the version being released and `SHA` is the release commit.
 
 ## 1. The release commit

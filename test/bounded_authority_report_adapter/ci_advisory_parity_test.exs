@@ -203,6 +203,44 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     assert setup =~ "System.version() == version"
   end
 
+  test "publication confirms the package exists before checking its version or publishing" do
+    workflow = File.read!(".github/workflows/publish.yml")
+    [before_build, _] = String.split(workflow, "\n      - name: Build documentation", parts: 2)
+
+    assert before_build =~
+             "package = to_string(Keyword.get(config[:package] || [], :name, config[:app]))"
+
+    [_, name_lookup, version_lookup] =
+      Regex.run(
+        ~r/python3 - <<'PYTHON'\n(.*?)\n          PYTHON\s+- name: Refuse an existing version tag or Hex release(.*)/s,
+        before_build
+      )
+
+    assert name_lookup =~ "name = os.environ['PACKAGE']"
+    assert name_lookup =~ "package = urllib.parse.quote(name, safe='')"
+    assert name_lookup =~ "package_url = f'https://hex.pm/api/packages/{package}'"
+    assert name_lookup =~ "urllib.request.urlopen(package_url, timeout=30) as response:"
+    assert version_lookup =~ "/releases/{version}"
+
+    for pattern <- [
+          ~r/if response.status != 200:\s+raise SystemExit\(f'::error::Hex.pm registry could not be read/,
+          ~r/if error.code == 404:\s+raise SystemExit\(/,
+          ~r/except \(OSError, http.client.HTTPException\):\s+raise SystemExit\(f'::error::Hex.pm registry could not be read/
+        ] do
+      assert name_lookup =~ pattern
+      mutated = Regex.replace(pattern, name_lookup, "")
+      refute mutated == name_lookup
+      refute mutated =~ pattern
+    end
+
+    assert name_lookup =~ "{name} has never been published to Hex.pm: "
+    assert name_lookup =~ "this workflow publishes new versions of existing packages only. "
+    assert name_lookup =~ "A first publication is the owner's decision."
+
+    assert name_lookup =~
+             "raise SystemExit(f'::error::Hex.pm registry could not be read for {name} (HTTP {error.code})')"
+  end
+
   test "every job in every workflow runs on the pinned GitHub-hosted image" do
     for path <- workflows(),
         [_, runner] <- Regex.scan(~r/^\s+runs-on: (.+)$/m, File.read!(path)) do
