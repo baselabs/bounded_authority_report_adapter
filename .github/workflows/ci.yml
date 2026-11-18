@@ -185,7 +185,7 @@ jobs:
 
   livebooks-local:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90 # no green run yet
+    timeout-minutes: 5 # run 44373025522
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -200,7 +200,7 @@ jobs:
     name: Build checked release package evidence
     needs: [gate, example, livebooks-local]
     runs-on: ubuntu-24.04
-    timeout-minutes: 90 # no green run yet
+    timeout-minutes: 5 # run 44373025522
     outputs:
       version: ${{ steps.archive.outputs.version }}
     # This job runs project code with read-only permissions and no signing identity.
