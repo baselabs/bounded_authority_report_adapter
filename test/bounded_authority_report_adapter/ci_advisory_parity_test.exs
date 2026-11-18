@@ -212,7 +212,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     tag = Enum.find_index(steps, &(&1["name"] == "Refuse an existing version tag"))
     build = Enum.find_index(steps, &(&1["name"] == "Build documentation"))
     assert is_integer(identity) and is_integer(lookup) and is_integer(tag) and is_integer(build)
-    assert identity < lookup and lookup < tag and tag < build
+    assert lookup < identity and identity < tag and tag < build
 
     assert Enum.at(steps, identity)["run"] =~
              "package = to_string(Keyword.get(config[:package] || [], :name, config[:app]))"

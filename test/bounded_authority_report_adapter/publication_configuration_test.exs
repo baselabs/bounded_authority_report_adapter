@@ -26,10 +26,13 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     [upload] = Enum.filter(steps, &Map.has_key?(&1["env"] || %{}, "HEX_API_KEY"))
     assert upload["env"] == %{"HEX_API_KEY" => "${{ secrets.HEX_API_KEY }}"}
     assert upload["id"] == "upload"
-    assert upload["working-directory"] == "${{ runner.temp }}/hex-upload"
+    assert upload["working-directory"] == "${{ runner.temp }}"
     assert upload["run"] =~ "test ! -e mix.exs"
     assert upload["run"] =~ "sha256sum --check"
-    assert upload["run"] =~ "mix run --no-mix-exs --no-start publish_hex.exs"
+    assert upload["run"] =~
+             ~s(mix run --no-mix-exs --no-start "$GITHUB_WORKSPACE/scripts/publish_hex_artifacts.exs")
+
+    assert upload["run"] =~ ~s("$PACKAGE" "$VERSION" "$PACKAGE_ARCHIVE" "$DOCS_ARCHIVE")
     refute upload["run"] =~ "mix hex.publish"
     without_upload = put_in(workflow, ["jobs", "publish", "steps"], steps -- [upload])
     refute inspect(without_upload) =~ "HEX_API_KEY"
@@ -39,6 +42,8 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     end
 
     commands = Enum.map(steps, &(&1["run"] || ""))
+    name = Enum.find_index(commands, &(&1 == "python3 scripts/check_hex_release.py name"))
+    deps = Enum.find_index(commands, &(&1 == "mix deps.get --check-locked"))
     docs = Enum.find_index(commands, &String.contains?(&1, "mix docs --warnings-as-errors"))
     build = Enum.find_index(commands, &String.starts_with?(&1, "mix hex.build --output"))
 
@@ -55,7 +60,12 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     read_back =
       Enum.find_index(commands, &(&1 == "python3 scripts/check_hex_release.py read-back"))
 
-    assert Enum.all?([docs, build, check, verify, prepare, keyed, read_back], &is_integer/1)
+    assert Enum.all?(
+             [name, deps, docs, build, check, verify, prepare, keyed, read_back],
+             &is_integer/1
+           )
+    assert name < deps and deps < docs
+    assert Enum.at(steps, name)["env"] == %{"PACKAGE" => "bounded_authority_report_adapter"}
     assert docs < build and build < check and check < verify and verify < prepare
     assert prepare < keyed and keyed < read_back
     assert Enum.at(steps, read_back)["env"]["PUBLICATION_HELD"] == "${{ steps.upload.outputs.held }}"
@@ -63,7 +73,7 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     assert Enum.at(commands, docs) =~ "--sort=name --mtime="
     assert Enum.at(commands, docs) =~ "gzip -n"
     assert Enum.at(commands, check) =~ ~s("$PACKAGE_ARCHIVE")
-    assert Enum.at(commands, prepare) =~ ~s(mkdir "$RUNNER_TEMP/hex-upload")
+    assert Enum.at(commands, prepare) =~ ~s(sha256sum "$PACKAGE_ARCHIVE" "$DOCS_ARCHIVE")
 
     verifier = Enum.at(steps, verify)
     assert verifier["env"] == %{"GH_TOKEN" => "${{ github.token }}"}
@@ -128,7 +138,15 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
       refute mutated =~ required
     end
 
-    upload = File.read!("scripts/publish_hex.exs")
+    upload = File.read!("scripts/publish_hex_artifacts.exs")
+    assert upload =~ "def main([name, version, archive, docs])"
+    assert upload =~ "if Mix.Project.get(), do: raise("
+    assert upload =~ "exists!(Hex.API.Package.get_anonymous(nil, name), name)"
+    assert upload =~ ~S(#{name} is not on Hex; first publication is the owner's decision)
+    assert upload =~ ~S(could not confirm #{name} exists on Hex; publication refused)
+    [before_upload, _] = String.split(upload, "Hex.API.Release.publish(", parts: 2)
+    assert before_upload =~ "package_bytes = File.read!(archive)"
+    assert before_upload =~ "docs_bytes = File.read!(docs)"
     assert upload =~ "Hex.API.Release.publish("
     assert upload =~ "Hex.API.ReleaseDocs.publish("
     assert upload =~ "replace: false"
@@ -138,8 +156,10 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     assert upload =~ ~s(state in ["staged", "held", "pending"])
     assert upload =~ "status == 202"
     assert upload =~ "held for approval on Hex; publication is incomplete"
-    refute upload =~ "Mix.Project"
+    refute upload =~ "Mix.Project.config"
     refute upload =~ "Mix.Task"
+    refute upload =~ "Hex.API.Release.get("
+    refute upload =~ "do not redispatch"
   end
 
   test "qualification gates its reusable attestation and never writes caches" do

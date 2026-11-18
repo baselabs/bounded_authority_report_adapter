@@ -54,11 +54,9 @@ def main():
     if len(sys.argv) != 2 or sys.argv[1] not in ("name", "prepare", "read-back"):
         refuse("usage: check_hex_release.py name|prepare|read-back")
     mode = sys.argv[1]
-    package, version = os.environ["PACKAGE"], os.environ["VERSION"]
-    if not re.fullmatch(r"[a-z][a-z0-9_]*", package) or not re.fullmatch(
-        r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", version
-    ):
-        refuse("Invalid release identity")
+    package = os.environ["PACKAGE"]
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", package):
+        refuse("Invalid package name")
     package_url = f"https://hex.pm/api/packages/{package}"
     # Also repeat the name refusal before any upload and during the final read-back.
     if fetch(package_url) is None:
@@ -70,6 +68,9 @@ def main():
     if mode == "name":
         return
 
+    version = os.environ["VERSION"]
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", version):
+        refuse("Invalid release version")
     metadata = fetch(f"{package_url}/releases/{version}")
     release = None if metadata is None else json.loads(metadata)
     if release is not None:
