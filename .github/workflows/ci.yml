@@ -17,7 +17,7 @@ jobs:
   toolchain:
     name: Read suite toolchains
     runs-on: ubuntu-24.04
-    timeout-minutes: 5 # no green run yet
+    timeout-minutes: 5 # run 44208265114
     outputs:
       lanes: ${{ steps.versions.outputs.lanes }}
     steps:
@@ -54,7 +54,7 @@ jobs:
     name: Gate battery (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     # A public repository runs on GitHub-hosted runners only, on a pinned image.
     runs-on: ubuntu-24.04
-    timeout-minutes: 7 # run 44167643363
+    timeout-minutes: 12 # run 44208265114
 
     # Local parity: `mix ci` reproduces these steps step-for-step on the
     # PINNED lane only (asdf .tool-versions, the local floor). The matrix is
@@ -132,7 +132,7 @@ jobs:
     needs: toolchain
     name: examples/edge_agent (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 5 # run 44167643363
+    timeout-minutes: 5 # run 44208265114
 
     # Same matrix as the gate job (one Linux lane per supported OTP major):
     # the example app is part of the supported surface (its
@@ -184,7 +184,7 @@ jobs:
     if: always()
     needs: [toolchain, gate, example]
     runs-on: ubuntu-24.04
-    timeout-minutes: 5 # no green run yet
+    timeout-minutes: 5 # run 44208265114
     steps:
       - name: Require every qualification job to succeed
         env:
