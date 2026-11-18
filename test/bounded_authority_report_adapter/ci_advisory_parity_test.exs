@@ -21,6 +21,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
   @edge_dir "examples/edge_agent"
   @audit_command "mix hex.audit"
+  @advisory_command "mix deps.audit"
   @env_guard_step "run --no-start scripts/ci_env_guard.exs"
 
   # A public repository runs on GitHub-hosted runners only, on a pinned image.
@@ -65,7 +66,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
            "mix ci must run the example job's runner as its example section"
 
     assert runner =~
-             ~r|\{"install deps", \["deps\.get", "--check-locked"\]\},\s*\{"audit dependencies", \["hex\.audit"\]\},|,
+             ~r|\{"install deps", \["deps\.get", "--check-locked"\]\},\s*\{"audit dependencies", \["hex\.audit"\]\},\s*\{"audit dependency advisories", \["deps\.audit"\]\},|,
            "the example runner must audit the edge example's own lock immediately " <>
              "after resolving its dependencies"
   end
@@ -79,8 +80,8 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
            "the GitHub example job must bind every mix command to examples/edge_agent"
 
     assert example_job =~
-             ~r|- name: Install deps\s+run: mix deps\.get --check-locked\s+- name: Audit dependencies\s+run: #{@audit_command}|,
-           "the GitHub example job must run mix hex.audit against examples/edge_agent, not " <>
+             ~r|- name: Install deps\s+run: mix deps\.get --check-locked\s+- name: Audit dependencies\s+run: #{@audit_command}\s+- name: Audit dependency advisories\s+run: #{@advisory_command}|,
+           "the GitHub example job must run both audits against examples/edge_agent, not " <>
              "the root library lock"
   end
 

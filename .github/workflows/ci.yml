@@ -165,6 +165,9 @@ jobs:
       - name: Audit dependencies
         run: mix hex.audit
 
+      - name: Audit dependency advisories
+        run: mix deps.audit
+
       - name: Check formatting
         run: mix format --check-formatted
 

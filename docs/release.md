@@ -34,7 +34,7 @@ commit edits:
 - the CHANGELOG line "The protocol dependency moves from `x` to `y`", which the Livebook
   test reads.
 
-## 2. Gates before the tag
+## 2. Gates before publication
 
 Run each and keep its output.
 
@@ -46,10 +46,17 @@ Run each and keep its output.
    curl -s https://hex.pm/api/packages/bounded_authority_protocol/releases/P.Q.R | jq -r .checksum
    ```
 
-2. **Local CI.** `MIX_ENV=test mix ci` exits 0.
-3. **CI on `SHA`.** `gh run watch <run-id> --exit-status` for the CI run of the release
-   commit exits 0.
-4. **Supply-chain attestation of `SHA`.** Run the workflow on `master` while the release
+2. **Qualification and landing.** Land `SHA` with
+   `kimosabe-land --repo . --sha <full sha>`. Its `kci/**` push runs the complete
+   qualification suite; `qualified` must be green before `master` moves. The project
+   session stops at the default branch and sends infra the commit, version and green run.
+3. **Publication authorization.** Infra requests the owner’s authorization for dispatching
+   `publish.yml` from `master`, with no inputs, in environment `publish`. Only `corepay` and `palermo-git` may be
+   both the actor and triggering actor. The workflow refuses any other ref, installs
+   the exact toolchain and pinned Hex client, fetches with `mix deps.get --check-locked`,
+   and refuses an existing version tag or Hex release. It relies on the default-branch
+   ruleset for qualification and does not rerun CI.
+4. **Supply-chain attestation of `SHA`.** Infra runs `supply-chain.yml` on `master` while the release
    commit is its head. The workflow attests the head of the ref it is started on and takes no
    commit input; the evidence artifact is named after that head commit. Wait for it:
 
@@ -62,27 +69,22 @@ Run each and keep its output.
      --repo baselabs/bounded_authority_report_adapter
    ```
 
-5. **The archive you would publish is the attested archive.** In a clean checkout of
-   `SHA`:
+5. **The inspected archive is the published archive.** `publish.yml` builds the docs
+   with warnings as errors, archives them, builds the Hex package, lists both package
+   layers and records both archive checksums. Its final step verifies those checksums
+   and uploads those exact package and documentation bytes through the Hex APIs.
+   `HEX_API_KEY` exists only in that step's environment; project and dependency code
+   do not run in the process holding it. The workflow fails if Hex stages the upload
+   for approval instead of completing publication. The pinned Hex client keeps
+   archive metadata consistent with the supply-chain build.
 
-   ```sh
-   mix local.hex "$(cat .hex-version)" --force
-   mix deps.get
-   mix hex.build --output /tmp/bounded_authority_report_adapter-X.Y.Z.tar
-   sha256sum /tmp/bounded_authority_report_adapter-X.Y.Z.tar
-   ```
+## 3. Publish and tag
 
-   The Hex client writes its own version into the archive metadata, so the build must run on
-   the client `.hex-version` pins, the one CI and the attestation used. The digest must equal the
-   one in `evidence/SHA256SUMS`. If it does not, stop. Publish from this same checkout with the
-   same Hex client, so the published archive is these bytes.
-
-## 3. Tag and publish
-
-6. Push the tag: `git tag -a vX.Y.Z SHA -m "X.Y.Z" && git push origin vX.Y.Z`. The tag's
-   supply-chain run must attest the same digest as step 4.
-7. Publish from the clean checkout of `SHA`: `mix hex.publish`. The one-hour revert
-   window starts.
+6. After the gates above, the owner dispatches `publish.yml`; infra reads the run to
+   completion. The workflow creates no tag or GitHub release. Hex's one-hour revert window starts at publication.
+7. Infra verifies the published bytes against the supply-chain evidence below, then
+   creates `vX.Y.Z` on the published `SHA`. The tag's supply-chain run must attest
+   the same digest as step 4; a tag push does not publish a package.
 
 ## 4. Read-back, within the hour
 
@@ -100,8 +102,9 @@ Run each and keep its output.
 12. `examples/edge_agent` runs against the published package: in a scratch copy, replace
     the `path: "../.."` dependency with `"~> X.Y"`, then `mix deps.get && mix test`.
 
-If any read-back fails inside the hour: `mix hex.publish --revert X.Y.Z`, fix, and start
-again from step 1. After the hour, fix forward as `X.Y.(Z+1)`.
+If any read-back fails inside the hour, infra asks the owner before reverting the
+publication, then fixes the release and starts again from step 1. After the hour, fix
+forward as `X.Y.(Z+1)`.
 
 ## 5. Evidence commit
 

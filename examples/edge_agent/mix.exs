@@ -51,7 +51,8 @@ defmodule EdgeAgent.MixProject do
       # HTTP server (the receiver is a Plug served by Bandit).
       {:plug, "~> 1.15"},
       {:bandit, "~> 1.0"},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
     ]
   end
 end

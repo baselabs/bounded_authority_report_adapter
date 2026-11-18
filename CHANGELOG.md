@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Audit the example project with both dependency feeds; add `mix_audit` as development and test tooling.
+
 ### Documentation
 
 - Correct the released 1.0 stability policy and dependency graph throughout the guides.

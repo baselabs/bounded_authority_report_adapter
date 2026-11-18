@@ -62,8 +62,8 @@ mix credo --strict
 mix test
 ```
 
-CI has two jobs in `.github/workflows/ci.yml`: `gate` checks the library, and `example`
-checks `examples/edge_agent`. The one-command whole-repo check, `mix ci`, runs both jobs'
+In `.github/workflows/ci.yml`, `gate` checks the library and `example` checks
+`examples/edge_agent`, alongside toolchain discovery and the final `qualified` gate. The one-command whole-repo check, `mix ci`, runs both jobs'
 checks on the current toolchain, with the example section delegated to
 `scripts/ci_example.exs`. The library's tests run once with coverage, rather than CI's
 separate `mix test` and `mix test --cover` steps. The alias does not reproduce Actions'
@@ -112,9 +112,11 @@ and is not part of `mix ci`.
 ## Releases
 
 A release follows the [release runbook](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/release.md): the release commit, the gates
-before the tag (local and remote CI, the supply-chain attestation, and an archive
-checksum equal to the attested one), the release tag and publication, and the registry
-read-back within Hex's one-hour revert window.
+before publication (`kci/**` qualification and landing, the supply-chain attestation,
+and an archive checksum equal to the attested one), then the owner dispatches `publish.yml`
+from `master` in environment `publish`. That workflow builds and inspects the package and
+docs and uploads those exact bytes. Infra verifies the registry read-back within Hex's
+one-hour revert window and tags the published commit afterward.
 
 ## Docs
 

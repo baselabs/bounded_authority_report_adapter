@@ -14,6 +14,7 @@ defmodule BoundedAuthorityReportAdapter.CiExample do
   @steps [
     {"install deps", ["deps.get", "--check-locked"]},
     {"audit dependencies", ["hex.audit"]},
+    {"audit dependency advisories", ["deps.audit"]},
     {"check formatting", ["format", "--check-formatted"]},
     {"compile (warnings as errors)", ["compile", "--warnings-as-errors"]},
     {"lint (credo)", ["credo", "--strict"]},
