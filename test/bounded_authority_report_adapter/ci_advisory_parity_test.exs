@@ -205,41 +205,35 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   end
 
   test "publication confirms the package exists before checking its version or publishing" do
-    workflow = File.read!(".github/workflows/publish.yml")
-    [before_build, _] = String.split(workflow, "\n      - name: Build documentation", parts: 2)
+    workflow = YamlElixir.read_from_file!(".github/workflows/publish.yml")
+    steps = workflow["jobs"]["publish"]["steps"]
+    identity = Enum.find_index(steps, &(&1["name"] == "Read the package identity"))
+    lookup = Enum.find_index(steps, &(&1["run"] == "python3 scripts/check_hex_release.py name"))
+    tag = Enum.find_index(steps, &(&1["name"] == "Refuse an existing version tag"))
+    build = Enum.find_index(steps, &(&1["name"] == "Build documentation"))
+    assert is_integer(identity) and is_integer(lookup) and is_integer(tag) and is_integer(build)
+    assert identity < lookup and lookup < tag and tag < build
 
-    assert before_build =~
+    assert Enum.at(steps, identity)["run"] =~
              "package = to_string(Keyword.get(config[:package] || [], :name, config[:app]))"
 
-    [_, name_lookup, version_lookup] =
-      Regex.run(
-        ~r/python3 - <<'PYTHON'\n(.*?)\n          PYTHON\s+- name: Refuse an existing version tag or Hex release(.*)/s,
-        before_build
-      )
-
-    assert name_lookup =~ "name = os.environ['PACKAGE']"
-    assert name_lookup =~ "package = urllib.parse.quote(name, safe='')"
-    assert name_lookup =~ "package_url = f'https://hex.pm/api/packages/{package}'"
-    assert name_lookup =~ "urllib.request.urlopen(package_url, timeout=30) as response:"
-    assert version_lookup =~ "/releases/{version}"
+    source = File.read!("scripts/check_hex_release.py")
 
     for pattern <- [
-          ~r/if response.status != 200:\s+raise SystemExit\(f'::error::Hex.pm registry could not be read/,
-          ~r/if error.code == 404:\s+raise SystemExit\(/,
-          ~r/except \(OSError, http.client.HTTPException\):\s+raise SystemExit\(f'::error::Hex.pm registry could not be read/
+          ~r/if response.status != 200:\s+refuse\(/,
+          ~r/if error.code == 404:\s+return None/,
+          ~r/except \(OSError, http.client.HTTPException\):\s+refuse\(/,
+          ~r/if fetch\(package_url\) is None:\s+refuse\(/
         ] do
-      assert name_lookup =~ pattern
-      mutated = Regex.replace(pattern, name_lookup, "")
-      refute mutated == name_lookup
+      assert source =~ pattern
+      mutated = Regex.replace(pattern, source, "")
+      refute mutated == source
       refute mutated =~ pattern
     end
 
-    assert name_lookup =~ "{name} has never been published to Hex.pm: "
-    assert name_lookup =~ "this workflow publishes new versions of existing packages only. "
-    assert name_lookup =~ "A first publication is the owner's decision."
-
-    assert name_lookup =~
-             "raise SystemExit(f'::error::Hex.pm registry could not be read for {name} (HTTP {error.code})')"
+    assert source =~ "{package} has never been published to Hex.pm: "
+    assert source =~ "this workflow publishes new versions of existing packages only. "
+    assert source =~ "A first publication is the owner's decision."
   end
 
   test "every job in every workflow runs on the pinned GitHub-hosted image" do
@@ -261,8 +255,9 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
     for {path, ref} <- uses do
       if String.starts_with?(ref, "./") do
-        assert ref == "./.github/actions/setup-beam"
-        assert File.regular?(Path.join(ref, "action.yml"))
+        assert ref in ["./.github/actions/setup-beam", "./.github/workflows/supply-chain.yml"]
+        path = if String.ends_with?(ref, ".yml"), do: ref, else: Path.join(ref, "action.yml")
+        assert File.regular?(path)
       else
         assert ref =~ @pinned_action,
                "#{path} uses #{ref}; pin it to a 40-hex commit SHA with its release comment"

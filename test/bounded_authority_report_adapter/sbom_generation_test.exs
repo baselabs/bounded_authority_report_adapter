@@ -1,8 +1,8 @@
 defmodule BoundedAuthorityReportAdapter.SbomGenerationTest do
   use ExUnit.Case, async: false
 
-  test "supply-chain CI uses the SBOM alias without starting hex_core or SSH" do
-    workflow = File.read!(".github/workflows/supply-chain.yml")
+  test "qualification uses the SBOM alias without starting hex_core or SSH" do
+    workflow = File.read!(".github/workflows/ci.yml")
 
     assert [_, command] =
              Regex.run(~r/- name: Generate CycloneDX SBOM\n\s+run: ([^\n]+)/, workflow)

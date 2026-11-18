@@ -56,46 +56,49 @@ Run each and keep its output.
    `publish.yml` from `master`, with no inputs, in environment `publish`. Only accounts allowlisted in the workflow may be
    both the actor and triggering actor. The workflow refuses any other ref, installs
    the exact toolchain and pinned Hex client, fetches with `mix deps.get --check-locked`,
-   and refuses an existing version tag or Hex release. It relies on the default-branch
+   and refuses an existing version tag or a retired Hex release. It relies on the default-branch
    ruleset for qualification and does not rerun CI.
-4. **Supply-chain attestation of `SHA`.** A release maintainer runs `supply-chain.yml` on `master` while the release
-   commit is its head. The workflow attests the head of the ref it is started on and takes no
-   commit input; the evidence artifact is named after that head commit. Wait for it:
-
-   ```sh
-   gh workflow run supply-chain.yml --ref master
-   gh run watch <run-id> --exit-status
-   gh run download <run-id> --name release-evidence-SHA --dir evidence
-   (cd evidence && sha256sum --check SHA256SUMS)
-   gh attestation verify evidence/bounded_authority_report_adapter-X.Y.Z.tar \
-     --repo baselabs/bounded_authority_report_adapter
-   ```
-
-5. **The inspected archive is the published archive.** `publish.yml` builds the docs
-   with warnings as errors, archives them, builds the Hex package, lists both package
-   layers and records both archive checksums. Its final step verifies those checksums
-   and uploads those exact package and documentation bytes through the Hex APIs.
-   `HEX_API_KEY` exists only in that step's environment; project and dependency code
-   do not run in the process holding it. The workflow fails if Hex stages the upload
-   for approval instead of completing publication. The pinned Hex client keeps
-   archive metadata consistent with the supply-chain build. A separate job,
+4. **Supply-chain attestation of `SHA`.** The same `kci/**` qualification run builds and
+   inspects the exact package archive, records its checksum, generates its release SBOM,
+   and calls `supply-chain.yml` after the gates pass. Only the reusable attestation job
+   holds signing permissions; it runs no project code. `qualified` needs both jobs.
+5. **The inspected archive is the published archive.** `publish.yml` builds HTML docs
+   with warnings as errors and fixed tar/gzip metadata, builds and inspects the Hex package,
+   and verifies its qualification attestation with the signer workflow and source digest.
+   It collects the qualification checksum and SBOM alongside the matching archive.
+   The upload step verifies both archive checksums and uploads only missing bytes through
+   the Hex APIs. `HEX_API_KEY` exists only in that step's environment, in a directory with
+   no `mix.exs`; project and dependency code do not run in the process holding it.
+   A held response is incomplete. After approval on Hex, dispatch again on the same commit:
+   identical existing bytes are left in place, missing uploads are completed, and differing
+   bytes or a retired version are refused. The workflow never replaces a package and
+   succeeds only after an unkeyed read-back proves both uploads match. A separate job,
    `published-livebooks`, then runs every notebook unchanged against the release. It
    has no environment and no key; qualification never installs this package from Hex,
    because a version commit names a release Hex does not serve yet.
 
 ## 3. Publish and tag
 
-6. After the gates above, an authorized release maintainer dispatches `publish.yml` and reads the run to
+6. After the gates above, the authorized release operator dispatches `publish.yml` and reads the run to
    completion. The workflow creates no tag or GitHub release. Hex's one-hour revert window starts at publication.
-7. The release maintainer verifies the published bytes against the supply-chain evidence below, then
-   creates `vX.Y.Z` on the published `SHA`. The tag's supply-chain run must attest
-   the same digest as step 4; a tag push does not publish a package.
+7. After the byte-exact read-back, the release operator compares the publication's archive
+   with the registry, creates `vX.Y.Z` on the published `SHA`, and creates the GitHub release
+   with the archive, `SHA256SUMS` and `release.cdx.json`. Consumers obtain all three files
+   from that GitHub release. No workflow runs on a tag or creates a GitHub release.
 
 ## 4. Read-back, within the hour
 
-8. The registry checksum equals the attested digest:
+8. Download the archive, checksum and SBOM from this repository's GitHub release `vX.Y.Z`.
+   The registry checksum must equal the attested archive digest:
 
    ```sh
+   gh release download vX.Y.Z --repo baselabs/bounded_authority_report_adapter \
+     --pattern '*.tar' --pattern SHA256SUMS --pattern '*.cdx.json'
+   sha256sum --check SHA256SUMS
+   gh attestation verify bounded_authority_report_adapter-X.Y.Z.tar \
+     --repo baselabs/bounded_authority_report_adapter \
+     --signer-workflow baselabs/bounded_authority_report_adapter/.github/workflows/supply-chain.yml \
+     --source-digest SHA --deny-self-hosted-runners
    curl -s https://hex.pm/api/packages/bounded_authority_report_adapter/releases/X.Y.Z | jq -r .checksum
    ```
 

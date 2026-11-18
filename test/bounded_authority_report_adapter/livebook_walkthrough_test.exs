@@ -90,7 +90,7 @@ defmodule BoundedAuthorityReportAdapter.LivebookWalkthroughTest do
     jobs = Regex.scan(~r/^  ([\w-]+):$/m, definitions) |> Enum.map(&Enum.at(&1, 1))
 
     assert jobs ==
-             ~w(toolchain gate example livebooks-local qualified)
+             ~w(toolchain gate example livebooks-local package attest qualified)
 
     [_before, qualification] = String.split(definitions, "  qualified:\n", parts: 2)
     assert qualification =~ "    if: always()\n"

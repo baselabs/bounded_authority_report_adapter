@@ -47,19 +47,25 @@ A report should include:
 
 ## Verifying a release (supply-chain provenance)
 
-Every `v*` tag push runs the supply-chain workflow: it builds the exact Hex
-archive through the full gate battery, records its SHA-256 in `SHA256SUMS`, and
-attests build provenance (SLSA) plus a CycloneDX SBOM via GitHub attestations.
-To verify a published release against that evidence:
+Every `kci/<sha>` qualification run builds and checks the exact Hex archive, records its
+SHA-256 in `SHA256SUMS`, and calls the reusable supply-chain workflow for build-provenance
+and CycloneDX SBOM attestations. Publication verifies the rebuilt archive against that
+attestation and reads both package and documentation bytes back from Hex. The release
+operator then tags the exact source commit and attaches the archive, `SHA256SUMS` and
+`release.cdx.json` to this repository's GitHub release `v<version>`. No workflow runs on a tag.
+To verify the files downloaded from that GitHub release:
 
 ```sh
-# 1. Download the release evidence artifact (the workflow run for the tag)
-#    and the tarball, then compare checksums:
+# 1. Download the GitHub release files and compare checksums:
+gh release download v<version> --repo baselabs/bounded_authority_report_adapter \
+  --pattern '*.tar' --pattern SHA256SUMS --pattern '*.cdx.json'
 sha256sum -c SHA256SUMS
 
-# 2. Verify the attestations against the subject digest (requires the
-#    gh CLI and the workflow run's artifact):
-gh attestation verify <tarball> --repo baselabs/bounded_authority_report_adapter
+# 2. Bind the archive to the qualification signer and exact source commit:
+gh attestation verify bounded_authority_report_adapter-<version>.tar \
+  --repo baselabs/bounded_authority_report_adapter \
+  --signer-workflow baselabs/bounded_authority_report_adapter/.github/workflows/supply-chain.yml \
+  --source-digest <commit> --deny-self-hosted-runners
 
 # 3. Cross-check against hex.pm's published checksum for the release
 #    (hex.pm shows the archive checksum on the version page: it must

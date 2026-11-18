@@ -66,7 +66,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
 
   @cast_arguments {:object, [{"record", {:object, [{"region", {:string, "us-east"}}]}}]}
 
-  def run! do
+  def run!(arguments) do
     source_root = Path.expand("..", __DIR__)
     config = Mix.Project.config()
     version = config[:version]
@@ -75,12 +75,24 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
     scratch_root = unique_tmp_root!()
 
     try do
-      archive_path = Path.join(scratch_root, "bounded_authority_report_adapter-#{version}.tar")
+      archive_path =
+        case arguments do
+          [] ->
+            path = Path.join(scratch_root, "bounded_authority_report_adapter-#{version}.tar")
+            run_mix!(["hex.build", "--output", path], source_root, [])
+            path
+
+          [path] ->
+            Path.expand(path)
+
+          _ ->
+            fail!("usage: check_package.exs [ARCHIVE]")
+        end
+
       outer_root = Path.join(scratch_root, "outer")
       package_root = Path.join(scratch_root, "package")
       consumer_root = Path.join(scratch_root, "consumer")
 
-      run_mix!(["hex.build", "--output", archive_path], source_root, [])
       assert_regular_nonempty!(archive_path)
 
       File.mkdir_p!(outer_root)
@@ -522,4 +534,4 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   defp fail!(message), do: raise("package check failed: #{message}")
 end
 
-BoundedAuthorityReportAdapter.PackageCheck.run!()
+BoundedAuthorityReportAdapter.PackageCheck.run!(System.argv())

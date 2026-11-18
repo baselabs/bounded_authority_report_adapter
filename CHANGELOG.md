@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Attest checked package archives during qualification. Publish those exact bytes from an
+  isolated Hex upload process, resume held package and docs uploads without replacement,
+  and deliver the archive, checksum and CycloneDX SBOM through GitHub releases.
+
 - Reorganize integrator guides and seven executable journey notebooks; qualify both checkout
   and exact published-package runs, recursive samples, source links and rendered links.
 - Correct issuer-role, key-custody, return-shape and first-arrival replay claims. Document the

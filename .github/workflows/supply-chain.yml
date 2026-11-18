@@ -1,123 +1,46 @@
 name: Supply chain
 
+# Attests the package that CI's package job built and checked earlier in the same run.
+# CI calls this workflow inside every kci/<sha> qualification run. It is reusable so that
+# every attestation names it as the signer:
+# `gh attestation verify --signer-workflow .../.github/workflows/supply-chain.yml`.
 on:
-  push:
-    tags:
-      - "v*"
-  # A manual run attests the ref it is started on: the default branch's head
-  # before a tag, or an existing version tag again. It takes no commit input,
-  # so it never builds or attests a commit that has not landed.
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Package version that the package job derived from mix.exs @version.
+        required: true
+        type: string
 
 permissions:
   contents: read
 
-concurrency:
-  group: supply-chain-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  build:
-    name: Build release package evidence
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8 # run 42809482079
-    # Deliberately NO id-token/attestations here: this job compiles and runs
-    # ~40 third-party packages' code: it must not hold OIDC identity. The
-    # attest job below is the only one that can mint attestations, and it
-    # runs no project code.
-    steps:
-      - name: Refuse a ref that is not the default branch or a version tag
-        env:
-          DEFAULT_REF: refs/heads/${{ github.event.repository.default_branch }}
-        run: |
-          case "$GITHUB_REF" in
-            "$DEFAULT_REF"|refs/tags/v*) ;;
-            *)
-              echo "::error::supply-chain attests only $DEFAULT_REF or a version tag, not $GITHUB_REF"
-              exit 1
-              ;;
-          esac
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - uses: ./.github/actions/setup-beam
-
-      - name: Pin the Hex client
-        # The Hex version is written into the archive metadata; .hex-version keeps CI, the
-        # attestation and a local release build on the same client.
-        run: mix local.hex "$(cat .hex-version)" --force
-
-      - name: Install dependencies
-        run: mix deps.get --check-locked
-
-      # MIX_ENV is explicit: the mix ci alias's env-guard REFUSES any boot
-      # other than :test instead of changing it implicitly; the
-      # caller owns the environment now.
-      - name: Run the full gate battery
-        run: MIX_ENV="test" mix ci
-
-      # Artifact names derive from mix.exs @version: never hardcoded (a stale
-      # name after a version bump silently attests nothing).
-      - name: Derive artifact version
-        # Read @version straight from mix.exs: a `mix run` here boots :dev and
-        # its compile progress would pollute the captured value.
-        run: echo "VERSION=$(grep -m1 '@version "' mix.exs | sed 's/.*"\(.*\)".*/\1/')" >> "$GITHUB_ENV"
-
-      - name: Build exact release archive
-        run: |
-          mkdir -p artifacts
-          mix hex.build --output "artifacts/bounded_authority_report_adapter-${VERSION}.tar"
-
-      - name: Record archive checksum
-        working-directory: artifacts
-        run: sha256sum "bounded_authority_report_adapter-${VERSION}.tar" > SHA256SUMS
-
-      - name: Generate CycloneDX SBOM
-        run: mix sbom.generate
-        env:
-          MIX_ENV: test
-
-      - name: Upload release evidence for attestation
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: release-evidence-${{ github.sha }}
-          path: |
-            artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
-            artifacts/release.cdx.json
-            artifacts/SHA256SUMS
-          if-no-files-found: error
-          retention-days: 30
-
   attest:
-    name: Attest provenance and SBOM
-    needs: build
+    name: Attest trusted package
     runs-on: ubuntu-24.04
-    timeout-minutes: 5 # run 42809482079
-    # The ONLY job with signing permissions (SLSA's build/attest split): the
-    # artifact-metadata permission is on actions/attest@v4's documented
-    # required set alongside id-token + attestations.
+    timeout-minutes: 5 # run 42809482079; same keyless download and attestation steps.
     permissions:
       contents: read
       id-token: write
       attestations: write
       artifact-metadata: write
+    env:
+      VERSION: ${{ inputs.version }}
     steps:
-      - name: Download release evidence
+      - name: Download checked package evidence
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: release-evidence-${{ github.sha }}
+          name: bounded-authority-report-adapter-${{ github.sha }}
           path: artifacts
 
       - name: Attest build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: artifacts/bounded_authority_report_adapter-*.tar
+          subject-path: artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
 
       - name: Attest release SBOM
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: artifacts/bounded_authority_report_adapter-*.tar
+          subject-path: artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
           sbom-path: artifacts/release.cdx.json
