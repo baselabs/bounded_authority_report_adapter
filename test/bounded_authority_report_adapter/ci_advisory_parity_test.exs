@@ -302,6 +302,10 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     [keyed, after_upload] = String.split(publish, "\n  published-livebooks:\n", parts: 2)
     assert keyed =~ "secrets.HEX_API_KEY"
     assert after_upload =~ "    needs: publish\n"
+
+    # Every job in publish.yml carries exactly the same actor condition.
+    [publish_if] = Regex.run(~r/^    if: .+$/m, keyed)
+    assert Regex.scan(~r/^    if: .+$/m, after_upload) == [[publish_if]]
     assert after_upload =~ "run: elixir scripts/check_livebooks.exs --published"
     refute after_upload =~ "secrets."
     refute after_upload =~ "environment:"

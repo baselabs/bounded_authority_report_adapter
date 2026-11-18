@@ -145,6 +145,7 @@ jobs:
   # no environment and no secrets, so project and dependency code never share the keyed job.
   published-livebooks:
     needs: publish
+    if: contains(fromJSON('["corepay","palermo-git"]'), github.actor) && contains(fromJSON('["corepay","palermo-git"]'), github.triggering_actor)
     runs-on: ubuntu-24.04
     timeout-minutes: 90 # no green run yet
     steps:
