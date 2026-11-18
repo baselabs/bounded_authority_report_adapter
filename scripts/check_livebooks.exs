@@ -70,11 +70,24 @@ defmodule BoundedAuthorityReportAdapter.NotebookRunner do
 
   def run!(_args), do: raise("usage: elixir scripts/check_livebooks.exs --local | --published")
 
+  # A persisted output is the inspected value. Elixir releases lay out the same term
+  # differently, so both sides are compared as parsed terms, not as text.
   defp compare!(cell, value, path) do
-    actual = inspect(value, pretty: true, width: 100)
+    actual =
+      inspect(value, pretty: true, width: 100, limit: :infinity, printable_limit: :infinity)
 
-    unless actual == cell.output do
-      raise "#{path}:#{cell.line}: output differs: #{actual} != #{cell.output}"
+    unless term!(actual, path, cell.line) == term!(cell.output, path, cell.line) do
+      raise "#{path}:#{cell.line}: output differs:\n#{actual}\n!=\n#{cell.output}"
+    end
+  end
+
+  defp term!(text, path, line) do
+    case Code.string_to_quoted(text) do
+      {:ok, quoted} ->
+        Macro.prewalk(quoted, &Macro.update_meta(&1, fn _meta -> [] end))
+
+      {:error, _} ->
+        raise "#{path}:#{line}: output is not a deterministic Elixir term:\n#{text}"
     end
   end
 

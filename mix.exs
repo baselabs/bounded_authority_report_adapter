@@ -134,7 +134,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       {:igniter, "~> 0.8", optional: true},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},
-      {:earmark_parser, "~> 1.4", only: :test, runtime: false},
+      {:earmark_parser, "~> 1.4", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       # CycloneDX generation uses sbom.generate: mix run --no-start starts only
       # sbom's dependency applications except code-only hex_core, then its
