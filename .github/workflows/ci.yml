@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -88,7 +92,9 @@ jobs:
       - name: Pin the Hex client
         # The Hex version is written into the archive metadata; .hex-version keeps CI, the
         # attestation and a local release build on the same client.
-        run: mix local.hex "$(cat .hex-version)" --force
+        run: |
+          hex_version="$(cat .hex-version)"
+          mix local.hex "$hex_version" --force
 
       - name: Install deps
         run: mix deps.get --check-locked
@@ -192,7 +198,9 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-beam
       - name: Pin the Hex client
-        run: mix local.hex "$(cat .hex-version)" --force
+        run: |
+          hex_version="$(cat .hex-version)"
+          mix local.hex "$hex_version" --force
       - name: Execute every notebook against local dependencies
         run: elixir scripts/check_livebooks.exs --local
 
@@ -213,7 +221,9 @@ jobs:
       - uses: ./.github/actions/setup-beam
 
       - name: Pin the Hex client
-        run: mix local.hex "$(cat .hex-version)" --force
+        run: |
+          hex_version="$(cat .hex-version)"
+          mix local.hex "$hex_version" --force
 
       - name: Install dependencies
         run: mix deps.get --check-locked

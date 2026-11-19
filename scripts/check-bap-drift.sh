@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+set -euo pipefail
+
 # check-bap-drift.sh: one-command ecosystem drift check for the protocol dependency.
 #
 # What BARA compiles against is a deliberate, reviewed choice (the lock follows
@@ -18,9 +20,8 @@
 # repo (lib/ spans run in the local sibling only when both commits are already present
 # locally).
 
-set -uo pipefail
-
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+script_dir="$(dirname "$0")"
+REPO="$(cd "$script_dir/.." && pwd)"
 APP="bounded_authority_protocol"
 BAP_REMOTE="https://github.com/baselabs/bounded_authority_protocol.git"
 BAP_SIBLING="$REPO/../bounded_authority_protocol"
@@ -28,7 +29,9 @@ BAP_SIBLING="$REPO/../bounded_authority_protocol"
 say() { printf '%s\n' "$*"; }
 print_files() {
   while IFS= read -r file; do
-    [ -n "$file" ] && printf '    %s\n' "$file"
+    if [ -n "$file" ]; then
+      printf '    %s\n' "$file"
+    fi
   done <<<"$1"
 }
 
@@ -44,37 +47,59 @@ fi
 say "BARA:    locks $APP $locked (requirement $requirement)"
 
 # --- 2. hex.pm (public API; degrade offline) ------------------------------------------
-hex_json="$(curl -fsSm 10 https://hex.pm/api/packages/$APP 2>/dev/null || true)"
+hex_status=0
+hex_json="$(curl -fsSm 10 "https://hex.pm/api/packages/$APP" 2>/dev/null)" || hex_status=$?
+case "$hex_status" in
+  0) ;;
+  # Network, HTTP and TLS failures are expected for this offline-capable probe.
+  5|6|7|18|22|28|35|52|55|56|60) hex_json="" ;;
+  *) exit "$hex_status" ;;
+esac
 
 if [ -n "$hex_json" ]; then
+  metadata_status=0
   hex_metadata="$(printf '%s' "$hex_json" | python3 -c '
 import json, sys
-d = json.load(sys.stdin)
-latest = d["latest_stable_version"]
-vs = [r["version"] for r in d["releases"]]
-if not isinstance(latest, str) or not latest or latest not in vs:
-    raise ValueError("incoherent Hex package metadata")
 try:
-    vs = sorted(vs, key=lambda v: tuple(int(p) for p in v.split(".")))
-except ValueError:
-    vs = sorted(vs)
+    d = json.load(sys.stdin)
+    latest = d["latest_stable_version"]
+    vs = [r["version"] for r in d["releases"]]
+    if (not isinstance(latest, str) or not latest or latest not in vs
+            or not all(isinstance(v, str) for v in vs)):
+        raise ValueError("incoherent Hex package metadata")
+    try:
+        vs = sorted(vs, key=lambda v: tuple(int(p) for p in v.split(".")))
+    except ValueError:
+        vs = sorted(vs)
+except (ValueError, KeyError, TypeError):
+    sys.exit(2)  # Malformed metadata withholds verdicts; tool failures still fail.
 print(latest, " ".join(vs))
-' 2>/dev/null || true)"
+' 2>/dev/null)" || metadata_status=$?
 
-  if [ -n "$hex_metadata" ]; then
-    read -r hex_latest hex_releases <<<"$hex_metadata"
-    say "hex.pm:  latest stable $hex_latest (published: $hex_releases)"
-  else
-    hex_latest=""
-    say "hex.pm:  WITHHELD (malformed API response): release verdicts withheld"
-  fi
+  case "$metadata_status" in
+    0)
+      read -r hex_latest hex_releases <<<"$hex_metadata"
+      say "hex.pm:  latest stable $hex_latest (published: $hex_releases)"
+      ;;
+    2)
+      hex_latest=""
+      say "hex.pm:  WITHHELD (malformed API response): release verdicts withheld"
+      ;;
+    *) exit "$metadata_status" ;;
+  esac
 else
   hex_latest=""
   say "hex.pm:  SKIP (offline or API unreachable): release verdicts withheld"
 fi
 
 # --- 3/4. the protocol remote, read-only (ls-remote: no fetch, no tag clobber) -------
-remote_refs="$(git ls-remote "$BAP_REMOTE" 2>/dev/null || true)"
+remote_status=0
+remote_refs="$(git ls-remote "$BAP_REMOTE" 2>/dev/null)" || remote_status=$?
+case "$remote_status" in
+  0) ;;
+  128) remote_refs="" ;; # Git could not reach the remote; verdicts remain withheld.
+  *) exit "$remote_status" ;;
+esac
 
 if [ -z "$remote_refs" ]; then
   say "BAP:     SKIP (remote unreachable): main/tag verdicts withheld"

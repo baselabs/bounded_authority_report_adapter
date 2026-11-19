@@ -38,7 +38,7 @@ defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
        context do
     # ADR-0023: no consumer's pin gates a BARA bump, so the probe never reads one. A
     # sibling checkout carrying a protocol pin must leave no trace in the output.
-    write_executable!(Path.join(context.bin, "curl"), "#!/bin/sh\nexit 1\n")
+    write_executable!(Path.join(context.bin, "curl"), "#!/bin/sh\nexit 7\n")
 
     consumer = Path.join(context.base, "bounded_authority")
     File.mkdir_p!(consumer)

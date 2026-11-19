@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: publish
   cancel-in-progress: false
@@ -45,7 +49,9 @@ jobs:
       - uses: ./.github/actions/setup-beam
 
       - name: Pin the Hex client
-        run: mix local.hex "$(cat .hex-version)" --force
+        run: |
+          hex_version="$(cat .hex-version)"
+          mix local.hex "$hex_version" --force
 
       - name: Install dependencies
         run: mix deps.get --check-locked
@@ -167,14 +173,16 @@ jobs:
       - uses: ./.github/actions/setup-beam
 
       - name: Pin the Hex client
-        run: mix local.hex "$(cat .hex-version)" --force
+        run: |
+          hex_version="$(cat .hex-version)"
+          mix local.hex "$hex_version" --force
 
       - name: Wait until the Hex repository serves the release
         run: |
           version="$(sed -n 's/^  @version "\(.*\)"$/\1/p' mix.exs)"
           test -n "$version"
           tarball="https://repo.hex.pm/tarballs/bounded_authority_report_adapter-${version}.tar"
-          for _ in $(seq 1 60); do
+          for ((attempt = 1; attempt <= 60; attempt++)); do
             if curl -fsSIo /dev/null "$tarball"; then exit 0; fi
             sleep 10
           done
