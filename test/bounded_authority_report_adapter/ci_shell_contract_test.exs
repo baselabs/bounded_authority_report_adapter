@@ -22,7 +22,10 @@ defmodule BoundedAuthorityReportAdapter.CiShellContractTest do
       assert get_in(workflow, ["defaults", "run", "shell"]) == "bash", path
 
       for {_name, job} <- workflow["jobs"] do
-        assert get_in(job, ["defaults", "run", "shell"]) in [nil, "bash"], path
+        # A job's defaults.run replaces the workflow's whole defaults.run, shell included.
+        if job_run_defaults = get_in(job, ["defaults", "run"]) do
+          assert job_run_defaults["shell"] == "bash", path
+        end
 
         for step <- job["steps"] || [], Map.has_key?(step, "run") do
           assert step["shell"] in [nil, "bash"], path

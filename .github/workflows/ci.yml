@@ -156,6 +156,8 @@ jobs:
 
     defaults:
       run:
+        # A job's defaults.run replaces the workflow's, so it restates the shell.
+        shell: bash
         working-directory: examples/edge_agent
 
     steps:
