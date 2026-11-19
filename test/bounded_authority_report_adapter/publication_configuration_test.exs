@@ -12,7 +12,7 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     assert workflow["on"] == %{"workflow_dispatch" => nil}
     assert workflow["permissions"] == %{"contents" => "read"}
     assert job["environment"] == "publish"
-    assert job["timeout-minutes"] == 90
+    assert job["timeout-minutes"] == 5
     assert hd(steps)["name"] == "Require the default branch"
     assert hd(steps)["run"] =~ ~s("refs/heads/$DEFAULT_BRANCH")
 
@@ -21,6 +21,7 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
 
     notebooks = workflow["jobs"]["published-livebooks"]
     assert notebooks["needs"] == "publish"
+    assert notebooks["timeout-minutes"] == 5
     assert notebooks["if"] == job["if"]
     refute Map.has_key?(notebooks, "environment")
     refute unabridged(notebooks) =~ "secrets."
