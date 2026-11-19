@@ -76,9 +76,14 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     workflow = File.read!(".github/workflows/ci.yml")
     [_gate_job, example_job] = String.split(workflow, "\n  example:", parts: 2)
 
-    assert example_job =~
-             ~r|defaults:\s+run:\s+working-directory: #{@edge_dir}|,
-           "the GitHub example job must bind every mix command to examples/edge_agent"
+    parsed = YamlElixir.read_from_file!(".github/workflows/ci.yml")
+
+    assert get_in(parsed, ["jobs", "example", "defaults", "run"]) == %{
+             "shell" => "bash",
+             "working-directory" => @edge_dir
+           },
+           "the GitHub example job must bind every mix command to examples/edge_agent, " <>
+             "under Bash with pipefail"
 
     assert example_job =~
              ~r|- name: Install deps\s+run: mix deps\.get --check-locked\s+- name: Audit dependencies\s+run: #{@audit_command}\s+- name: Audit dependency advisories\s+run: #{@advisory_command}|,
