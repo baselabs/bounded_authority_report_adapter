@@ -40,6 +40,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Read-back places the served docs' commit on the default branch's history.
+          fetch-depth: 0
 
       - name: Refuse a package name the registry has never had
         env:
@@ -124,17 +126,6 @@ jobs:
           sha256sum "$PACKAGE_ARCHIVE" "$DOCS_ARCHIVE" > "$RUNNER_TEMP/hex-publish.sha256"
           python3 scripts/check_hex_release.py prepare
 
-      - name: Upload the consumer release files
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: release-assets
-          path: |
-            artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
-            artifacts/SHA256SUMS
-            artifacts/release.cdx.json
-          if-no-files-found: error
-          retention-days: 30
-
       - name: Upload only the missing inspected package and documentation
         id: upload
         working-directory: ${{ runner.temp }}
@@ -150,7 +141,21 @@ jobs:
       - name: Read back both uploads and refuse a held or differing release
         env:
           PUBLICATION_HELD: ${{ steps.upload.outputs.held }}
+          SERVED_DOCS_ARCHIVE: artifacts/bounded_authority_report_adapter-${{ env.VERSION }}-docs.tar.gz
         run: python3 scripts/check_hex_release.py read-back
+
+      # After read-back: the served docs archive names the published commit infra tags.
+      - name: Upload the consumer release files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets
+          path: |
+            artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
+            artifacts/bounded_authority_report_adapter-${{ env.VERSION }}-docs.tar.gz
+            artifacts/SHA256SUMS
+            artifacts/release.cdx.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Remove publication scratch
         if: always()

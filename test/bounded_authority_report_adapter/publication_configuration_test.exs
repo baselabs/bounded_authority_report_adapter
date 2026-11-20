@@ -108,9 +108,25 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
 
     assert String.split(assets["with"]["path"], "\n", trim: true) == [
              "artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar",
+             "artifacts/bounded_authority_report_adapter-${{ env.VERSION }}-docs.tar.gz",
              "artifacts/SHA256SUMS",
              "artifacts/release.cdx.json"
            ]
+
+    # The bundle follows read-back, which saves the served docs that name the published commit
+    # and needs the default branch's history to place that commit.
+    steps = publish["steps"]
+
+    read_back =
+      Enum.find_index(steps, &(&1["run"] == "python3 scripts/check_hex_release.py read-back"))
+
+    assert Enum.find_index(steps, &(&1 == assets)) > read_back
+
+    assert Enum.at(steps, read_back)["env"]["SERVED_DOCS_ARCHIVE"] ==
+             "artifacts/bounded_authority_report_adapter-${{ env.VERSION }}-docs.tar.gz"
+
+    [checkout] = Enum.filter(steps, &uses?(&1, "actions/checkout@"))
+    assert checkout["with"]["fetch-depth"] == 0
 
     for path <- Path.wildcard(".github/workflows/*.yml") do
       source = File.read!(path)
@@ -130,7 +146,7 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     end
   end
 
-  test "resumption compares the package bytes, reads served docs back by commit, and refuses retirement" do
+  test "resumption compares the package bytes, places served docs on the default branch, and refuses retirement" do
     source = File.read!("scripts/check_hex_release.py")
 
     for required <- [
@@ -139,19 +155,20 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
           "if served != expected:",
           "https://repo.hex.pm/tarballs/{package}-{version}.tar",
           "https://repo.hex.pm/docs/{package}-{version}.tar.gz",
-          "docs_served = present(",
+          "docs, published = served_docs(",
           "tarfile.open(fileobj=io.BytesIO(served), mode=\"r:gz\")",
           "if \"index.html\" not in members:",
           "if \"release.json\" not in members or not members[\"release.json\"].isfile():",
-          "commit = os.environ[\"GITHUB_SHA\"]",
-          "{\"package\": package, \"version\": version, \"commit\": commit}",
-          "if built != identity:",
-          "finish this publication by dispatching publish.yml on commit {source}",
+          "head = os.environ[\"GITHUB_SHA\"]",
+          "set(built) != {\"package\", \"version\", \"commit\"}",
+          "[\"git\", \"merge-base\", \"--is-ancestor\", commit, head]",
+          "if not descends(head, commit):",
+          "Path(os.environ[\"SERVED_DOCS_ARCHIVE\"]).write_bytes(docs)",
           "PUBLISH_PACKAGE={str(not package_served).lower()}",
           "PUBLISH_DOCS={str(not docs_served).lower()}",
           "if held or not (release is not None and package_served and docs_served):",
           "Publication is held or not yet served",
-          "this same commit"
+          "dispatch publish.yml again from the default branch"
         ] do
       assert source =~ required
       mutated = String.replace(source, required, "", global: false)
@@ -160,7 +177,7 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     end
 
     # An ExDoc build is not byte-stable: docs are read back as present, never compared by bytes.
-    [_, docs_check] = String.split(source, "docs_served = present(", parts: 2)
+    [_, docs_check] = String.split(source, "docs, published = served_docs(", parts: 2)
     [docs_check, _] = String.split(docs_check, ")", parts: 2)
     refute docs_check =~ "DOCS_ARCHIVE"
     refute source =~ ~r/compare\(\s*f"https:\/\/repo\.hex\.pm\/docs\//

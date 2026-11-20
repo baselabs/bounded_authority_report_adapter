@@ -57,7 +57,7 @@ defmodule PublishHexArtifacts do
 
   defp accepted!(_result, label) do
     # Do not render responses: authentication failures can contain credential material.
-    raise "#{label} upload failed; dispatch this same commit again after resolving the failure"
+    raise "#{label} upload failed; dispatch publish.yml again from the default branch after resolving the failure"
   end
 end
 

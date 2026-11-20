@@ -7,9 +7,11 @@ docs are uploaded and read back. Hex accepts docs only for a release it serves, 
 always belong to the package compared here, and nothing here replaces either upload.
 
 The docs sources and ExDoc's locked version are not all inside the package, so publish.yml
-writes release.json (package, version, commit) into the docs archive. Read-back requires the
-served docs to name this package, version and commit: a resumed publication finishes only on
-the commit that built the served docs, and the refusal names that commit.
+writes release.json (package, version, commit) into the docs archive. Served docs must name this
+package and version, and a commit that is the dispatched commit or its ancestor on the default
+branch. That commit is the published commit: a resume after the default branch moved keeps the
+served docs and publishes their commit, and read-back saves the served docs archive for
+release-assets, so the release, its tag and the served docs name one commit.
 """
 
 import hashlib
@@ -19,6 +21,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import tarfile
 import urllib.error
@@ -64,10 +67,17 @@ def compare(url, path, label):
     return True
 
 
-def present(url, label, identity):
+def descends(head, commit):
+    # Exit status 0 means commit is head or its ancestor; anything else places it off history.
+    return subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit, head], capture_output=True
+    ).returncode == 0
+
+
+def served_docs(url, label, package, version, head):
     served = fetch(url)
     if served is None:
-        return False
+        return None, None
     try:
         with tarfile.open(fileobj=io.BytesIO(served), mode="r:gz") as archive:
             members = {member.name.removeprefix("./"): member for member in archive.getmembers()}
@@ -78,16 +88,23 @@ def present(url, label, identity):
             built = json.loads(archive.extractfile(members["release.json"]).read())
     except (tarfile.TarError, OSError, EOFError, ValueError):
         refuse(f"{label} served by Hex is not a readable docs archive")
-    if built != identity:
-        source = built.get("commit") if isinstance(built, dict) else None
-        remedy = (
-            f"finish this publication by dispatching publish.yml on commit {source}"
-            if isinstance(source, str)
-            else "it cannot be matched to any commit"
+    if (
+        not isinstance(built, dict)
+        or set(built) != {"package", "version", "commit"}
+        or built["package"] != package
+        or built["version"] != version
+        or not isinstance(built["commit"], str)
+        or not re.fullmatch(r"[0-9a-f]{40}", built["commit"])
+    ):
+        refuse(f"{label} served by Hex names {built}, not {package} {version} and a commit")
+    commit = built["commit"]
+    if not descends(head, commit):
+        refuse(
+            f"{label} served by Hex was built from commit {commit}, which is neither the "
+            f"dispatched commit {head} nor its ancestor on the default branch"
         )
-        refuse(f"{label} served by Hex names {built}, not {identity}; {remedy}")
-    print(f"{label} read-back present for commit {identity['commit']} ({len(members)} entries)")
-    return True
+    print(f"{label} read-back present, built from commit {commit} ({len(members)} entries)")
+    return served, commit
 
 
 def main():
@@ -126,14 +143,17 @@ def main():
         Path(os.environ["PACKAGE_ARCHIVE"]),
         "Package",
     )
-    commit = os.environ["GITHUB_SHA"]
-    if not re.fullmatch(r"[0-9a-f]{40}", commit):
-        refuse("Invalid source commit")
-    docs_served = present(
+    head = os.environ["GITHUB_SHA"]
+    if not re.fullmatch(r"[0-9a-f]{40}", head):
+        refuse("Invalid dispatched commit")
+    docs, published = served_docs(
         f"https://repo.hex.pm/docs/{package}-{version}.tar.gz",
         "Documentation",
-        {"package": package, "version": version, "commit": commit},
+        package,
+        version,
+        head,
     )
+    docs_served = docs is not None
     # Metadata that advertises an upload is never permission to overwrite it while
     # its CDN object is unavailable. A later dispatch can retry the read-back.
     if release is not None and not package_served:
@@ -152,10 +172,11 @@ def main():
     if held or not (release is not None and package_served and docs_served):
         refuse(
             "Publication is held or not yet served: approve any held uploads on Hex, "
-            "then dispatch publish.yml again on this same commit. "
+            "then dispatch publish.yml again from the default branch. "
             "The package must match and the documentation must be served before tagging."
         )
-    print(f"Hex serves both inspected uploads for {package} {version}")
+    Path(os.environ["SERVED_DOCS_ARCHIVE"]).write_bytes(docs)
+    print(f"Published commit {published}: Hex serves {package} {version} and docs built from it")
 
 
 if __name__ == "__main__":

@@ -69,10 +69,15 @@ Run each and keep its output.
    The upload step verifies both archive checksums and uploads only missing bytes through
    the Hex APIs. `HEX_API_KEY` exists only in that step's environment, in a directory with
    no `mix.exs`; project and dependency code do not run in the process holding it.
-   A held response is incomplete. After approval on Hex, dispatch again on the same commit:
-   identical existing bytes are left in place, missing uploads are completed, and differing
-   bytes or a retired version are refused. The workflow never replaces a package and
-   succeeds only after an unkeyed read-back proves both uploads match. A separate job,
+   A held response is incomplete. After approval on Hex, dispatch again from `master`: an
+   identical existing package is left in place, missing uploads are completed, and a differing
+   package or a retired version is refused. Docs are a rendering of the package and an ExDoc
+   build is not byte-stable, so docs are never compared by bytes: the docs archive carries
+   `release.json` naming the package, version and commit that built it, and served docs must
+   name this package and version and the dispatched commit or its ancestor on `master`. That
+   commit is the published commit. The workflow never replaces a package or served docs, and
+   succeeds only after an unkeyed read-back proves the package matches and the docs are served.
+   Read-back saves the served docs archive in the `release-assets` bundle. A separate job,
    `published-livebooks`, then runs every notebook unchanged against the release. It
    has no environment and no key; qualification never installs this package from Hex,
    because a version commit names a release Hex does not serve yet.
@@ -81,8 +86,9 @@ Run each and keep its output.
 
 6. After the gates above, the authorized release operator dispatches `publish.yml` and reads the run to
    completion. The workflow creates no tag or GitHub release. Hex's one-hour revert window starts at publication.
-7. After the byte-exact read-back, the release operator compares the publication's archive
-   with the registry, creates `vX.Y.Z` on the published `SHA`, and creates the GitHub release
+7. After the read-back, the release operator compares the publication's archive with the
+   registry, creates `vX.Y.Z` on the published commit that the served docs' `release.json`
+   names, and creates the GitHub release
    with the archive, `SHA256SUMS` and `release.cdx.json`. Consumers obtain all three files
    from that GitHub release. No workflow runs on a tag or creates a GitHub release.
 

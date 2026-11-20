@@ -51,11 +51,13 @@ Every `kci/<sha>` qualification run builds and checks the exact Hex archive, rec
 SHA-256 in `SHA256SUMS`, and calls the reusable supply-chain workflow for build-provenance
 and CycloneDX SBOM attestations. Publication verifies the rebuilt archive against that
 attestation and reads the package bytes back from Hex. Docs are a rendering of the package
-and an ExDoc build is not byte-stable, so served docs are read back as present, never compared
-by bytes. The docs archive carries `release.json` naming the package, version and commit that
-built it; a resumed publication finishes only on that commit, and a refusal names it. The
-release operator then tags the exact source commit and attaches the archive, `SHA256SUMS` and
-`release.cdx.json` to this repository's GitHub release `v<version>`. No workflow runs on a tag.
+and an ExDoc build is not byte-stable, so docs are never compared by bytes. The docs archive
+carries `release.json` naming the package, version and commit that built it; served docs must
+name this package and version and the dispatched commit or its ancestor on `master`. That
+commit is the published commit, and read-back saves the served docs archive in the
+`release-assets` bundle. The release operator then tags the published commit and attaches the
+archive, `SHA256SUMS` and `release.cdx.json` to this repository's GitHub release `v<version>`.
+No workflow runs on a tag.
 To verify the files downloaded from that GitHub release:
 
 ```sh
