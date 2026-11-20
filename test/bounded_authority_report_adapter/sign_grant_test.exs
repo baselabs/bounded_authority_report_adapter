@@ -88,7 +88,7 @@ defmodule BoundedAuthorityReportAdapter.SignGrantTest do
     end
   end
 
-  describe "the full envelope loop (RA7 ↔ RA1 — design Q8)" do
+  describe "the full envelope loop (RA7 ↔ RA1, design Q8)" do
     test "a sign_grant grant fed into sign_report verifies via check_envelope/2" do
       # The issuer signs the grant (RA7), binding it to the holder's thumbprint.
       {:ok, %{grant: grant_compact}} =
@@ -190,7 +190,7 @@ defmodule BoundedAuthorityReportAdapter.SignGrantTest do
     end
   end
 
-  describe "key identity from the handle (atomic snapshot — never trusted from the caller)" do
+  describe "key identity from the handle (an atomic snapshot, never trusted from the caller)" do
     test "a caller-supplied :key_id / :public_key in the grant map are ignored" do
       # Smuggle bogus key-identifiers through the grant map. The adapter must ignore them:
       # {key_id, public_key} come from the handle's signing_identity/1 snapshot. The signed

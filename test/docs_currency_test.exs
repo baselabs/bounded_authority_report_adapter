@@ -78,7 +78,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
 
     identifiers = Enum.reject(identifiers, &match?({_m, _f, 0}, &1))
 
-    assert identifiers != [], "no identifiers found — the scan itself is broken"
+    assert identifiers != [], "no identifiers found. The scan itself is broken"
 
     # Arity-exact: {fun, arity} pairs, not bare names. Arity-0 tokens are
     # excluded: in these docs they are TYPE names (`sign_error/0`, ...), not
@@ -102,7 +102,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
         true ->
           flunk(
             "usage-rules.md references #{module}.#{fun}/#{arity} but it is neither an " <>
-              "exported function nor a behaviour callback — the doc drifted from the code"
+              "exported function nor a behaviour callback. The doc drifted from the code"
           )
       end
     end
@@ -363,7 +363,7 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
         |> Enum.reject(&(&1 == :invalid))
 
       nil ->
-        flunk("could not locate @type #{type} in the lib source — the scan is broken")
+        flunk("could not locate @type #{type} in the lib source. The scan is broken")
     end
   end
 

@@ -48,8 +48,8 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     root_mix = File.read!("mix.exs") |> strip_comments()
 
     assert root_mix =~ ~r|"#{@env_guard_step}",\s*"deps\.get --check-locked",|,
-           "the env guard must be the FIRST ci step, immediately before locked deps.get — " <>
-             "it replaces the old POSIX env(1) re-exec (the RA7 trap stays guarded)"
+           "the env guard must be the FIRST ci step, immediately before locked deps.get. " <>
+             "It replaces the old POSIX env(1) re-exec (the RA7 trap stays guarded)"
 
     mutated = String.replace(root_mix, ~s{"#{@env_guard_step}",}, "", global: false)
     refute mutated == root_mix, "env-guard mutation fixture changed nothing"
@@ -133,12 +133,12 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
         String.replace(gate_job, "run: #{command}\n", "run: mix test\n", global: false)
 
       refute mutated_gate == gate_job,
-             "the workflow mutation fixture for #{command} did not change the gate job — " <>
-               "the mutation proof is not exercising the red path"
+             "the workflow mutation fixture for #{command} did not change the gate job. " <>
+               "The mutation proof is not exercising the red path"
 
       refute mutated_gate =~ Regex.compile!(workflow_battery_pattern()),
-             "the parity pattern still matches the gate job with #{command} dropped — " <>
-               "the gate would stay green over a missing step"
+             "the parity pattern still matches the gate job with #{command} dropped. " <>
+               "The gate would stay green over a missing step"
 
       # The mix ci alias surface: drop the quoted alias entry, then the
       # production alias pattern must no longer match mix.exs.
@@ -146,12 +146,12 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
         String.replace(root_mix, ~s{"#{alias_form(command)}",}, "", global: false)
 
       refute mutated_alias == root_mix,
-             "the alias mutation fixture for #{command} did not change mix.exs — " <>
-               "the mutation proof is not exercising the red path"
+             "the alias mutation fixture for #{command} did not change mix.exs. " <>
+               "The mutation proof is not exercising the red path"
 
       refute mutated_alias =~ Regex.compile!(alias_battery_pattern()),
-             "the alias parity pattern still matches mix.exs with #{command} dropped — " <>
-               "the gate would stay green over a missing step"
+             "the alias parity pattern still matches mix.exs with #{command} dropped. " <>
+               "The gate would stay green over a missing step"
     end
   end
 

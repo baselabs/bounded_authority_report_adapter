@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Use plain US English without em dashes in public prose and doctor diagnostics.
+  Check all tracked text for literal and escaped em dashes.
+
 ## [1.0.1]: 2026-11-18
 
 1.0.1 is a patch release: the public API and signed bytes are unchanged, and it ships the

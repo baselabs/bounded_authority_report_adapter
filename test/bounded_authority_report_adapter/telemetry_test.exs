@@ -271,7 +271,7 @@ defmodule BoundedAuthorityReportAdapter.TelemetryTest do
 
   # --- the shape validator refuses everything outside the closed surface ------------
 
-  test "the emitters refuse unknown objects, unknown classes, and bad durations — emitting nothing" do
+  test "the emitters refuse unknown objects, unknown classes, and bad durations, emitting nothing" do
     # The refusal calls run INSIDE the captured fun: a mutation that makes a
     # refused emission both return the error tuple AND emit would be caught
     # here (the capture would see the event), not vacuously green.

@@ -25,7 +25,7 @@ defmodule EdgeAgent.ProtocolLockParityTest do
 
     assert example_version == library_version,
            "the two locks resolve :#{@protocol_app} at different versions " <>
-             "(example #{example_version} != library #{library_version}) — a silent " <>
+             "(example #{example_version} != library #{library_version}). A silent " <>
              "`mix deps.update` in one project split the CI jobs onto different " <>
              "protocol spans; re-lock BOTH in the same commit"
   end

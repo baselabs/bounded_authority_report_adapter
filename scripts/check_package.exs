@@ -119,7 +119,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   defp remove_scratch!(path, 0) do
     IO.puts(
       :stderr,
-      "check warning: could not fully remove scratch #{path} — ephemeral, left for the OS temp cleanup"
+      "check warning: could not fully remove scratch #{path}. It is ephemeral and left for the OS temp cleanup."
     )
   end
 
@@ -453,7 +453,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
   defp assert_runtime_dep_allowed!(name) do
     unless MapSet.member?(@runtime_dep_allowlist, name) do
       fail!(
-        "unexpected runtime dependency #{inspect(name)} — the shipped artifact's " <>
+        "unexpected runtime dependency #{inspect(name)}. The shipped artifact's " <>
           "dependency set is a deliberate, reviewed surface; extend " <>
           "@runtime_dep_allowlist in the same commit that adds the dep"
       )

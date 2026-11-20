@@ -88,7 +88,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
     end
 
     @tag :conformance
-    test "positive_cases.nonce_absent verifies per the declared verdict (valid) — per-case :not_required nonce" do
+    test "positive_cases.nonce_absent verifies per the declared verdict (valid), with per-case :not_required nonce" do
       # The proof payload carries NO nonce. The shared expected_context.nonce
       # would red this declared-valid case; the per-case derivation in
       # VectorCase sets nonce: :not_required (design §1.6 C).
@@ -238,7 +238,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
         ])
 
       assert published == covered,
-             "published case set (#{inspect(MapSet.to_list(published))}) != covered set (#{inspect(MapSet.to_list(covered))}) — a case was added/removed without a matching test"
+             "published case set (#{inspect(MapSet.to_list(published))}) != covered set (#{inspect(MapSet.to_list(covered))}). A case was added or removed without a matching test."
 
       # Nested sub-cases under selector_denied (a container whose value is a map
       # of sub-cases). Each sub-case must be covered by a per-case test that
@@ -259,7 +259,7 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       covered_subcases = MapSet.new(["equals", "one_of"])
 
       assert selector_subcases == covered_subcases,
-             "selector_denied sub-cases (#{inspect(MapSet.to_list(selector_subcases))}) != covered (#{inspect(MapSet.to_list(covered_subcases))}) — a sub-case was added/removed without a matching test"
+             "selector_denied sub-cases (#{inspect(MapSet.to_list(selector_subcases))}) != covered (#{inspect(MapSet.to_list(covered_subcases))}). A sub-case was added or removed without a matching test."
     end
   end
 
@@ -300,10 +300,10 @@ defmodule BoundedAuthorityReportAdapter.ConformanceRoundtripTest do
       verdicts = Enum.map(cases, & &1["expected_verdict"]) |> MapSet.new()
 
       assert MapSet.member?(verdicts, "valid"),
-             "no valid grant_time_cases — the pin would be vacuously red-only"
+             "no valid grant_time_cases. The pin would be vacuously red-only"
 
       assert MapSet.member?(verdicts, "invalid"),
-             "no invalid grant_time_cases — the pin would be vacuously green-only"
+             "no invalid grant_time_cases. The pin would be vacuously green-only"
     end
   end
 

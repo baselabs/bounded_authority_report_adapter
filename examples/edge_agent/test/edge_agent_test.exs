@@ -59,7 +59,7 @@ defmodule EdgeAgentTest do
     end
   end
 
-  describe "rejection — the crypto is real" do
+  describe "rejection: the crypto is real" do
     test "headers and request route are unambiguous before replay admission", %{url: url} do
       {grant, proof, invocation_id, nonce} = signed_envelope()
       valid_headers = headers(grant, proof, invocation_id, nonce)
@@ -102,7 +102,7 @@ defmodule EdgeAgentTest do
     end
   end
 
-  describe "rejection — the §8 identity binding is real" do
+  describe "rejection: the §8 identity binding is real" do
     test "a valid envelope presented to a receiver expecting a DIFFERENT identity is rejected (401)" do
       # check_envelope would PASS here (grant issued to A, proof by A), but the
       # receiver's expected identity is B: the §8 binding must catch it.
@@ -129,7 +129,7 @@ defmodule EdgeAgentTest do
     end
   end
 
-  describe "rejection — the §9 replay ledger is real" do
+  describe "rejection: the §9 replay ledger is real" do
     test "a replayed nonce (same identity) is rejected on the second request (401)", %{url: url} do
       {grant, proof, invocation_id, nonce} = signed_envelope()
 

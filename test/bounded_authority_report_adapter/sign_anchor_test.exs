@@ -103,7 +103,7 @@ defmodule BoundedAuthorityReportAdapter.SignAnchorTest do
     end
   end
 
-  describe "key identity from the handle (atomic snapshot — never trusted from the caller)" do
+  describe "key identity from the handle (an atomic snapshot, never trusted from the caller)" do
     test "a caller-supplied :key_id / :public_key in the anchor map are ignored" do
       # Smuggle bogus key-identifiers through the anchor map. The adapter must
       # ignore them: {key_id, public_key} come from the handle's key_identity/1.
@@ -219,7 +219,7 @@ defmodule BoundedAuthorityReportAdapter.SignAnchorTest do
     end
   end
 
-  describe "non-vacuity (defect injection — the signed anchor is real)" do
+  describe "non-vacuity (defect injection: the signed anchor is real)" do
     test "a flipped signature byte makes verify_historical_anchor/3 reject" do
       input = anchor_input()
       pub = holder_pub()

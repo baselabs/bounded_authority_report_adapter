@@ -67,7 +67,7 @@ defmodule EdgeAgent.LocalLoopbackTest do
     challenge
   end
 
-  describe "the happy paths — real IPv4 and IPv6 loopback listeners" do
+  describe "the happy paths use real IPv4 and IPv6 loopback listeners" do
     test "IPv4: run_local_loopback/1 reserves, signs + POSTs and the profile receiver accepts (200)" do
       target = start_loopback_receiver({127, 0, 0, 1})
 
@@ -81,7 +81,7 @@ defmodule EdgeAgent.LocalLoopbackTest do
     end
   end
 
-  describe "cross-profile rejection — the profiles never mix on the wire" do
+  describe "cross-profile rejection: the profiles never mix on the wire" do
     test "a STANDARD proof presenting a properly reserved challenge is still rejected (401)" do
       # The challenge gate passes (it was minted by this listener), so the red
       # is the PROFILE's: standard bytes carry typ dpop+jwt and red at the
@@ -198,7 +198,7 @@ defmodule EdgeAgent.LocalLoopbackTest do
     end
   end
 
-  describe "boot binding — the profile receiver is bound to the literal listener" do
+  describe "boot binding: the profile receiver is bound to the literal listener" do
     test "init refuses a non-loopback interface (fail loud at boot)" do
       assert_raise ArgumentError, ~r/literal loopback interface/, fn ->
         EdgeAgent.Receiver.init(profile: :local_loopback, ip: {0, 0, 0, 0}, port: 4000)

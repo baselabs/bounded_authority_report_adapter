@@ -293,7 +293,7 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
 
   # ----------------------------------------------------- cross-type matrix
 
-  describe "the cross-type matrix — every operation, both directions (D2)" do
+  describe "the cross-type matrix covers every operation in both directions (D2)" do
     setup do
       {pub, priv} = ec_holder()
       ec_pair = %{pub: pub, priv: priv}
@@ -650,7 +650,7 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
                )
     end
 
-    test "out-of-range scalars collapse closed — the range check precedes normalization", ctx do
+    test "out-of-range scalars collapse closed: the range check precedes normalization", ctx do
       {pub, _priv} = ctx.ec
       two = pad(:x, 2)
 
@@ -672,7 +672,8 @@ defmodule BoundedAuthorityReportAdapter.V3SignTest do
       end
     end
 
-    test "s = n − 1 (in-range, high) normalizes then fails the verify — closed, no raise", ctx do
+    test "s = n − 1 (in-range, high) normalizes then fails verification (closed, no raise)",
+         ctx do
       # s = n − 1 passes the raw range check and normalizes to s' = 1, but
       # the crafted (r, 1) is not a signature for the key: the VERIFY guard
       # closes it. This is the boundary that punishes normalize-before-check

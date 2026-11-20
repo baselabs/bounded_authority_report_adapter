@@ -325,8 +325,8 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
   test "minimal handle: no fatals, both advisories (which operation each blocks)" do
     assert %{fatals: [], advisories: advisories} = Doctor.check(MinimalHandle, :ref, false)
 
-    assert Enum.any?(advisories, &(&1 =~ "key_identity/1 absent" and &1 =~ "sign_anchor/3"))
-    assert Enum.any?(advisories, &(&1 =~ "signing_identity/1 absent" and &1 =~ "sign_grant/3"))
+    assert Enum.any?(advisories, &(&1 =~ "key_identity/1 is absent" and &1 =~ "sign_anchor/3"))
+    assert Enum.any?(advisories, &(&1 =~ "signing_identity/1 is absent" and &1 =~ "sign_grant/3"))
   end
 
   test "each optional-callback advisory lists exactly the entry points that call the callback" do
@@ -346,7 +346,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     }
 
     for {callback, entry_points} <- expected do
-      prefix = "#{callback}/1 absent — blocks "
+      prefix = "#{callback}/1 is absent, which blocks "
       assert [advisory] = Enum.filter(advisories, &String.starts_with?(&1, prefix))
 
       listed =
@@ -477,7 +477,10 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
       Doctor.run(["--handle", "BoundedAuthorityReportAdapter.DoctorTaskTest.FullHandle"])
 
       assert_received {:mix_shell, :info,
-                       ["[info] key type: Ed25519 (32-byte) — unlocks the major-1 surface" <> _]}
+                       [
+                         "[info] key type: Ed25519 (32-byte). This unlocks the major-1 surface" <>
+                           _
+                       ]}
     end)
   end
 

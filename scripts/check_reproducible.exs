@@ -64,7 +64,7 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
   defp remove_scratch!(path, 0) do
     IO.puts(
       :stderr,
-      "check warning: could not fully remove scratch #{path} — ephemeral, left for the OS temp cleanup"
+      "check warning: could not fully remove scratch #{path}. It is ephemeral and left for the OS temp cleanup."
     )
   end
 
@@ -99,7 +99,7 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
   defp assert_mix_lock_present!(source_root) do
     unless File.regular?(Path.join(source_root, "mix.lock")) do
       raise(
-        "release candidate check failed: mix.lock is missing — reproducibility cannot be checked without a locked dep set"
+        "release candidate check failed: mix.lock is missing. Reproducibility cannot be checked without a locked dep set"
       )
     end
   end

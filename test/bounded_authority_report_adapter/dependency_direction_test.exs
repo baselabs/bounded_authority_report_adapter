@@ -217,7 +217,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
       assert String.contains?(mix_exs, ":#{@protocol_app}"),
              "mix.exs must declare the :#{@protocol_app} dependency (the public wire-profile " <>
-               "trust root — charter §6 invariant 3; strategy §3)"
+               "trust root; charter §6 invariant 3; strategy §3)"
     end
 
     test "mix.exs requires the protocol package at @protocol_requirement" do
@@ -358,10 +358,10 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
       mix_exs = File.read!("mix.exs")
 
       assert not Regex.match?(@mix_exs_forbidden, mix_exs),
-             "a forbidden dependency tuple was found in mix.exs — the adapter must depend on " <>
+             "a forbidden dependency tuple was found in mix.exs. The adapter must depend on " <>
                "the public protocol package ONLY, NEVER the :bounded_authority runtime app " <>
                "(charter §3) or the :replicant / :capstan transport libs (charter §6 invariant " <>
-               "4; strategy §3). (Documentation prose that names the forbidden atom is fine — " <>
+               "4; strategy §3). (Documentation prose that names the forbidden atom is fine; " <>
                "a real dep is the tuple form.)"
     end
 
@@ -369,9 +369,9 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
       mix_lock = File.read!("mix.lock")
 
       assert not Regex.match?(@mix_lock_forbidden, mix_lock),
-             "a forbidden package resolved into mix.lock — the runtime app or a transport lib " <>
-               "in the lock is a dependency-direction violation. (:bounded_authority_protocol " <>
-               "— the public package — is allowed; the bare :bounded_authority runtime app, " <>
+             "a forbidden package resolved into mix.lock. The runtime app or a transport lib " <>
+               "in the lock is a dependency-direction violation. (:bounded_authority_protocol, " <>
+               "the public package, is allowed; the bare :bounded_authority runtime app, " <>
                ":replicant, and :capstan are not.)"
     end
   end
@@ -383,8 +383,8 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
       offenders = namespace_offenders(source_files())
 
       assert offenders == [],
-             "runtime-internal reference(s) found in compiled source: #{inspect(offenders)} — " <>
-               "the adapter must consume ONLY the public BoundedAuthorityProtocol. surface, " <>
+             "runtime-internal reference(s) found in compiled source: #{inspect(offenders)}. " <>
+               "The adapter must consume ONLY the public BoundedAuthorityProtocol. surface, " <>
                "never the BoundedAuthority.* / BoundedAuthorityWeb.* runtime internals " <>
                "(charter §3; ADR 0003)"
     end
@@ -440,7 +440,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
           |> namespace_offenders()
 
         assert offenders != [],
-               "the lib/ mutation proof failed — a planted runtime-internal token was NOT caught " <>
+               "the lib/ mutation proof failed. A planted runtime-internal token was NOT caught " <>
                  "(a malformed glob returning [] would cause this; the lib/ scope is silently unscanned)"
       after
         # File.rm!/1 raises on deletion failure. Ignoring a File.rm/1 error would leave
@@ -471,7 +471,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
           |> namespace_offenders()
 
         assert offenders != [],
-               "the test/support/ mutation proof failed — a planted runtime-internal token was " <>
+               "the test/support/ mutation proof failed. A planted runtime-internal token was " <>
                  "NOT caught (the test/support/ compile-bearing scope is silently unscanned; a " <>
                  "BoundedAuthority.* ref here would compile + run green while the wall passed)"
       after
@@ -499,7 +499,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
           |> namespace_offenders()
 
         assert Enum.any?(offenders, fn {file, _token} -> file == adapter_path end),
-               "the real-module mutation proof failed — a planted BoundedAuthority.Authority ref " <>
+               "the real-module mutation proof failed. A planted BoundedAuthority.Authority ref " <>
                  "in the real adapter module was NOT caught (the module the wall guards is " <>
                  "silently unscanned): #{inspect(offenders)}"
       after
@@ -528,7 +528,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
               do: token
 
         assert offenders != [],
-               "the bare runtime-root reference #{inspect(ref)} was NOT caught — alias/import " <>
+               "the bare runtime-root reference #{inspect(ref)} was NOT caught. The alias/import forms for " <>
                  "BoundedAuthority couple to the runtime namespace and must trip the wall " <>
                  "(including alias/import of the root): #{inspect(offenders)}"
       end
@@ -549,7 +549,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
         )
 
       refute String.contains?(depless, ":#{@protocol_app}"),
-             "the dep-removal fixture did not strip the protocol dep — the positive-clause " <>
+             "the dep-removal fixture did not strip the protocol dep. The positive-clause " <>
                "mutation proof is not exercising the red path (the fixture itself is broken)"
     end
 
@@ -571,7 +571,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
         assert offenders == [],
                "the protocol reference #{inspect(ref)} tripped a runtime-internal regex " <>
-                 "(false-positive — the public protocol surface must stay allowed): #{inspect(offenders)}"
+                 "(false positive; the public protocol surface must stay allowed): #{inspect(offenders)}"
       end
     end
 
@@ -593,7 +593,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
         assert offenders == [],
                "the adapter's own reference #{inspect(ref)} tripped a runtime-internal regex " <>
-                 "(false-positive — the adapter's own namespace must stay allowed): #{inspect(offenders)}"
+                 "(false positive; the adapter's own namespace must stay allowed): #{inspect(offenders)}"
       end
     end
 

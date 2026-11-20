@@ -88,7 +88,7 @@ defmodule BoundedAuthorityReportAdapter.SignLocalLoopbackReportTest do
     }
   end
 
-  describe "valid production — both literal loopback families" do
+  describe "valid production over both literal loopback families" do
     test "an IPv4 target signs and verifies green via check_local_loopback_envelope" do
       report = loopback_report()
 
@@ -247,7 +247,7 @@ defmodule BoundedAuthorityReportAdapter.SignLocalLoopbackReportTest do
     end
   end
 
-  describe "profile cross-rejection — the two proof families are mutually exclusive" do
+  describe "profile cross-rejection: the two proof families are mutually exclusive" do
     test "a loopback proof is rejected by the STANDARD envelope verifier and decoder" do
       report = loopback_report()
 
@@ -430,7 +430,7 @@ defmodule BoundedAuthorityReportAdapter.SignLocalLoopbackReportTest do
     end
   end
 
-  describe "delegation proof — the signed message IS BAP's local-profile signing input" do
+  describe "delegation proof: the signed message IS BAP's local-profile signing input" do
     test "sign/2 receives byte-exactly BAP's input, and BAP's assembler reproduces the compact" do
       report = loopback_report()
       opts = %{issued_at: @now - 50, proof_id: "llh-delegation-001"}
@@ -507,7 +507,7 @@ defmodule BoundedAuthorityReportAdapter.SignLocalLoopbackReportTest do
     end
   end
 
-  describe "telemetry — the closed, value-free span" do
+  describe "telemetry: the closed, value-free span" do
     test "the span emits :local_loopback_report start/stop with closed metadata only" do
       report = loopback_report()
       events = self()

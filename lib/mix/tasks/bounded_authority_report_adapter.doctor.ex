@@ -109,7 +109,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
   defp print_default_shape_line(_report, _module, _ref, _major), do: :ok
 
   defp verdict(%{fatals: fatals}) when fatals != [] do
-    Mix.shell().error("doctor: #{length(fatals)} fatal finding(s) — fix before wiring")
+    Mix.shell().error("doctor: #{length(fatals)} fatal finding(s). Fix before wiring.")
     exit({:shutdown, 1})
   end
 
@@ -236,7 +236,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   defp unwrapped_fatal(normal) do
     [
-      "public_key/1 returned #{redact(normal)} — the contract is " <>
+      "public_key/1 returned #{redact(normal)}. The contract is " <>
         "{:ok, public_key}, and the adapter rejects unwrapped returns"
     ]
   end
@@ -279,7 +279,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
 
   defp thumbprint_verdict(_module, _ref, _key, _expected, _thumbprint_failed) do
     {[
-       "thumbprint/1 rejected, raised, or exited for the supplied ref — the " <>
+       "thumbprint/1 rejected, raised, or exited for the supplied ref. The " <>
          "callback must return the RFC 7638 digest"
      ], []}
   end
@@ -290,14 +290,14 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
         {[
            "thumbprint/1 does not match the RFC 7638 digest derived from public_key/1 " <>
              "(the suite's preimage: OKP members for Ed25519 keys, EC members for P-256 " <>
-             "keys) — the issuer's cnf.jkt is minted from that digest, so a mismatched " <>
+             "keys). The issuer's cnf.jkt is minted from that digest, so a mismatched " <>
              "implementation fails every envelope at verification"
          ], []}
 
       _rotated ->
         {[],
          [
-           "public_key/1 changed between samples — the handle rotated during the " <>
+           "public_key/1 changed between samples. The handle rotated during the " <>
              "preflight; the thumbprint comparison is inconclusive (not a defect)"
          ]}
     end
@@ -339,7 +339,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
       # (a test derives that list from the entry points' behavior).
       for {callback, entry_points} <- BoundedAuthorityReportAdapter.OptionalCallbacks.users(),
           not function_exported?(module, callback, 1),
-          do: "#{callback}/1 absent — blocks #{entry_point_list(entry_points)}"
+          do: "#{callback}/1 is absent, which blocks #{entry_point_list(entry_points)}"
     else
       []
     end
@@ -397,12 +397,12 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
     case classify_public_key(key) do
       {:ed25519, _} when major in [nil, 1] ->
         {:ok,
-         "key type: Ed25519 (32-byte) — unlocks the major-1 surface " <>
+         "key type: Ed25519 (32-byte). This unlocks the major-1 surface " <>
            "(BoundedAuthorityReportAdapter); the V3 surface requires a P-256 key"}
 
       {:p256, _} when major in [nil, 3] ->
         {:ok,
-         "key type: P-256 (65-byte, on-curve) — unlocks the major-3 surface " <>
+         "key type: P-256 (65-byte, on-curve). This unlocks the major-3 surface " <>
            "(BoundedAuthorityReportAdapter.V3, ES256); the major-1 surface requires " <>
            "an Ed25519 key"}
 
@@ -424,7 +424,7 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
            probe_verdict(classified, @synthetic_probe_message, signature) do
       if high_s?,
         do: [
-          "--live probe: sign/2 returns a HIGH-S spelling — the adapter normalizes it " <>
+          "--live probe: sign/2 returns a HIGH-S spelling. The adapter normalizes it " <>
             "(low-S normalization is the adapter's duty as the producer), but a " <>
             "custodian that can emit low-S directly should"
         ],
