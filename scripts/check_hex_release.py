@@ -1,12 +1,26 @@
-"""Compare the inspected uploads with Hex's public, immutable release bytes."""
+"""Compare the inspected package with Hex's immutable release bytes; read served docs back.
+
+The package is the release: a served package must equal the archive this job built. Docs are a
+rendering of that release and an ExDoc build is not byte-stable, so docs are never compared by
+bytes. Docs Hex already serves for this version are kept and read back as present; missing
+docs are uploaded and read back. Hex accepts docs only for a release it serves, so served docs
+always belong to the package compared here, and nothing here replaces either upload.
+
+The docs sources and ExDoc's locked version are not all inside the package, so publish.yml
+writes release.json (package, version, commit) into the docs archive. Read-back requires the
+served docs to name this package, version and commit: a resumed publication finishes only on
+the commit that built the served docs, and the refusal names that commit.
+"""
 
 import hashlib
 import http.client
+import io
 import json
 import os
 from pathlib import Path
 import re
 import sys
+import tarfile
 import urllib.error
 import urllib.request
 
@@ -50,6 +64,32 @@ def compare(url, path, label):
     return True
 
 
+def present(url, label, identity):
+    served = fetch(url)
+    if served is None:
+        return False
+    try:
+        with tarfile.open(fileobj=io.BytesIO(served), mode="r:gz") as archive:
+            members = {member.name.removeprefix("./"): member for member in archive.getmembers()}
+            if "index.html" not in members:
+                refuse(f"{label} served by Hex has no index.html")
+            if "release.json" not in members or not members["release.json"].isfile():
+                refuse(f"{label} served by Hex has no release.json naming the commit that built it")
+            built = json.loads(archive.extractfile(members["release.json"]).read())
+    except (tarfile.TarError, OSError, EOFError, ValueError):
+        refuse(f"{label} served by Hex is not a readable docs archive")
+    if built != identity:
+        source = built.get("commit") if isinstance(built, dict) else None
+        remedy = (
+            f"finish this publication by dispatching publish.yml on commit {source}"
+            if isinstance(source, str)
+            else "it cannot be matched to any commit"
+        )
+        refuse(f"{label} served by Hex names {built}, not {identity}; {remedy}")
+    print(f"{label} read-back present for commit {identity['commit']} ({len(members)} entries)")
+    return True
+
+
 def main():
     if len(sys.argv) != 2 or sys.argv[1] not in ("name", "prepare", "read-back"):
         refuse("usage: check_hex_release.py name|prepare|read-back")
@@ -86,10 +126,13 @@ def main():
         Path(os.environ["PACKAGE_ARCHIVE"]),
         "Package",
     )
-    docs_served = compare(
+    commit = os.environ["GITHUB_SHA"]
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        refuse("Invalid source commit")
+    docs_served = present(
         f"https://repo.hex.pm/docs/{package}-{version}.tar.gz",
-        Path(os.environ["DOCS_ARCHIVE"]),
         "Documentation",
+        {"package": package, "version": version, "commit": commit},
     )
     # Metadata that advertises an upload is never permission to overwrite it while
     # its CDN object is unavailable. A later dispatch can retry the read-back.
@@ -110,7 +153,7 @@ def main():
         refuse(
             "Publication is held or not yet served: approve any held uploads on Hex, "
             "then dispatch publish.yml again on this same commit. "
-            "Both package and documentation must match before tagging."
+            "The package must match and the documentation must be served before tagging."
         )
     print(f"Hex serves both inspected uploads for {package} {version}")
 

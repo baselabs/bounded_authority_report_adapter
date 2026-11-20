@@ -79,6 +79,12 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     assert Enum.at(commands, docs) =~ "--formatter html"
     assert Enum.at(commands, docs) =~ "--sort=name --mtime="
     assert Enum.at(commands, docs) =~ "gzip -n"
+
+    # The docs archive names the package, version and commit that built it, before it is packed.
+    docs_command = Enum.at(commands, docs)
+    assert docs_command =~ ~s("$PACKAGE" "$VERSION" "$GITHUB_SHA" > doc/release.json)
+    [before_pack, _] = String.split(docs_command, "tar -C doc", parts: 2)
+    assert before_pack =~ "doc/release.json"
     assert Enum.at(commands, check) =~ ~s("$PACKAGE_ARCHIVE")
     assert Enum.at(commands, prepare) =~ ~s(sha256sum "$PACKAGE_ARCHIVE" "$DOCS_ARCHIVE")
 
@@ -124,7 +130,7 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     end
   end
 
-  test "resumption compares both archives and refuses retirement or differing bytes" do
+  test "resumption compares the package bytes, reads served docs back by commit, and refuses retirement" do
     source = File.read!("scripts/check_hex_release.py")
 
     for required <- [
@@ -133,6 +139,14 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
           "if served != expected:",
           "https://repo.hex.pm/tarballs/{package}-{version}.tar",
           "https://repo.hex.pm/docs/{package}-{version}.tar.gz",
+          "docs_served = present(",
+          "tarfile.open(fileobj=io.BytesIO(served), mode=\"r:gz\")",
+          "if \"index.html\" not in members:",
+          "if \"release.json\" not in members or not members[\"release.json\"].isfile():",
+          "commit = os.environ[\"GITHUB_SHA\"]",
+          "{\"package\": package, \"version\": version, \"commit\": commit}",
+          "if built != identity:",
+          "finish this publication by dispatching publish.yml on commit {source}",
           "PUBLISH_PACKAGE={str(not package_served).lower()}",
           "PUBLISH_DOCS={str(not docs_served).lower()}",
           "if held or not (release is not None and package_served and docs_served):",
@@ -144,6 +158,12 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
       refute mutated == source
       refute mutated =~ required
     end
+
+    # An ExDoc build is not byte-stable: docs are read back as present, never compared by bytes.
+    [_, docs_check] = String.split(source, "docs_served = present(", parts: 2)
+    [docs_check, _] = String.split(docs_check, ")", parts: 2)
+    refute docs_check =~ "DOCS_ARCHIVE"
+    refute source =~ ~r/compare\(\s*f"https:\/\/repo\.hex\.pm\/docs\//
 
     upload = File.read!("scripts/publish_hex_artifacts.exs")
     assert upload =~ "def main([name, version, archive, docs])"

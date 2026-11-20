@@ -83,6 +83,8 @@ jobs:
         run: |
           mix docs --warnings-as-errors --formatter html
           test -s doc/index.html
+          printf '{"package": "%s", "version": "%s", "commit": "%s"}\n' \
+            "$PACKAGE" "$VERSION" "$GITHUB_SHA" > doc/release.json
           tar -C doc --format=gnu --sort=name --mtime='2000-01-01 00:00Z' \
             --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' -cf - . \
             | gzip -n > "$DOCS_ARCHIVE"
