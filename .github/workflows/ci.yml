@@ -230,6 +230,12 @@ jobs:
       - name: Install dependencies
         run: mix deps.get --check-locked
 
+      - name: Test local identifier hooks
+        run: |
+          command -v python3 >/dev/null
+          command -v git >/dev/null
+          mix privacy.hooks
+
       - name: Build exact unpublished archive
         id: archive
         run: |

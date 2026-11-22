@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add generic local identifier hooks for staged content, commit messages and outgoing Git
+  objects, with ignored owner policy and synthetic real-Git guard tests in CI.
+
 - Use plain US English without em dashes in public prose and doctor diagnostics.
   Check all tracked text for literal and escaped em dashes.
 

@@ -48,3 +48,10 @@ internal coordination, secrets or environment files to public sources.
 Contributors commit changes for maintainer review. Only maintainers land qualified commits
 and run publication or site deployment. Never publish or tag as part of a contribution.
 Report vulnerabilities through [SECURITY.md](SECURITY.md).
+
+## Maintainer checks
+
+Install the tracked hooks with `bash scripts/install-hooks.sh`. Local confidential-identifier
+checks require an ignored owner policy; contributors without it get an inactive notice.
+See the [maintainer checks](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/maintainer-checks.md)
+for activation, coverage and the standalone guard tests. Public CI uses only synthetic identifiers.

@@ -66,8 +66,10 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   defp aliases do
     [
       "sbom.generate": ["run --no-start scripts/generate_release_sbom.exs"],
+      "privacy.hooks": ["cmd python3 scripts/test_private_identifier_guard.py"],
       ci: [
         "run --no-start scripts/ci_env_guard.exs",
+        "privacy.hooks",
         # job: gate (the library)
         "deps.get --check-locked",
         "format --check-formatted",
