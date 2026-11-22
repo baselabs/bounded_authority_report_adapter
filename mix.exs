@@ -69,9 +69,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       "privacy.hooks": ["cmd python3 scripts/test_private_identifier_guard.py"],
       ci: [
         "run --no-start scripts/ci_env_guard.exs",
-        "privacy.hooks",
         # job: gate (the library)
         "deps.get --check-locked",
+        "privacy.hooks",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "credo --strict",
