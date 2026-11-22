@@ -23,7 +23,7 @@ defmodule BoundedAuthorityReportAdapter.PackageVocabularyTest do
 
   # Decision records are local to the maintainers' checkout (gitignored, never packaged or
   # published), so a citation of one names a document no reader has.
-  @decision_record ~r/\bADR\b|\.kimosabe|ash_onetime/
+  @decision_record ~r/\bADR\b|ash_onetime/
 
   # Public documents outside the package that readers of the repository and the site see.
   @public_documents [
@@ -57,7 +57,7 @@ defmodule BoundedAuthorityReportAdapter.PackageVocabularyTest do
            "decision-record citations in public files:\n" <> Enum.join(findings, "\n")
 
     # Non-vacuity: each form the pattern exists to catch.
-    for planted <- ["(ADR-0021)", "ADR 0003", "see .kimosabe/adr/", "the ash_onetime posture"] do
+    for planted <- ["(ADR-0021)", "ADR 0003", "the ash_onetime posture"] do
       assert Regex.match?(@decision_record, planted), "#{planted} slipped past the pattern"
     end
 

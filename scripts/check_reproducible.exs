@@ -104,30 +104,19 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
     end
   end
 
-  # What a reproducible build starts from: source only: no build artifacts,
-  # fetched deps, tool/state dirs, or generated output. `.env` and friends are
-  # CREDENTIALS (never copied into temp trees); `examples/` is a separate mix
-  # project the root archive build does not touch (and its nested deps/_build
-  # would double the copy for nothing).
-  @copy_excludes ~w(_build deps .git .zcode .kimosabe artifacts cover doc
-                    graphify-out erl_crash.dump .env .claude .expert .serena
-                    .elixir_ls .lexical examples)
-
+  # Copy tracked working-tree files, including documentation assets and candidate
+  # edits. Untracked local state, fetched dependencies and generated output never
+  # enter either independent build.
   defp copy_source_tree!(source, dest) do
     File.mkdir_p!(dest)
 
-    for entry <- ["examples/files"] do
-      target = Path.join(dest, entry)
-      File.mkdir_p!(Path.dirname(target))
-      File.cp_r!(Path.join(source, entry), target)
-    end
+    {output, 0} = System.cmd("git", ["ls-files", "-z"], cd: source, stderr_to_stdout: true)
 
-    source
-    |> File.ls!()
-    |> Enum.reject(&(&1 in @copy_excludes))
-    |> Enum.each(fn entry ->
-      File.cp_r!(Path.join(source, entry), Path.join(dest, entry))
-    end)
+    for path <- String.split(output, <<0>>, trim: true) do
+      target = Path.join(dest, path)
+      File.mkdir_p!(Path.dirname(target))
+      File.cp!(Path.join(source, path), target)
+    end
   end
 
   defp build_in!(copy_root, output) do

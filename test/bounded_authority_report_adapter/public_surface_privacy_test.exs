@@ -4,7 +4,7 @@ defmodule BoundedAuthorityReportAdapter.PublicSurfacePrivacyTest do
   @moduletag timeout: 180_000
 
   # These hashes represent generic deployment-topology phrases, not private names.
-  # Exact private identifiers live only in the ignored .kimosabe manifest consumed
+  # Exact private identifiers live only in the ignored local manifest consumed
   # by the commit guard; publishing their unhashed or unkeyed hashes would create a
   # confirmation oracle for guessed names.
   @forbidden_topology_hashes MapSet.new([

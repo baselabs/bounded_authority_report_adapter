@@ -14,5 +14,3 @@ bounded_authority_report_adapter-*.tar
 .env
 .env.*
 .DS_Store
-
-/.kimosabe/
