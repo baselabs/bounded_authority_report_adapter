@@ -12,6 +12,7 @@ The library and example app are separate projects. Keep transport dependencies i
 example. Use only documented protocol functions. Update examples and documentation with
 contracts; discover and execute samples recursively and check rendered links.
 
-Use the exact toolchains in `.tool-versions`. Validate through the repository CI contract.
+Read CI toolchains only through `scripts/toolchain.sh`; it reads `.tool-versions` and
+checks installed versions with `--installed`. Validate through the repository CI contract.
 Commit named paths. Do not push, publish, tag, deploy or dispatch workflows without a
 maintainer's explicit instruction. Never read, print or commit secrets; never mock services.

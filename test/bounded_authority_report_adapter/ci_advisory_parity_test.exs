@@ -23,6 +23,8 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   @audit_command "mix hex.audit"
   @advisory_command "mix deps.audit"
   @env_guard_step "run --no-start scripts/ci_env_guard.exs"
+  @toolchain_reader ~s(scripts/toolchain.sh >> "$GITHUB_OUTPUT")
+  @installed_check ~s(scripts/toolchain.sh --installed "elixir=$EXPECTED_ELIXIR" "erlang=$EXPECTED_OTP")
 
   # A public repository runs on GitHub-hosted runners only, on a pinned image.
   @runner "ubuntu-24.04"
@@ -157,7 +159,8 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
   test "both jobs consume every declared compatibility lane through the toolchain reader" do
     workflow = File.read!(".github/workflows/ci.yml")
-    declaration = File.read!(".tool-versions")
+    parsed = YamlElixir.read_from_file!(".github/workflows/ci.yml")
+    {output, 0} = System.cmd("scripts/toolchain.sh", [".tool-versions"])
 
     for runner <- ["windows-", "macos-"] do
       refute String.contains?(workflow, runner)
@@ -166,47 +169,91 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     end
 
     versions =
-      declaration
+      output
       |> String.split("\n", trim: true)
       |> Map.new(fn line ->
-        [tool | values] = String.split(line)
-        {tool, values}
+        [key, value] = String.split(line, "=", parts: 2)
+        {key, value}
       end)
 
-    assert versions["elixir"] == ["1.20.2-otp-29", "1.18.4-otp-27", "1.19.5-otp-28"]
-    assert versions["erlang"] == ["29.0.3", "27.3.4.14", "28.5.0.3"]
+    assert versions["elixir"] == "1.20.2-otp-29"
+    assert versions["otp"] == "29.0.3"
+    assert versions["erlang"] == versions["otp"]
 
-    reader = workflow |> String.split("\n  gate:", parts: 2) |> hd()
-    assert reader =~ "pathlib.Path('.tool-versions').read_text()"
-    assert reader =~ "for elixir in versions['elixir']:"
-    assert reader =~ "otp.split('.')[0] == match[2]"
-    assert reader =~ "if len(matches) != 1:"
-    assert reader =~ "lanes.append({'elixir': elixir, 'otp': matches[0]})"
+    assert :json.decode(versions["beam_lanes"]) == [
+             %{"elixir" => "1.18.4-otp-27", "otp" => "27.3.4.14"},
+             %{"elixir" => "1.19.5-otp-28", "otp" => "28.5.0.3"}
+           ]
 
-    [_, gate_and_example] = String.split(workflow, "\n  gate:", parts: 2)
-    [gate_job, example_and_qualified] = String.split(gate_and_example, "\n  example:", parts: 2)
-    [example_job, _] = String.split(example_and_qualified, "\n  qualified:", parts: 2)
-    matrix = "include: ${{ fromJSON(needs.toolchain.outputs.lanes) }}"
+    reader = List.last(parsed["jobs"]["toolchain"]["steps"])
+    assert reader["id"] == "versions"
+    assert reader["run"] == @toolchain_reader
 
-    for {job_name, job} <- [{"gate", gate_job}, {"example", example_job}] do
-      assert job =~ "needs: toolchain"
-      assert job =~ ~r/strategy:\s+fail-fast:\s*false\s+matrix:\s+include:/m
-      assert job =~ "runs-on: #{@runner}\n"
-      assert job =~ matrix, "#{job_name} must consume the reader's whole lane list"
-      mutated = String.replace(job, matrix, "include: []", global: false)
-      refute mutated == job
-      refute mutated =~ matrix
+    assert parsed["jobs"]["toolchain"]["outputs"] == %{
+             "elixir" => "${{ steps.versions.outputs.elixir }}",
+             "otp" => "${{ steps.versions.outputs.otp }}",
+             "beam_lanes" => "${{ steps.versions.outputs.beam_lanes }}"
+           }
 
-      assert job =~
-               ~r/uses: \.\/\.github\/actions\/setup-beam\s+with:\s+elixir-version: \$\{\{ matrix\.elixir \}\}\s+otp-version: \$\{\{ matrix\.otp \}\}/
+    for job_name <- ["gate", "example"] do
+      job = parsed["jobs"][job_name]
+      assert job["needs"] == "toolchain"
+      assert job["runs-on"] == @runner
+      assert job["strategy"]["fail-fast"] == false
+      matrix = job["strategy"]["matrix"]
+      assert_beam_matrix(matrix)
+
+      for key <- ["beam", "include"] do
+        assert_raise ExUnit.AssertionError, fn -> assert_beam_matrix(Map.delete(matrix, key)) end
+      end
+
+      setup = Enum.find(job["steps"], &(&1["uses"] == "./.github/actions/setup-beam"))
+
+      assert setup["with"] == %{
+               "elixir-version" => "${{ matrix.beam.elixir }}",
+               "otp-version" => "${{ matrix.beam.otp }}"
+             }
+    end
+  end
+
+  test "BEAM setup reads shared outputs and immediately checks the installed pair" do
+    setup = YamlElixir.read_from_file!(".github/actions/setup-beam/action.yml")
+    steps = setup["runs"]["steps"]
+    assert_shared_beam_setup(steps)
+
+    for index <- [0, 2] do
+      mutated = List.update_at(steps, index, &Map.put(&1, "run", "true"))
+      assert_raise ExUnit.AssertionError, fn -> assert_shared_beam_setup(mutated) end
     end
 
-    setup = File.read!(".github/actions/setup-beam/action.yml")
-    assert setup =~ "version-type: strict"
-    assert setup =~ "Elixir build and OTP major differ"
-    assert setup =~ "EXPECTED_OTP"
-    assert setup =~ "actual_otp == System.fetch_env!(\"EXPECTED_OTP\")"
-    assert setup =~ "System.version() == version"
+    [reader, install, check] = steps
+
+    assert_raise ExUnit.AssertionError, fn ->
+      assert_shared_beam_setup([reader, check, install])
+    end
+
+    for {path, job_name} <- [
+          {".github/workflows/ci.yml", "livebooks-local"},
+          {".github/workflows/ci.yml", "package"},
+          {".github/workflows/publish.yml", "publish"},
+          {".github/workflows/publish.yml", "published-livebooks"}
+        ] do
+      workflow = YamlElixir.read_from_file!(path)
+      job_steps = workflow["jobs"][job_name]["steps"]
+      setup_step = Enum.find(job_steps, &(&1["uses"] == "./.github/actions/setup-beam"))
+      assert setup_step
+      refute Map.has_key?(setup_step, "with")
+    end
+  end
+
+  test "workflows and composites use no alternate toolchain readers or runtime literals" do
+    for path <- workflows() ++ Path.wildcard(".github/actions/**/action.yml") do
+      source = path |> File.read!() |> strip_comments()
+      refute source =~ ".tool-versions", path
+      refute source =~ ~r/\b[\w-]*version-file:/, path
+      refute source =~ ~r/\b(?:bash|sh)\s+scripts\/toolchain\.sh/, path
+      refute source =~ ~r/\b[\w-]+-version:\s*['"]?\d/, path
+    end
   end
 
   test "publication confirms the package exists before checking its version or publishing" do
@@ -312,6 +359,43 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   end
 
   defp workflows, do: Path.wildcard(".github/workflows/*.yml")
+
+  defp assert_beam_matrix(matrix) do
+    assert matrix == %{
+             "beam" => "${{ fromJSON(needs.toolchain.outputs.beam_lanes) }}",
+             "include" => [
+               %{
+                 "beam" => %{
+                   "elixir" => "${{ needs.toolchain.outputs.elixir }}",
+                   "otp" => "${{ needs.toolchain.outputs.otp }}"
+                 }
+               }
+             ]
+           }
+  end
+
+  defp assert_shared_beam_setup(steps) do
+    assert [reader, install, check] = steps
+    assert reader["id"] == "versions"
+    assert reader["run"] == @toolchain_reader
+    assert reader["working-directory"] == "${{ github.workspace }}"
+    assert install["uses"]
+    assert String.starts_with?(install["uses"], "erlef/setup-beam@")
+
+    versions = %{
+      "elixir-version" => "${{ inputs.elixir-version || steps.versions.outputs.elixir }}",
+      "otp-version" => "${{ inputs.otp-version || steps.versions.outputs.otp }}"
+    }
+
+    assert install["with"] == Map.put(versions, "version-type", "strict")
+    assert check["working-directory"] == "${{ github.workspace }}"
+    assert check["run"] == @installed_check
+
+    assert check["env"] == %{
+             "EXPECTED_ELIXIR" => versions["elixir-version"],
+             "EXPECTED_OTP" => versions["otp-version"]
+           }
+  end
 
   # Full-line comments (the alias's step annotations, the workflow's battery
   # comment) must not weaken step-adjacency matching: strip them so the

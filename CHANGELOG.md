@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Read CI toolchains and check installed versions through the shared toolchain reader.
+  Preserve every supported Elixir and OTP pair and the primary runtime in release jobs.
+
 - Limit new-ref identifier checks to commits outside the pushing remote's tracking refs.
   Keep full-history checks for unconfigured remotes and remotes without tracking refs.
 

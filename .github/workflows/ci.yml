@@ -23,39 +23,20 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5 # run 44208265114
     outputs:
-      lanes: ${{ steps.versions.outputs.lanes }}
+      elixir: ${{ steps.versions.outputs.elixir }}
+      otp: ${{ steps.versions.outputs.otp }}
+      beam_lanes: ${{ steps.versions.outputs.beam_lanes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Read every declared lane from .tool-versions
+      - name: Read shared toolchains
         id: versions
-        run: |
-          python3 - <<'PYTHON'
-          import json, os, pathlib, re
-          versions = {}
-          for line in pathlib.Path('.tool-versions').read_text().splitlines():
-              fields = line.split('#', 1)[0].split()
-              if fields:
-                  if len(fields) < 2 or fields[0] in versions:
-                      raise SystemExit('Invalid or duplicate toolchain declaration')
-                  versions[fields[0]] = fields[1:]
-          lanes = []
-          for elixir in versions['elixir']:
-              match = re.fullmatch(r'(\d+\.\d+\.\d+)-otp-(\d+)', elixir)
-              if not match:
-                  raise SystemExit('Declare an exact Elixir build')
-              matches = [otp for otp in versions['erlang'] if otp.split('.')[0] == match[2]]
-              if len(matches) != 1:
-                  raise SystemExit('Each Elixir build requires exactly one declared OTP version')
-              lanes.append({'elixir': elixir, 'otp': matches[0]})
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-              out.write('lanes=' + json.dumps(lanes) + '\n')
-          PYTHON
+        run: scripts/toolchain.sh >> "$GITHUB_OUTPUT"
 
   gate:
     needs: toolchain
-    name: Gate battery (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
+    name: Gate battery (Elixir ${{ matrix.beam.elixir }} / OTP ${{ matrix.beam.otp }})
     # A public repository runs on GitHub-hosted runners only, on a pinned image.
     runs-on: ubuntu-24.04
     timeout-minutes: 12 # run 44208265114
@@ -73,7 +54,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.toolchain.outputs.lanes) }}
+        beam: ${{ fromJSON(needs.toolchain.outputs.beam_lanes) }}
+        include:
+          - beam:
+              elixir: ${{ needs.toolchain.outputs.elixir }}
+              otp: ${{ needs.toolchain.outputs.otp }}
 
     env:
       MIX_ENV: test
@@ -86,8 +71,8 @@ jobs:
 
       - uses: ./.github/actions/setup-beam
         with:
-          elixir-version: ${{ matrix.elixir }}
-          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.beam.elixir }}
+          otp-version: ${{ matrix.beam.otp }}
 
       - name: Pin the Hex client
         # The Hex version is written into the archive metadata; .hex-version keeps CI, the
@@ -139,7 +124,7 @@ jobs:
 
   example:
     needs: toolchain
-    name: examples/edge_agent (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
+    name: examples/edge_agent (Elixir ${{ matrix.beam.elixir }} / OTP ${{ matrix.beam.otp }})
     runs-on: ubuntu-24.04
     timeout-minutes: 5 # run 44208265114
 
@@ -149,7 +134,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.toolchain.outputs.lanes) }}
+        beam: ${{ fromJSON(needs.toolchain.outputs.beam_lanes) }}
+        include:
+          - beam:
+              elixir: ${{ needs.toolchain.outputs.elixir }}
+              otp: ${{ needs.toolchain.outputs.otp }}
 
     env:
       MIX_ENV: test
@@ -167,8 +156,8 @@ jobs:
 
       - uses: ./.github/actions/setup-beam
         with:
-          elixir-version: ${{ matrix.elixir }}
-          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.beam.elixir }}
+          otp-version: ${{ matrix.beam.otp }}
 
       - name: Install deps
         run: mix deps.get --check-locked

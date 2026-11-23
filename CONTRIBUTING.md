@@ -7,8 +7,11 @@ material must never enter a handle term. Test helpers do not ship in the package
 ## Environment and boundaries
 
 Use Elixir 1.18 through 1.20 on Erlang/OTP 27 through 29. Exact toolchains are in
-`.tool-versions`; OTP 27 is required for `:json`. The library and `examples/edge_agent`
-are separate Mix projects. Transport dependencies belong only to the example.
+`.tool-versions`; OTP 27 is required for `:json`. CI reads it only through the shared
+toolchain reader, `scripts/toolchain.sh`. Its primary outputs and `beam_lanes` supply
+every supported pair; setup checks the installed versions with `--installed`.
+The library and `examples/edge_agent` are separate Mix projects. Transport dependencies
+belong only to the example.
 
 Required runtime dependencies are the public protocol and telemetry; Igniter is optional.
 `test/bounded_authority_report_adapter/dependency_direction_test.exs` enforces this boundary.
