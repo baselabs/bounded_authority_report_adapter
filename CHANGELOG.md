@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Build BEAM matrices with top-level Elixir and OTP keys from the shared toolchain reader.
+
 - Read CI toolchains and check installed versions through the shared toolchain reader.
   Preserve every supported Elixir and OTP pair and the primary runtime in release jobs.
 

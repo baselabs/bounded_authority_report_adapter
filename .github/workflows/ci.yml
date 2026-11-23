@@ -23,9 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5 # run 44208265114
     outputs:
-      elixir: ${{ steps.versions.outputs.elixir }}
-      otp: ${{ steps.versions.outputs.otp }}
-      beam_lanes: ${{ steps.versions.outputs.beam_lanes }}
+      beam_matrix: ${{ steps.matrix.outputs.beam_matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,10 +31,23 @@ jobs:
       - name: Read shared toolchains
         id: versions
         run: scripts/toolchain.sh >> "$GITHUB_OUTPUT"
+      - name: Build BEAM matrix
+        id: matrix
+        env:
+          ELIXIR: ${{ steps.versions.outputs.elixir }}
+          OTP: ${{ steps.versions.outputs.otp }}
+          BEAM_LANES: ${{ steps.versions.outputs.beam_lanes }}
+        run: |
+          matrix=$(jq -cn \
+            --arg elixir "$ELIXIR" \
+            --arg otp "$OTP" \
+            --argjson lanes "$BEAM_LANES" \
+            '{include: ($lanes + [{elixir: $elixir, otp: $otp}])}')
+          printf 'beam_matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
 
   gate:
     needs: toolchain
-    name: Gate battery (Elixir ${{ matrix.beam.elixir }} / OTP ${{ matrix.beam.otp }})
+    name: Gate battery (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     # A public repository runs on GitHub-hosted runners only, on a pinned image.
     runs-on: ubuntu-24.04
     timeout-minutes: 12 # run 44208265114
@@ -53,12 +64,7 @@ jobs:
     # config assert's set, and .tool-versions.
     strategy:
       fail-fast: false
-      matrix:
-        beam: ${{ fromJSON(needs.toolchain.outputs.beam_lanes) }}
-        include:
-          - beam:
-              elixir: ${{ needs.toolchain.outputs.elixir }}
-              otp: ${{ needs.toolchain.outputs.otp }}
+      matrix: ${{ fromJSON(needs.toolchain.outputs.beam_matrix) }}
 
     env:
       MIX_ENV: test
@@ -71,8 +77,8 @@ jobs:
 
       - uses: ./.github/actions/setup-beam
         with:
-          elixir-version: ${{ matrix.beam.elixir }}
-          otp-version: ${{ matrix.beam.otp }}
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
 
       - name: Pin the Hex client
         # The Hex version is written into the archive metadata; .hex-version keeps CI, the
@@ -124,7 +130,7 @@ jobs:
 
   example:
     needs: toolchain
-    name: examples/edge_agent (Elixir ${{ matrix.beam.elixir }} / OTP ${{ matrix.beam.otp }})
+    name: examples/edge_agent (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-24.04
     timeout-minutes: 5 # run 44208265114
 
@@ -133,12 +139,7 @@ jobs:
     # Bandit/Req pins must hold on every lane).
     strategy:
       fail-fast: false
-      matrix:
-        beam: ${{ fromJSON(needs.toolchain.outputs.beam_lanes) }}
-        include:
-          - beam:
-              elixir: ${{ needs.toolchain.outputs.elixir }}
-              otp: ${{ needs.toolchain.outputs.otp }}
+      matrix: ${{ fromJSON(needs.toolchain.outputs.beam_matrix) }}
 
     env:
       MIX_ENV: test
@@ -156,8 +157,8 @@ jobs:
 
       - uses: ./.github/actions/setup-beam
         with:
-          elixir-version: ${{ matrix.beam.elixir }}
-          otp-version: ${{ matrix.beam.otp }}
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
 
       - name: Install deps
         run: mix deps.get --check-locked

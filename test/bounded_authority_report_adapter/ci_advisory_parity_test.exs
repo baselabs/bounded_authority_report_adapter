@@ -185,33 +185,58 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
              %{"elixir" => "1.19.5-otp-28", "otp" => "28.5.0.3"}
            ]
 
-    reader = List.last(parsed["jobs"]["toolchain"]["steps"])
+    [_, reader, matrix_step] = parsed["jobs"]["toolchain"]["steps"]
     assert reader["id"] == "versions"
     assert reader["run"] == @toolchain_reader
 
     assert parsed["jobs"]["toolchain"]["outputs"] == %{
-             "elixir" => "${{ steps.versions.outputs.elixir }}",
-             "otp" => "${{ steps.versions.outputs.otp }}",
-             "beam_lanes" => "${{ steps.versions.outputs.beam_lanes }}"
+             "beam_matrix" => "${{ steps.matrix.outputs.beam_matrix }}"
            }
 
-    for job_name <- ["gate", "example"] do
+    assert matrix_step["id"] == "matrix"
+
+    assert matrix_step["env"] == %{
+             "ELIXIR" => "${{ steps.versions.outputs.elixir }}",
+             "OTP" => "${{ steps.versions.outputs.otp }}",
+             "BEAM_LANES" => "${{ steps.versions.outputs.beam_lanes }}"
+           }
+
+    assert build_beam_matrix(matrix_step, versions) == %{
+             "include" => [
+               %{"elixir" => "1.18.4-otp-27", "otp" => "27.3.4.14"},
+               %{"elixir" => "1.19.5-otp-28", "otp" => "28.5.0.3"},
+               %{"elixir" => "1.20.2-otp-29", "otp" => "29.0.3"}
+             ]
+           }
+
+    primary_only = %{"elixir" => "1.21.0-otp-30", "otp" => "30.0.0", "beam_lanes" => "[]"}
+
+    assert build_beam_matrix(matrix_step, primary_only) == %{
+             "include" => [%{"elixir" => "1.21.0-otp-30", "otp" => "30.0.0"}]
+           }
+
+    for {job_name, label} <- [{"gate", "Gate battery"}, {"example", @edge_dir}] do
       job = parsed["jobs"][job_name]
       assert job["needs"] == "toolchain"
       assert job["runs-on"] == @runner
+      assert job["name"] == "#{label} (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})"
       assert job["strategy"]["fail-fast"] == false
       matrix = job["strategy"]["matrix"]
       assert_beam_matrix(matrix)
 
-      for key <- ["beam", "include"] do
-        assert_raise ExUnit.AssertionError, fn -> assert_beam_matrix(Map.delete(matrix, key)) end
+      for invalid <- [
+            nil,
+            %{"beam" => matrix},
+            "${{ fromJSON(needs.toolchain.outputs.beam_lanes) }}"
+          ] do
+        assert_raise ExUnit.AssertionError, fn -> assert_beam_matrix(invalid) end
       end
 
       setup = Enum.find(job["steps"], &(&1["uses"] == "./.github/actions/setup-beam"))
 
       assert setup["with"] == %{
-               "elixir-version" => "${{ matrix.beam.elixir }}",
-               "otp-version" => "${{ matrix.beam.otp }}"
+               "elixir-version" => "${{ matrix.elixir }}",
+               "otp-version" => "${{ matrix.otp }}"
              }
     end
   end
@@ -361,17 +386,22 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   defp workflows, do: Path.wildcard(".github/workflows/*.yml")
 
   defp assert_beam_matrix(matrix) do
-    assert matrix == %{
-             "beam" => "${{ fromJSON(needs.toolchain.outputs.beam_lanes) }}",
-             "include" => [
-               %{
-                 "beam" => %{
-                   "elixir" => "${{ needs.toolchain.outputs.elixir }}",
-                   "otp" => "${{ needs.toolchain.outputs.otp }}"
-                 }
-               }
-             ]
-           }
+    assert matrix == "${{ fromJSON(needs.toolchain.outputs.beam_matrix) }}"
+  end
+
+  defp build_beam_matrix(step, versions) do
+    {output, 0} =
+      System.cmd("bash", ["-euo", "pipefail", "-c", step["run"]],
+        env: [
+          {"ELIXIR", versions["elixir"]},
+          {"OTP", versions["otp"]},
+          {"BEAM_LANES", versions["beam_lanes"]},
+          {"GITHUB_OUTPUT", "/dev/stdout"}
+        ]
+      )
+
+    assert "beam_matrix=" <> matrix = String.trim(output)
+    :json.decode(matrix)
   end
 
   defp assert_shared_beam_setup(steps) do
