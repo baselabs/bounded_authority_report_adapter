@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Update the shared toolchain reader to the version that checks every installed runtime it reads.
+
 - Build BEAM matrices with top-level Elixir and OTP keys from the shared toolchain reader.
 
 - Read CI toolchains and check installed versions through the shared toolchain reader.
