@@ -160,7 +160,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   test "both jobs consume every declared compatibility lane through the toolchain reader" do
     workflow = File.read!(".github/workflows/ci.yml")
     parsed = YamlElixir.read_from_file!(".github/workflows/ci.yml")
-    {output, 0} = System.cmd("scripts/toolchain.sh", [".tool-versions"])
+    {output, 0} = System.cmd(Path.expand("scripts/toolchain.sh"), [".tool-versions"])
 
     for runner <- ["windows-", "macos-"] do
       refute String.contains?(workflow, runner)
