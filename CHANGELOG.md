@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Refuse to publish a package whose changelog is not stamped for its version.
+
 - Keep CI and release artifacts for 7 days, the period anything reads them after their run.
 
 - Update the shared toolchain reader to the version that checks every installed runtime it reads.
