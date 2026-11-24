@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep CI and release artifacts for 7 days, the period anything reads them after their run.
+
 - Update the shared toolchain reader to the version that checks every installed runtime it reads.
 
 - Build BEAM matrices with top-level Elixir and OTP keys from the shared toolchain reader.

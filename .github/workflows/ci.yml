@@ -257,7 +257,7 @@ jobs:
             artifacts/release.cdx.json
             artifacts/SHA256SUMS
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
 
   attest:
     name: Supply chain
