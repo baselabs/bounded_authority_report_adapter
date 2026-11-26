@@ -58,6 +58,10 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
             state.mode}, %{state | calls: [{version, message} | state.calls]}}
         end)
 
+      respond(mode, suite, message, key)
+    end
+
+    defp respond(mode, suite, message, key) do
       case mode do
         :failure ->
           {:error, :provider_failure}

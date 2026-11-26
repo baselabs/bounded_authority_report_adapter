@@ -1192,20 +1192,22 @@ defmodule BoundedAuthorityReportAdapter do
           {:ok, action_approval_compact()} | {:error, action_approval_sign_error()}
   def sign_action_approval(input, key_handle, opts \\ %{}) do
     Telemetry.sign_span(:action_approval, fn ->
-      ContentSigner.approval(input, opts, fn assertion, bounds ->
-        with {:ok, {key, signing_handle}} <-
-               ContentSigner.snapshot(key_handle, &accept_key/1, &safe_callback/3) do
-          ContentSigner.produce(
-            assertion,
-            key,
-            bounds,
-            :eddsa,
-            &sign_via_handle(signing_handle, &1),
-            &verify_signature/3
-          )
-        end
-      end)
+      ContentSigner.approval(input, opts, &sign_approval_content(&1, key_handle, &2))
     end)
+  end
+
+  defp sign_approval_content(assertion, key_handle, bounds) do
+    with {:ok, {key, signing_handle}} <-
+           ContentSigner.snapshot(key_handle, &accept_key/1, &safe_callback/3) do
+      ContentSigner.produce(
+        assertion,
+        key,
+        bounds,
+        :eddsa,
+        &sign_via_handle(signing_handle, &1),
+        &verify_signature/3
+      )
+    end
   end
 
   @doc """

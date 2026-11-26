@@ -4,6 +4,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   use ExUnit.Case, async: true
 
   alias BoundedAuthorityReportAdapter.ProtocolDependency
+  alias Mix.Dep.Lock
 
   @protocol :bounded_authority_protocol
   @release "~> 1.5"
@@ -35,7 +36,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   test "the active lock identifies the dependency compiled by Mix" do
     identity = ProtocolDependency.identity!()
     version = to_string(Application.spec(@protocol, :vsn))
-    lock = Map.fetch!(Mix.Dep.Lock.read(), @protocol)
+    lock = Map.fetch!(Lock.read(), @protocol)
 
     case lock do
       {:git, _, ref, [ref: ref]} ->
@@ -51,7 +52,7 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
 
   test "direct and locked dependencies stay inside the adapter package boundary" do
     direct = Enum.map(Mix.Project.config()[:deps], &elem(&1, 0))
-    locked = Map.keys(Mix.Dep.Lock.read())
+    locked = Map.keys(Lock.read())
 
     assert direct_dependencies?(direct)
     assert locked_dependencies?(locked)

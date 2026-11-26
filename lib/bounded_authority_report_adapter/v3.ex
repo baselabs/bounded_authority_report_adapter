@@ -717,13 +717,15 @@ defmodule BoundedAuthorityReportAdapter.V3 do
         key,
         bounds,
         :es256,
-        fn message ->
-          with {:ok, signature} <- sign_via_handle(signing_handle, message) do
-            canonicalize_low_s(signature)
-          end
-        end,
+        &sign_low_s(signing_handle, &1),
         &verify_es256/3
       )
+    end
+  end
+
+  defp sign_low_s(signing_handle, message) do
+    with {:ok, signature} <- sign_via_handle(signing_handle, message) do
+      canonicalize_low_s(signature)
     end
   end
 
