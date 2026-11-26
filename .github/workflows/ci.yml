@@ -24,7 +24,6 @@ jobs:
     timeout-minutes: 5 # run 44208265114
     outputs:
       beam_matrix: ${{ steps.matrix.outputs.beam_matrix }}
-      protocol_is_release: ${{ steps.dependency.outputs.protocol_is_release }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,17 +45,10 @@ jobs:
             '{include: ($lanes + [{elixir: $elixir, otp: $otp}])}')
           printf 'beam_matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
 
-      - name: Read the protocol dependency origin
-        id: dependency
-        run: |
-          if [[ ! -e mix.candidate.lock && ! -e examples/edge_agent/mix.candidate.lock ]]; then
-            printf '%s\n' 'protocol_is_release=true' >> "$GITHUB_OUTPUT"
-          else
-            printf '%s\n' 'protocol_is_release=false' >> "$GITHUB_OUTPUT"
-          fi
-
   gate:
     needs: toolchain
+    outputs:
+      protocol_identity: ${{ steps.protocol.outputs.identity }}
     name: Gate battery (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     # A public repository runs on GitHub-hosted runners only, on a pinned image.
     runs-on: ubuntu-24.04
@@ -101,10 +93,11 @@ jobs:
       - name: Install deps
         run: mix deps.get --check-locked
 
-      - name: Confirm the checked-out protocol candidate
+      - name: Verify the resolved protocol dependency
+        id: protocol
         run: |
-          test "$(git -C deps/bounded_authority_protocol rev-parse HEAD)" = \
-            "2e339cec88d2831c7e5e3e848fa5ff8199764f8c"
+          identity="$(mix run --no-compile --no-deps-check --no-start -r scripts/protocol_dependency.exs -e 'IO.puts(BoundedAuthorityReportAdapter.ProtocolDependency.identity!())')"
+          printf 'identity=%s\n' "$identity" >> "$GITHUB_OUTPUT"
 
       - name: Check formatting
         run: mix format --check-formatted
@@ -139,15 +132,17 @@ jobs:
         run: mix deps.audit
 
       - name: Package boundary (build + unpack + consumer smoke)
-        if: needs.toolchain.outputs.protocol_is_release == 'true'
+        if: startsWith(steps.protocol.outputs.identity, 'hex:')
         run: mix run --no-start scripts/check_package.exs
 
       - name: Release reproducibility (two independent builds agree)
-        if: needs.toolchain.outputs.protocol_is_release == 'true'
+        if: startsWith(steps.protocol.outputs.identity, 'hex:')
         run: mix run --no-start scripts/check_reproducible.exs
 
   example:
     needs: toolchain
+    outputs:
+      protocol_identity: ${{ steps.protocol.outputs.identity }}
     name: examples/edge_agent (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-24.04
     timeout-minutes: 5 # run 44208265114
@@ -195,10 +190,11 @@ jobs:
       - name: Audit dependency advisories
         run: mix deps.audit
 
-      - name: Confirm the checked-out protocol candidate
+      - name: Verify the resolved protocol dependency
+        id: protocol
         run: |
-          test "$(git -C deps/bounded_authority_protocol rev-parse HEAD)" = \
-            "2e339cec88d2831c7e5e3e848fa5ff8199764f8c"
+          identity="$(mix run --no-compile --no-deps-check --no-start -r ../../scripts/protocol_dependency.exs -e 'IO.puts(BoundedAuthorityReportAdapter.ProtocolDependency.identity!())')"
+          printf 'identity=%s\n' "$identity" >> "$GITHUB_OUTPUT"
 
       - name: Check formatting
         run: mix format --check-formatted
@@ -231,10 +227,11 @@ jobs:
         run: elixir scripts/check_livebooks.exs --local
 
   hex-qualification:
-    # The Git candidate can pass source checks. Release qualification needs Hex.
-    if: needs.toolchain.outputs.protocol_is_release == 'true'
+    # A protocol Git candidate can pass source checks. Release qualification requires
+    # both Mix projects to resolve the same Hex release.
+    if: startsWith(needs.gate.outputs.protocol_identity, 'hex:') && needs.gate.outputs.protocol_identity == needs.example.outputs.protocol_identity
     name: Qualify Hex archives
-    needs: [toolchain, gate, example, livebooks-local]
+    needs: [gate, example, livebooks-local]
     runs-on: ubuntu-24.04
     timeout-minutes: 15 # No green run yet for this job.
     steps:

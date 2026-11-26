@@ -40,6 +40,7 @@
       "docs/notebooks/registry.txt",
       "examples/files/signing-flow.svg",
       "lib/bounded_authority_report_adapter.ex",
+      "lib/bounded_authority_report_adapter/content_signer.ex",
       "lib/bounded_authority_report_adapter/optional_callbacks.ex",
       "lib/bounded_authority_report_adapter/options.ex",
       "lib/bounded_authority_report_adapter/telemetry.ex",
@@ -53,7 +54,7 @@
       "bounded_authority_protocol": {
         "app": "bounded_authority_protocol",
         "optional": false,
-        "requirement": "~> 1.0",
+        "requirement": "~> 1.5",
         "repository": "hexpm"
       },
       "igniter": {

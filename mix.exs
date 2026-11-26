@@ -2,7 +2,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   use Mix.Project
 
   @version "1.4.0"
-  @protocol_release {:bounded_authority_protocol, "~> 1.0"}
+  @protocol_release {:bounded_authority_protocol, "~> 1.5"}
   @source_url "https://github.com/baselabs/bounded_authority_report_adapter"
 
   def project do
@@ -34,6 +34,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         plt_add_apps: [:mix, :earmark_parser]
       ],
       lockfile: "mix.candidate.lock",
+      protocol_release: @protocol_release,
       deps: deps(),
       package: package(),
       docs: qualified_docs(docs(), System.get_env("HEX_DOCS_SOURCE_REF")),
@@ -130,10 +131,9 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       #     are additive or soundness repairs. Crossing it is a deliberate, reviewed change.
       # The dependency wall test derives its probes from the floor and the ceiling, so a range
       # move edits only this requirement, the wall's three range attributes and the locks.
-      Tuple.append(@protocol_release,
-        git: "https://github.com/baselabs/bounded_authority_protocol.git",
-        ref: "2e339cec88d2831c7e5e3e848fa5ff8199764f8c"
-      ),
+      {:bounded_authority_protocol,
+       git: "https://github.com/baselabs/bounded_authority_protocol.git",
+       ref: "2e339cec88d2831c7e5e3e848fa5ff8199764f8c"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # The install task (lib/mix/tasks) uses Igniter when present; the file
       # compiles to a Mix.raise fallback without it.

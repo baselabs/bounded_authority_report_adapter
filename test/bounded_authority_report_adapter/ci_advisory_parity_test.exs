@@ -46,6 +46,54 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     {"release reproducibility", "mix run --no-start scripts/check_reproducible.exs"}
   ]
 
+  @release_step "startsWith(steps.protocol.outputs.identity, 'hex:')"
+  @release_commands [
+    "mix run --no-start scripts/check_package.exs",
+    "mix run --no-start scripts/check_reproducible.exs"
+  ]
+
+  test "release checks use the identity of the downloaded dependency in both projects" do
+    jobs = YamlElixir.read_from_file!(".github/workflows/ci.yml")["jobs"]
+
+    for {job, script} <- [
+          {"gate", "scripts/protocol_dependency.exs"},
+          {"example", "../../scripts/protocol_dependency.exs"}
+        ] do
+      assert jobs[job]["outputs"] == %{
+               "protocol_identity" => "${{ steps.protocol.outputs.identity }}"
+             }
+
+      steps = jobs[job]["steps"]
+      install_index = Enum.find_index(steps, &(&1["run"] == "mix deps.get --check-locked"))
+      check_index = Enum.find_index(steps, &(&1["id"] == "protocol"))
+      assert install_index < check_index
+
+      check = Enum.at(steps, check_index)
+
+      assert check["run"] == """
+             identity="$(mix run --no-compile --no-deps-check --no-start -r #{script} -e 'IO.puts(BoundedAuthorityReportAdapter.ProtocolDependency.identity!())')"
+             printf 'identity=%s\\n' "$identity" >> "$GITHUB_OUTPUT"
+             """
+    end
+
+    assert jobs["hex-qualification"]["needs"] == ~w(gate example livebooks-local)
+    assert jobs["package"]["needs"] == "hex-qualification"
+
+    assert jobs["hex-qualification"]["if"] ==
+             "startsWith(needs.gate.outputs.protocol_identity, 'hex:') && " <>
+               "needs.gate.outputs.protocol_identity == needs.example.outputs.protocol_identity"
+
+    for command <- @release_commands do
+      assert [%{"if" => @release_step}] =
+               Enum.filter(jobs["gate"]["steps"], &(&1["run"] == command))
+    end
+
+    source = File.read!(".github/workflows/ci.yml") |> strip_comments()
+    mutated = String.replace(source, "if: #{@release_step}", "", global: false)
+    assert mutated != source
+    refute mutated =~ Regex.compile!(workflow_battery_pattern())
+  end
+
   test "mix ci boots through the env guard before any step" do
     root_mix = File.read!("mix.exs") |> strip_comments()
 
@@ -444,7 +492,10 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   defp workflow_battery_pattern do
     @battery
     |> Enum.map_join("\\s+", fn {_name, command} ->
-      "- name: [^\\n]+\\s+run: #{Regex.escape(command)}"
+      condition =
+        if command in @release_commands, do: "if: #{Regex.escape(@release_step)}\\s+", else: ""
+
+      "- name: [^\\n]+\\s+#{condition}run: #{Regex.escape(command)}"
     end)
   end
 end
