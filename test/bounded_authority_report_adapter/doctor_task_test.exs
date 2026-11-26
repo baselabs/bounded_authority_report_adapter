@@ -24,6 +24,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     def thumbprint(_ref),
       do: {:ok, BoundedAuthorityReportAdapter.DoctorTaskTest.ed_thumb_ref(elem(keypair(), 0))}
 
+    def key_snapshot(ref), do: {:ok, {"k", elem(keypair(), 0), ref}}
     def key_identity(_ref), do: {:ok, {"k", elem(keypair(), 0)}}
     def signing_identity(_ref), do: {:ok, {:holder, "k", elem(keypair(), 0)}}
     defp keypair, do: :crypto.generate_key(:eddsa, :ed25519, <<7::256>>)
@@ -103,6 +104,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
 
     def thumbprint(_ref), do: {:ok, TestKeys.ec_thumbprint_raw(elem(keypair(), 0))}
 
+    def key_snapshot(ref), do: {:ok, {"k", elem(keypair(), 0), ref}}
     def key_identity(_ref), do: {:ok, {"k", elem(keypair(), 0)}}
     def signing_identity(_ref), do: {:ok, {:holder, "k", elem(keypair(), 0)}}
   end
@@ -322,7 +324,7 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
     assert %{fatals: []} = Doctor.check(MinimalHandle, :ref, false)
   end
 
-  test "minimal handle: no fatals, both advisories (which operation each blocks)" do
+  test "minimal handle: no fatals, optional callback advisories (which operation each blocks)" do
     assert %{fatals: [], advisories: advisories} = Doctor.check(MinimalHandle, :ref, false)
 
     assert Enum.any?(advisories, &(&1 =~ "key_identity/1 is absent" and &1 =~ "sign_anchor/3"))
@@ -342,7 +344,12 @@ defmodule BoundedAuthorityReportAdapter.DoctorTaskTest do
         "V3.sign_anchor/3",
         "V3.sign_key_transition/3"
       ],
-      signing_identity: ["sign_grant/3", "V3.sign_grant/3"]
+      signing_identity: ["sign_grant/3", "V3.sign_grant/3"],
+      key_snapshot: [
+        "sign_action_approval/3",
+        "V3.sign_content_assertion/3",
+        "V3.sign_action_approval/3"
+      ]
     }
 
     for {callback, entry_points} <- expected do

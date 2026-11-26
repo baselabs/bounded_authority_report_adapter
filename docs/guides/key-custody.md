@@ -9,6 +9,12 @@ the caller process. Bound every remote request, cancellation and retry in the ha
 `signing_identity/1` also returns its declared role. `sign/2` must use that same version.
 Do not resolve a moving alias separately for identity and signing. A mismatched signature
 fails the adapter's public-key self-check as `:signing_failed`.
+`key_snapshot/1` captures the key ID and public key along with an opaque, immutable
+provider reference for ES256 content assertions and action approvals. Resolve an alias
+to its version before returning that reference. When the provider hashes internally,
+pass the exact JWS input to its ES256 mechanism. When it requires a prehash, hash that
+input with SHA-256 once and sign the digest. Return raw 64-byte `r || s`.
+
 
 ## Signature suites
 

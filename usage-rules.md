@@ -7,7 +7,7 @@
    §8](docs/guides/framework-integration.md)).
 2. Keep private bytes out of the opaque handle term and behind a `{module, term}` key handle
    implementing the `BoundedAuthorityReportAdapter` behavior (`sign/2`, `public_key/1`,
-   `thumbprint/1`, and as needed `key_identity/1` and `signing_identity/1`). If you find
+   `thumbprint/1`, and as needed `key_identity/1`, `signing_identity/1` and `key_snapshot/1`). If you find
    yourself passing key bytes into the adapter, the integration is wrong; see
    [Getting started](docs/guides/getting-started.md). `thumbprint/1` is one call:
    `public_key_thumbprint/1` of the handle's public key. The adapter calls the handle in the
@@ -66,6 +66,11 @@
     `BoundedAuthorityProtocol.ContentAssertion.V1.verify_assertion/2`, supplying the
     expected identifiers, digests, trusted key, time and bounds, and keeps its own state
     if it must reject replays or check a lineage.
+
+15. Select the content-assertion suite explicitly. ES256 content assertions and both
+    action approval producers use `key_snapshot/1` to capture the key ID, public key and
+    immutable signing reference in one read. Sign with that exact key version. The host
+    selects its own approval requirements and eligible approver roles.
 
 See [Getting started](docs/guides/getting-started.md), [Errors](docs/guides/errors.md),
 [Telemetry](docs/guides/telemetry.md) and

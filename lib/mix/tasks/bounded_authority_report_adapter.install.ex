@@ -68,7 +68,10 @@ if Code.ensure_loaded?(Igniter) do
           sign_anchor/3,
           sign_key_transition/3,
           sign_content_assertion/3     -> sign/2, key_identity/1 (atomic kid+pub snapshot)
-          V3.sign_report/3 and siblings -> the same callbacks over P-256 keys
+          sign_action_approval/3,
+          V3.sign_action_approval/3,
+          V3.sign_content_assertion/3  -> sign/2, key_snapshot/1 (immutable signing version)
+          V3 standard credentials     -> the standard callbacks over P-256 keys
 
         thumbprint/1 is not called by the adapter; it exists so you can check this
         handle against a grant's cnf.jkt, and must use the suite's RFC 7638
@@ -121,6 +124,13 @@ if Code.ensure_loaded?(Igniter) do
           # the wrong kid into an anchor header (docs/guides/key-custody.md, immutable key identities).
           #   {:ok, {key_id, public_key}} = MyKms.current_version(_handle)
           raise "wire #{inspect(module)}.key_identity/1 as ONE atomic snapshot"
+        end
+
+        @impl true
+        def key_snapshot(_handle) do
+          # Capture {key_id, public_key, immutable_reference} in one provider read.
+          # sign/2 must use that reference to sign with the captured version.
+          raise "wire #{inspect(module)}.key_snapshot/1 to an immutable key version"
         end
 
         @impl true

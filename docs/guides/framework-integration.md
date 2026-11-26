@@ -336,3 +336,88 @@ end
 Use the same admission boundary in non-HTTP hosts. Only the transport extraction changes;
 policy, revocation and replay ownership do not. The [operations runbook](operations.md)
 covers unavailable stores, key rotation, custody failures and incident response.
+
+## 12. Sign and verify an action approval
+
+An executing host sets the approval requirement and eligible approver roles as operation
+policy. Prepare the request ID, immutable revision digest, subject, action and exact resource
+set from the request the host intends to execute. The approver uses a plain signing-backend
+signature. Carry the returned record bytes and assertion compact together.
+
+This example uses the development key from the README. In production, the handle resolves
+an immutable signing version from caller-owned custody. The relying party supplies its own
+prepared request, enrolled key, trusted-key snapshot and current time.
+
+```elixir
+alias BoundedAuthorityProtocol.ActionApproval.V1, as: Approval
+
+prepared = %{
+  request_id: "urn:example:request:accessibility-review",
+  revision_digest: :crypto.hash(:sha256, "prepared accessibility revision"),
+  subject: "public documentation",
+  action: "publish",
+  resources: ["accessibility-summary", "navigation-guide"]
+}
+
+record = struct!(Approval.Record, Map.put(prepared, :approver_role, "reviewer"))
+audience = "https://documentation.example"
+issuer = "https://review.example"
+approver = {MyApp.DevKey, {:reviewer, "reviewer-key-1"}}
+
+{:ok, %{record: record_bytes, content_assertion: assertion}} =
+  BoundedAuthorityReportAdapter.sign_action_approval(
+    %{
+      record: record,
+      jti: "urn:example:approval:accessibility-review-1",
+      iss: issuer,
+      aud: audience,
+      iat: now,
+      nbf: now,
+      exp: now + 60
+    },
+    approver
+  )
+
+{:ok, enrolled_key} = MyApp.DevKey.public_key({:reviewer, "reviewer-key-1"})
+
+context =
+  Map.merge(prepared, %{
+    trust_domain: "documentation",
+    audience: audience,
+    roles: ["reviewer"],
+    now: now,
+    max_staleness: 30,
+    max_lifetime: 60,
+    bounds: %{},
+    record_bounds: %{},
+    snapshot: %{
+      trust_domain: "documentation",
+      suite: :eddsa,
+      provenance: "configured-enrollment",
+      as_of: now,
+      entries: [
+        %{
+          issuer: issuer,
+          key: %V1.HistoricalPublicKey{
+            key_id: "reviewer-key-1",
+            public_key: enrolled_key,
+            valid_from: now,
+            valid_before: :unbounded
+          },
+          roles: ["reviewer"]
+        }
+      ]
+    }
+  })
+
+{:ok, %{trust: :not_evaluated}} = Approval.verify_eddsa(record_bytes, assertion, context)
+
+Approval.verify_eddsa(record_bytes, assertion, %{context | resources: ["navigation-guide"]})
+#=> {:error, :scope_mismatch}
+```
+
+For P-256, select `BoundedAuthorityReportAdapter.V3.sign_action_approval/3` and
+`Approval.verify_es256/3` with an independently configured ES256 snapshot. Collapse any
+presenter-facing verification failure to the same value-free refusal. Before committing
+the effect or its durable intent, the host authenticates the executor and atomically checks
+the current revision and claims both the assertion identity and the request revision.

@@ -11,3 +11,7 @@ The [edge_agent application](edge_agent/README.md) signs, sends and verifies req
 real HTTP using Bandit, Plug and Req. Its test suite runs the transport demonstration and
 the guide's host admission handoff with real policy and local replay storage. Production
 hosts supply their own durable admission, live revocation and execution recovery.
+
+The [action approval example](../docs/guides/framework-integration.md#12-sign-and-verify-an-action-approval)
+signs an exact prepared request and verifies it against independent host inputs. The
+documentation sample gate runs the example and checks that changing the resource set is refused.

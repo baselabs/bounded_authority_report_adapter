@@ -4,7 +4,7 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   `BAP3-ES256-SHA256` suite, with P-256 keys and ES256 signatures.
 
   This module is the ES256 sibling of `BoundedAuthorityReportAdapter`: the same four
-  standard objects (`sign_report/3`, `sign_grant/3`, `sign_anchor/3`,
+  standard credential and historical evidence objects (`sign_report/3`, `sign_grant/3`, `sign_anchor/3`,
   `sign_key_transition/3`), the same key-handle behavior, the same error sets and the same
   signing path (resolve the key, sign through the handle, verify, assemble through the
   protocol package). The differences are the suite's:
@@ -23,8 +23,9 @@ defmodule BoundedAuthorityReportAdapter.V3 do
       the result against the public key. A handle that returns high-S still produces a
       conforming compact. The signature in the compact can therefore differ from the one
       your signing device logged in its `s` half; match the two on `r` and the message.
-    * **No local-loopback or content-assertion entry point.** Those profiles are bound to
-      Ed25519; use `BoundedAuthorityReportAdapter`.
+    * **Content assertions and action approvals.** These use the ES256 content-assertion
+      profile and call `key_snapshot/1` to pin the signing key version.
+    * **Local loopback.** Use the Ed25519 local-loopback profile.
     * **No role-attestation gate.** `sign_grant/3` here refuses the `:role_attestation`
       option with `{:error, :invalid_role_attestation}` instead of ignoring it, because
       the role-attestation profile binds Ed25519 keys only.
@@ -67,6 +68,9 @@ defmodule BoundedAuthorityReportAdapter.V3 do
 
     @impl true
     def key_identity({_role, name}), do: {:ok, {name, public_key_of(name)}}
+
+    @impl true
+    def key_snapshot({_role, name} = version), do: {:ok, {name, public_key_of(name), version}}
 
     @impl true
     def signing_identity({role, name}), do: {:ok, {role, name, public_key_of(name)}}
@@ -113,6 +117,8 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   alias BoundedAuthorityProtocol.V1
   alias BoundedAuthorityProtocol.V1.Json
   alias BoundedAuthorityProtocol.V3
+  alias BoundedAuthorityReportAdapter, as: Adapter
+  alias BoundedAuthorityReportAdapter.ContentSigner
   alias BoundedAuthorityReportAdapter.Options
   alias BoundedAuthorityReportAdapter.Telemetry
 
@@ -607,6 +613,110 @@ defmodule BoundedAuthorityReportAdapter.V3 do
          {:ok, compact} <-
            sign_and_assemble(key_handle, signing_input, current_public_key, bounds) do
       {:ok, %{key_transition: compact}}
+    end
+  end
+
+  @doc """
+  Signs a content assertion under the ES256 sibling profile.
+
+  Uses the payload fields and options of `BoundedAuthorityReportAdapter.sign_content_assertion/3`.
+  The handle supplies an immutable P-256 signing reference through
+  `c:BoundedAuthorityReportAdapter.key_snapshot/1`. The adapter normalizes the raw signature
+  to low-S and checks the compact with
+  `BoundedAuthorityProtocol.ContentAssertion.ES256.V1.verify_assertion/2` before returning it.
+
+  ```elixir
+  alias BoundedAuthorityProtocol.ContentAssertion.ES256.V1, as: Content
+
+  {:ok, digest} = Content.content_digest("inspection checklist", %{})
+
+  {:ok, %{content_assertion: compact}} =
+    BoundedAuthorityReportAdapter.V3.sign_content_assertion(
+      %{
+        jti: "checklist-1",
+        iss: "maintenance",
+        aud: "inspection-service",
+        sub: "checklist",
+        profile: "inspection-checklist/1",
+        profile_digest: :crypto.hash(:sha256, "checklist schema"),
+        content_digest: digest,
+        gen: 1,
+        prev: <<0::256>>,
+        iat: now,
+        nbf: now,
+        exp: now + 60
+      },
+      ec_holder
+    )
+
+  {:ok, %{content_digest: ^digest}} = Content.decode_assertion(compact, %{})
+  ```
+  """
+  @spec sign_content_assertion(
+          Adapter.content_assertion_input(),
+          key_handle(),
+          Adapter.content_assertion_opts() | keyword()
+        ) ::
+          {:ok, Adapter.content_assertion_compact()}
+          | {:error, Adapter.content_assertion_sign_error()}
+  def sign_content_assertion(input, key_handle, opts \\ %{}) do
+    Telemetry.sign_span(:content_assertion, fn ->
+      with {:ok, opts} <- normalize_opts(opts, :invalid_content_assertion, :content_assertion) do
+        sign_content(input, key_handle, Map.get(opts, :bounds, %{}))
+      end
+    end)
+  end
+
+  @doc """
+  Signs one action approval record with the ES256 content-assertion profile.
+
+  Uses the record and options of `BoundedAuthorityReportAdapter.sign_action_approval/3`,
+  with a P-256 signing reference from `c:BoundedAuthorityReportAdapter.key_snapshot/1`.
+  Verify the returned bytes with `BoundedAuthorityProtocol.ActionApproval.V1.verify_es256/3`.
+
+  ```elixir
+  alias BoundedAuthorityProtocol.ActionApproval.V1, as: Approval
+
+  record = %Approval.Record{
+    request_id: "catalog-update-1",
+    revision_digest: :crypto.hash(:sha256, "prepared catalog revision"),
+    subject: "catalog",
+    action: "publish",
+    resources: ["catalog-index", "catalog-summary"],
+    approver_role: "editor"
+  }
+
+  {:ok, %{record: record_bytes, content_assertion: _compact}} =
+    BoundedAuthorityReportAdapter.V3.sign_action_approval(
+      %{record: record, jti: "approval-1", iss: "editor-1", aud: "catalog-service",
+        iat: now, nbf: now, exp: now + 60},
+      ec_holder
+    )
+
+  {:ok, ^record} = Approval.decode_record(record_bytes)
+  ```
+  """
+  @spec sign_action_approval(
+          Adapter.action_approval_input(),
+          key_handle(),
+          Adapter.action_approval_opts() | keyword()
+        ) ::
+          {:ok, Adapter.action_approval_compact()}
+          | {:error, Adapter.action_approval_sign_error()}
+  def sign_action_approval(input, key_handle, opts \\ %{}) do
+    Telemetry.sign_span(:action_approval, fn ->
+      ContentSigner.approval(input, opts, &sign_content(&1, key_handle, &2))
+    end)
+  end
+
+  defp sign_content(input, handle, bounds) do
+    with {:ok, {key, signing_handle}} <-
+           ContentSigner.snapshot(handle, &p256_public_key/1, &safe_callback/3) do
+      ContentSigner.produce(input, key, bounds, :es256, fn message ->
+        with {:ok, signature} <- sign_via_handle(signing_handle, message) do
+          canonicalize_low_s(signature)
+        end
+      end)
     end
   end
 

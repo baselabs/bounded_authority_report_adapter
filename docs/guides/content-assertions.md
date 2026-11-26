@@ -11,6 +11,14 @@ Generation 1 uses an all-zero predecessor. Later assertions link to the exact pr
 assertion digest; lineage and application interpretation belong to the consumer. The
 profile digest identifies semantics; it is not an instruction to fetch or execute code.
 A valid assertion is evidence of the stated content binding, not permission to use it.
-This profile uses Ed25519 and the `key_identity/1` callback; the V3 surface has no content
-assertion signer. Run the [content notebook](../notebooks/content-assertions.livemd) for
-success, changed bytes, changed context and invalid input.
+Select the suite before signing or verifying. The Ed25519 signer uses `key_identity/1`.
+`BoundedAuthorityReportAdapter.V3.sign_content_assertion/3` uses `key_snapshot/1` to
+capture an immutable P-256 signing reference. Verify its output with
+`BoundedAuthorityProtocol.ContentAssertion.ES256.V1.verify_assertion/2`.
+The ES256 backend hashes the exact JWS input once with SHA-256 and returns raw
+`r || s`. The signer normalizes low-S and verifies the compact against the captured
+key. A suite change starts a new lineage.
+
+Run the [content notebook](../notebooks/content-assertions.livemd) for the Ed25519
+content workflow. See [action approvals](framework-integration.md#12-sign-and-verify-an-action-approval)
+for a signed content profile.

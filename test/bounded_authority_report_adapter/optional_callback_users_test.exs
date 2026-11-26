@@ -57,6 +57,12 @@ defmodule BoundedAuthorityReportAdapter.RecordingHandle do
   end
 
   @impl true
+  def key_snapshot(%{key_id: key_id, public: public} = reference) do
+    record(:key_snapshot)
+    {:ok, {key_id, public, reference}}
+  end
+
+  @impl true
   def signing_identity(%{role: role, key_id: key_id, public: public}) do
     record(:signing_identity)
     {:ok, {role, key_id, public}}
@@ -78,6 +84,7 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
 
   use ExUnit.Case, async: true
 
+  alias BoundedAuthorityProtocol.ActionApproval.V1.Record
   alias BoundedAuthorityProtocol.ContentAssertion
   alias BoundedAuthorityProtocol.RoleAttestation
   alias BoundedAuthorityProtocol.V1
@@ -89,7 +96,7 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
   alias BoundedAuthorityReportAdapter.RecordingHandle
   alias BoundedAuthorityReportAdapter.V3
 
-  @optional [:key_identity, :signing_identity]
+  @optional [:key_identity, :signing_identity, :key_snapshot]
   @now 1_750_000_000
 
   # The options schema each entry point uses, by function name.
@@ -99,7 +106,8 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
     sign_anchor: :anchor,
     sign_grant: :grant,
     sign_key_transition: :key_transition,
-    sign_content_assertion: :content_assertion
+    sign_content_assertion: :content_assertion,
+    sign_action_approval: :action_approval
   }
 
   test "the declared users of each optional callback are exactly the entry points that call it" do
@@ -130,7 +138,7 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
     calls =
       Map.new(probes(), fn {entry_point, probe} -> {entry_point, record(entry_point, probe)} end)
 
-    callbacks = [:sign, :public_key, :thumbprint, :key_identity, :signing_identity]
+    callbacks = [:sign, :public_key, :thumbprint, :key_identity, :signing_identity, :key_snapshot]
 
     callers =
       Map.new(callbacks, fn callback ->
@@ -196,7 +204,7 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
   end
 
   defp callback_names(text) do
-    ~r/`(sign|public_key|thumbprint|key_identity|signing_identity)\/\d`/
+    ~r/`(sign|public_key|thumbprint|key_identity|signing_identity|key_snapshot)\/\d`/
     |> Regex.scan(text)
     |> Enum.map(fn [_, name] -> String.to_existing_atom(name) end)
     |> Enum.uniq()
@@ -364,6 +372,20 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
       exp: @now + 3600
     }
 
+    approval =
+      assertion
+      |> Map.take([:jti, :iss, :aud, :iat, :nbf, :exp])
+      |> Map.put(:record, %Record{
+        request_id: "request-1",
+        subject: "inventory",
+        action: "inspect",
+        resources: ["equipment-1"],
+        revision_digest: <<1::256>>,
+        approver_role: "inspector"
+      })
+
+    approval_options = %{bounds: %{}, record_bounds: %{}, canonicalize_resources: true}
+
     bounds = V1.Bounds.maximum()
     report_options = %{bounds: bounds, issued_at: @now, proof_id: "urn:example:proof:probe"}
     anchor_options = %{bounds: bounds, anchored_at: @now}
@@ -395,6 +417,12 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
         {&Adapter.sign_key_transition(transition_input(next), handle(holder), &1), bounds_only},
       {Adapter, :sign_content_assertion} =>
         {&Adapter.sign_content_assertion(assertion, handle(holder), &1), bounds_only},
+      {Adapter, :sign_action_approval} =>
+        {&Adapter.sign_action_approval(approval, handle(holder), &1), approval_options},
+      {V3, :sign_content_assertion} =>
+        {&V3.sign_content_assertion(assertion, handle(ec_holder), &1), bounds_only},
+      {V3, :sign_action_approval} =>
+        {&V3.sign_action_approval(approval, handle(ec_holder), &1), approval_options},
       {V3, :sign_report} =>
         {&V3.sign_report(
            report(ec_grant, "https://api.example/probe"),

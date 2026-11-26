@@ -1,8 +1,8 @@
 # Sign telemetry
 
 The adapter emits a closed, value-free telemetry surface for its signing entry
-points: ten entry points across the two suite surfaces (`BoundedAuthorityReportAdapter`
-and `BoundedAuthorityReportAdapter.V3`) and six object kinds. The object names the kind of
+points: thirteen entry points across the two suite surfaces (`BoundedAuthorityReportAdapter`
+and `BoundedAuthorityReportAdapter.V3`) and seven object kinds. The object names the kind of
 object signed, never the entry point or the suite. The library does not attach a handler;
 an application sees nothing until it attaches one.
 
@@ -30,6 +30,7 @@ Objects (one per object kind):
 | `:key_transition` | `sign_key_transition/3` |
 | `:local_loopback_report` | `sign_local_loopback_report/3` |
 | `:content_assertion` | `sign_content_assertion/3` |
+| `:action_approval` | `sign_action_approval/3` |
 
 Each `BoundedAuthorityReportAdapter.V3` entry point emits the object of its major-1
 namesake (`V3.sign_report/3` emits `:report`, and so on).

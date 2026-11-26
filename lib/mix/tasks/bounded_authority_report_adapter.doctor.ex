@@ -34,6 +34,8 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
       will refuse the handle;
     * `signing_identity/1` absent: `sign_grant/3` and `V3.sign_grant/3` will refuse
       the handle;
+    * `key_snapshot/1` absent: action approval signing and ES256 content-assertion signing
+      will refuse the handle;
     * with `--ref` + `--live`: a synthetic-message `sign/2` probe whose
       signature does not verify against `public_key/1`'s key (the same
       wrong-key guard the adapter enforces on every real sign; the probe

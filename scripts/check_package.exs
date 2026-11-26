@@ -41,6 +41,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
                         "SECURITY.md",
                         "usage-rules.md",
                         "lib/bounded_authority_report_adapter.ex",
+                        "lib/bounded_authority_report_adapter/content_signer.ex",
                         "lib/bounded_authority_report_adapter/optional_callbacks.ex",
                         "lib/bounded_authority_report_adapter/options.ex",
                         "lib/bounded_authority_report_adapter/telemetry.ex",

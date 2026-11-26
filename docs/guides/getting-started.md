@@ -67,6 +67,9 @@ defmodule MyApp.DevKey do
   @impl true
   def key_identity({_role, name}), do: {:ok, {name, public_key_of(name)}}
 
+  @impl true
+  def key_snapshot({_role, name} = version), do: {:ok, {name, public_key_of(name), version}}
+
   # Role, key id and public key in one call. sign_grant/3 requires the :issuer role.
   @impl true
   def signing_identity({role, name}), do: {:ok, {role, name, public_key_of(name)}}
@@ -87,10 +90,12 @@ Which callbacks each entry point calls:
 | `sign_report/3`, `sign_local_loopback_report/3` | `sign/2`, `public_key/1` |
 | `sign_grant/3` | `sign/2`, `signing_identity/1` (must declare `:issuer`) |
 | `sign_anchor/3`, `sign_key_transition/3`, `sign_content_assertion/3` | `sign/2`, `key_identity/1` |
+| `sign_action_approval/3` | `sign/2`, `key_snapshot/1` |
 
 `thumbprint/1` is required by the behavior but the adapter does not call it; it exists so
-you can check your handle against a grant's holder binding. `key_identity/1` and
-`signing_identity/1` are optional callbacks: a handle that only signs proofs can omit them.
+you can check your handle against a grant's holder binding. `key_identity/1`,
+`signing_identity/1` and `key_snapshot/1` are optional callbacks that a proof-only handle
+can omit.
 
 ## 2. The issuer signs a grant
 

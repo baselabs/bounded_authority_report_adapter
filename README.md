@@ -74,6 +74,9 @@ defmodule MyApp.DevKey do
   @impl true
   def key_identity({_role, name}), do: {:ok, {name, public_key_of(name)}}
 
+  @impl true
+  def key_snapshot({_role, name} = version), do: {:ok, {name, public_key_of(name), version}}
+
   # Role, key id and public key in one call. sign_grant/3 requires the :issuer role.
   @impl true
   def signing_identity({role, name}), do: {:ok, {role, name, public_key_of(name)}}
@@ -178,10 +181,11 @@ replay identities through its durable execution record. See [Framework integrati
 | `sign_anchor/3` | consumption-chain boundary anchor | `sign/2`, `key_identity/1` | `V1.verify_historical_anchor/3` |
 | `sign_key_transition/3` | historical-key transition | `sign/2`, `key_identity/1` | `V1.verify_key_transition/4` |
 | `sign_content_assertion/3` | content assertion (`ba+content-assertion`) | `sign/2`, `key_identity/1` | `ContentAssertion.V1.verify_assertion/2` |
+| `sign_action_approval/3` | action approval record and assertion | `sign/2`, `key_snapshot/1` | `ActionApproval.V1.verify_eddsa/3` |
 
 These take Ed25519 keys (contract-major 1). `BoundedAuthorityReportAdapter.V3` provides
-`sign_report/3`, `sign_grant/3`, `sign_anchor/3` and `sign_key_transition/3` for the ES256
-suite (contract-major 3) with P-256 keys. Select the module explicitly: the main surface
+`sign_report/3`, `sign_grant/3`, `sign_anchor/3`, `sign_key_transition/3`,
+`sign_content_assertion/3` and `sign_action_approval/3` for the ES256 suite (contract-major 3) with P-256 keys. Select the module explicitly: the main surface
 requires a 32-byte Ed25519 public key; `V3` requires a 65-byte uncompressed P-256 point.
 Verify functions are in the protocol package (`BoundedAuthorityProtocol.*`).
 

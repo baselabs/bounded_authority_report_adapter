@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add ES256 content-assertion signing and action approval signing for Ed25519 and
+  ES256. New entry points capture an immutable signing reference through `key_snapshot/1`.
+- Self-verify content assertions against the captured key with the selected protocol
+  verifier before returning the compact.
+
 ## [1.4.0]: 2026-11-27
 
 - Hex publication uses a short-lived, package-scoped token issued through GitHub Actions

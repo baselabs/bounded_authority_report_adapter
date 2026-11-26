@@ -23,7 +23,8 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     :anchor_sign_error,
     :grant_sign_error,
     :transition_sign_error,
-    :content_assertion_sign_error
+    :content_assertion_sign_error,
+    :action_approval_sign_error
   ]
 
   test "every docs/guides/errors.md table atom exists in a lib error @type and vice versa" do

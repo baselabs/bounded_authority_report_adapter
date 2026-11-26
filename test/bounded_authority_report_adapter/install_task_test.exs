@@ -29,7 +29,7 @@ defmodule BoundedAuthorityReportAdapter.InstallTaskTest do
              "the scaffold must not sign anything until the consumer wires a key store"
 
       # All five callbacks present (the behaviour compiles warning-clean).
-      for callback <- ~w(sign public_key thumbprint key_identity signing_identity) do
+      for callback <- ~w(sign public_key thumbprint key_identity signing_identity key_snapshot) do
         assert content =~ "def #{callback}("
       end
     end)

@@ -18,7 +18,12 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbacks do
         {V3, :sign_anchor},
         {V3, :sign_key_transition}
       ],
-      signing_identity: [{BoundedAuthorityReportAdapter, :sign_grant}, {V3, :sign_grant}]
+      signing_identity: [{BoundedAuthorityReportAdapter, :sign_grant}, {V3, :sign_grant}],
+      key_snapshot: [
+        {BoundedAuthorityReportAdapter, :sign_action_approval},
+        {V3, :sign_content_assertion},
+        {V3, :sign_action_approval}
+      ]
     ]
   end
 end

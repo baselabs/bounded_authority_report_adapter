@@ -1,7 +1,7 @@
 defmodule BoundedAuthorityReportAdapter.Telemetry do
   @moduledoc """
-  The closed, value-free telemetry surface of the signing entry points: ten entry points
-  across the two suite surfaces, six object kinds. The object names the kind of object
+  The closed, value-free telemetry surface of the signing entry points: thirteen entry points
+  across the two suite surfaces, seven object kinds. The object names the kind of object
   signed, never the entry point or the suite.
 
   The library emits events but does not attach a handler; an application sees nothing
@@ -54,7 +54,15 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
 
   # The single source of truth for both axes. docs/guides/telemetry.md's tables are
   # diffed against these by telemetry_test.exs: a drift reds the suite.
-  @objects [:report, :anchor, :grant, :key_transition, :local_loopback_report, :content_assertion]
+  @objects [
+    :report,
+    :anchor,
+    :grant,
+    :key_transition,
+    :local_loopback_report,
+    :content_assertion,
+    :action_approval
+  ]
   @classes [
     :ok,
     :invalid_input,
@@ -68,7 +76,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   The closed object axis: one atom per signing object kind.
 
       iex> BoundedAuthorityReportAdapter.Telemetry.objects()
-      [:report, :anchor, :grant, :key_transition, :local_loopback_report, :content_assertion]
+      [:report, :anchor, :grant, :key_transition, :local_loopback_report, :content_assertion, :action_approval]
   """
   @spec objects() :: [atom()]
   def objects, do: @objects
@@ -152,6 +160,7 @@ defmodule BoundedAuthorityReportAdapter.Telemetry do
   defp classify({:error, :invalid_grant}), do: :invalid_input
   defp classify({:error, :invalid_transition}), do: :invalid_input
   defp classify({:error, :invalid_content_assertion}), do: :invalid_input
+  defp classify({:error, :invalid_action_approval}), do: :invalid_input
   defp classify({:error, :invalid_key_handle}), do: :invalid_key_handle
   defp classify({:error, :invalid_role_attestation}), do: :invalid_role_attestation
   defp classify({:error, :signing_failed}), do: :signing_failed

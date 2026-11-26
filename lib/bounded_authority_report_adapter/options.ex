@@ -24,7 +24,7 @@ defmodule BoundedAuthorityReportAdapter.Options do
   # closed error. Omitting the options argument is each sign_*/3's %{} default and never
   # reaches here.
 
-  @type kind :: :integer | :binary | :bounds | :role_attestation
+  @type kind :: :integer | :binary | :boolean | :bounds | :role_attestation
   @type schema :: %{atom() => kind()}
 
   # The options each kind of entry point accepts, on both suite surfaces. V3.sign_grant/3
@@ -34,7 +34,8 @@ defmodule BoundedAuthorityReportAdapter.Options do
     anchor: %{bounds: :bounds, anchored_at: :integer},
     grant: %{bounds: :bounds, role_attestation: :role_attestation},
     key_transition: %{bounds: :bounds},
-    content_assertion: %{bounds: :bounds}
+    content_assertion: %{bounds: :bounds},
+    action_approval: %{bounds: :bounds, record_bounds: :bounds, canonicalize_resources: :boolean}
   }
 
   @role_attestation_keys [:compact, :attestor, :now]
@@ -85,6 +86,7 @@ defmodule BoundedAuthorityReportAdapter.Options do
     end
   end
 
+  defp value(:boolean, value) when is_boolean(value), do: {:ok, value}
   defp value(:integer, value) when is_integer(value), do: {:ok, value}
   defp value(:binary, value) when is_binary(value), do: {:ok, value}
   defp value(:bounds, value) when is_map(value) and not is_struct(value), do: {:ok, value}

@@ -20,9 +20,10 @@ defmodule BoundedAuthorityReportAdapter do
   | `sign_anchor/3` | a boundary anchor (chain checkpoint) | `sign/2`, `key_identity/1` | `BoundedAuthorityProtocol.V1.verify_historical_anchor/3` |
   | `sign_key_transition/3` | a key transition (rotation) | `sign/2`, `key_identity/1` | `BoundedAuthorityProtocol.V1.verify_key_transition/4` |
   | `sign_content_assertion/3` | a content assertion | `sign/2`, `key_identity/1` | `BoundedAuthorityProtocol.ContentAssertion.V1.verify_assertion/2` |
+  | `sign_action_approval/3` | an action approval record and its assertion | `sign/2`, `key_snapshot/1` | `BoundedAuthorityProtocol.ActionApproval.V1.verify_eddsa/3` |
 
   `BoundedAuthorityReportAdapter.V3` is the ES256 sibling (contract-major 3, P-256 keys)
-  of `sign_report/3`, `sign_grant/3`, `sign_anchor/3` and `sign_key_transition/3`. Both
+  of the standard credential, historical evidence and content signing entry points. Both
   modules use the same key-handle behavior. This module's signing entry points accept
   Ed25519 keys only, and `V3`'s accept P-256 keys only.
 
@@ -46,12 +47,11 @@ defmodule BoundedAuthorityReportAdapter do
   `GenServer.call/3` to your HSM client); the timeout's exit is contained as above.
 
   The behavior requires `sign/2`, `public_key/1` and `thumbprint/1`, and makes
-  `key_identity/1` and `signing_identity/1` optional. Which callbacks each entry point
-  calls (the same on `BoundedAuthorityReportAdapter.V3`, for its four entry points):
+  `key_identity/1` `signing_identity/1` and `key_snapshot/1` optional. Which callbacks each entry point calls:
 
     * `sign/2`: every signing entry point: `sign_report/3`, `sign_local_loopback_report/3`,
       `sign_grant/3`, `sign_anchor/3`, `sign_key_transition/3` and
-      `sign_content_assertion/3`.
+      `sign_content_assertion/3` and `sign_action_approval/3`.
     * `public_key/1`: only `sign_report/3` and `sign_local_loopback_report/3`, for the
       holder key. The other entry points read the public key from the identity callback
       below.
@@ -62,6 +62,8 @@ defmodule BoundedAuthorityReportAdapter do
     * `signing_identity/1`: `sign_grant/3`. It reads the declared role, the key id and the
       public key in one call, and signs only when the role is `:issuer`. A handle without
       it is refused.
+    * `key_snapshot/1`: `sign_action_approval/3`. It captures the key ID, public key and
+      immutable provider reference in one read.
     * `thumbprint/1`: no entry point calls it. It returns the RFC 7638 thumbprint the
       issuer puts in a grant's `cnf.jkt`, so callers can check a handle against a grant.
       `public_key_thumbprint/1` computes it from the public key in one call.
@@ -120,9 +122,9 @@ defmodule BoundedAuthorityReportAdapter do
   """
 
   alias BoundedAuthorityProtocol.ApplicationProfile.LocalLoopbackHttp.V1, as: LocalLoopbackHttp
-  alias BoundedAuthorityProtocol.ContentAssertion.V1, as: ContentAssertionV1
   alias BoundedAuthorityProtocol.RoleAttestation.V1, as: RoleAttestationV1
   alias BoundedAuthorityProtocol.V1.Json
+  alias BoundedAuthorityReportAdapter.ContentSigner
   alias BoundedAuthorityReportAdapter.Options
   alias BoundedAuthorityReportAdapter.Telemetry
 
@@ -1100,25 +1102,105 @@ defmodule BoundedAuthorityReportAdapter do
   end
 
   defp do_sign_content_assertion(assertion_input, key_handle, opts) do
-    bounds = Map.get(opts, :bounds, %{})
-
-    with {:ok, {key_id, public_key}} <- resolve_key_identity(key_handle),
-         {:ok, assertion} <- build_content_assertion(assertion_input, key_id),
-         {:ok, signing_input} <- produce_content_assertion_signing_input(assertion, bounds),
-         {:ok, compact} <-
-           sign_and_assemble(
-             key_handle,
-             signing_input,
-             public_key,
-             bounds,
-             &ContentAssertionV1.assemble_compact/3
-           ) do
-      {:ok, %{content_assertion: compact}}
+    with {:ok, key} <- resolve_key_identity(key_handle) do
+      ContentSigner.produce(
+        assertion_input,
+        key,
+        Map.get(opts, :bounds, %{}),
+        :eddsa,
+        fn message ->
+          sign_via_handle(key_handle, message)
+        end
+      )
     end
   end
 
   defp content_assertion_opts(opts),
     do: normalize_opts(opts, :invalid_content_assertion, :content_assertion)
+
+  @typedoc "The typed record, assertion identifiers and explicit Unix-second window for one approval."
+  @type action_approval_input :: %{
+          record: BoundedAuthorityProtocol.ActionApproval.V1.Record.t(),
+          jti: binary(),
+          iss: binary(),
+          aud: binary(),
+          iat: integer(),
+          nbf: integer(),
+          exp: integer()
+        }
+
+  @typedoc "Optional protocol bounds, record ceilings, and explicit resource-set canonicalization."
+  @type action_approval_opts :: %{
+          optional(:bounds) => BoundedAuthorityProtocol.V1.Bounds.t() | map(),
+          optional(:record_bounds) => BoundedAuthorityProtocol.ActionApproval.V1.record_bounds(),
+          optional(:canonicalize_resources) => boolean()
+        }
+
+  @typedoc "Exact canonical record bytes paired with the content assertion that signs their digest."
+  @type action_approval_compact :: %{record: binary(), content_assertion: binary()}
+
+  @typedoc "Closed input, custody, signing and protocol errors for an action approval."
+  @type action_approval_sign_error ::
+          :invalid_action_approval
+          | :invalid_key_handle
+          | :signing_failed
+          | {:producer_error, :invalid}
+
+  @doc """
+  Signs one action approval record with the Ed25519 content-assertion profile.
+
+  Supply the prepared record, unique assertion ID, enrolled issuer, executing host audience and
+  an explicit validity window. The protocol encodes the record and the signer binds its
+  exact bytes and request ID to a fresh assertion. The approver role uses a plain
+  signing-backend signature. The host determines whether approval is required and which roles
+  qualify. Verify the returned bytes with
+  `BoundedAuthorityProtocol.ActionApproval.V1.verify_eddsa/3`.
+
+  The handle supplies one immutable signing reference through `c:key_snapshot/1`. Pass
+  `:bounds` and `:record_bounds` to tighten ceilings. Resources must already be in strict
+  UTF-8 byte order unless `canonicalize_resources: true` explicitly requests sorting and
+  deduplication. The default options are empty.
+
+  ```elixir
+  alias BoundedAuthorityProtocol.ActionApproval.V1, as: Approval
+
+  record = %Approval.Record{
+    request_id: "catalog-update-1",
+    revision_digest: :crypto.hash(:sha256, "prepared catalog revision"),
+    subject: "catalog",
+    action: "publish",
+    resources: ["catalog-index", "catalog-summary"],
+    approver_role: "editor"
+  }
+
+  {:ok, %{record: record_bytes, content_assertion: _compact}} =
+    BoundedAuthorityReportAdapter.sign_action_approval(
+      %{record: record, jti: "approval-1", iss: "editor-1", aud: "catalog-service",
+        iat: now, nbf: now, exp: now + 60},
+      holder
+    )
+
+  {:ok, ^record} = Approval.decode_record(record_bytes)
+  ```
+  """
+  @spec sign_action_approval(
+          action_approval_input(),
+          key_handle(),
+          action_approval_opts() | keyword()
+        ) ::
+          {:ok, action_approval_compact()} | {:error, action_approval_sign_error()}
+  def sign_action_approval(input, key_handle, opts \\ %{}) do
+    Telemetry.sign_span(:action_approval, fn ->
+      ContentSigner.approval(input, opts, fn assertion, bounds ->
+        with {:ok, {key, signing_handle}} <-
+               ContentSigner.snapshot(key_handle, &accept_key/1, &safe_callback/3) do
+          ContentSigner.produce(assertion, key, bounds, :eddsa, fn message ->
+            sign_via_handle(signing_handle, message)
+          end)
+        end
+      end)
+    end)
+  end
 
   @doc """
   Returns the raw RFC 7638 thumbprint of a public key: the 32-byte SHA-256 digest that a
@@ -1625,42 +1707,6 @@ defmodule BoundedAuthorityReportAdapter do
     end
   end
 
-  defp build_content_assertion(input, key_id) when is_map(input) do
-    binary_fields = [:jti, :iss, :aud, :sub, :profile, :profile_digest, :content_digest, :prev]
-    integer_fields = [:gen, :iat, :nbf, :exp]
-
-    if Enum.all?(binary_fields, &is_binary(Map.get(input, &1))) and
-         Enum.all?(integer_fields, &is_integer(Map.get(input, &1))) do
-      {:ok,
-       %ContentAssertionV1.ContentAssertion{
-         attestor_key_id: key_id,
-         jti: input.jti,
-         iss: input.iss,
-         aud: input.aud,
-         sub: input.sub,
-         profile: input.profile,
-         profile_digest: input.profile_digest,
-         content_digest: input.content_digest,
-         gen: input.gen,
-         prev: input.prev,
-         iat: input.iat,
-         nbf: input.nbf,
-         exp: input.exp
-       }}
-    else
-      {:error, :invalid_content_assertion}
-    end
-  end
-
-  defp build_content_assertion(_input, _key_id), do: {:error, :invalid_content_assertion}
-
-  defp produce_content_assertion_signing_input(assertion, bounds) do
-    case ContentAssertionV1.assertion_signing_input(assertion, bounds) do
-      {:ok, signing_input} -> {:ok, signing_input}
-      {:error, :invalid} -> {:error, {:producer_error, :invalid}}
-    end
-  end
-
   defp sign_via_handle({module, handle}, message) do
     # `key_handle` shape is validated upstream by resolve_public_key/1 (the only
     # path here is through the `with` after a successful resolve), so the handle
@@ -1789,5 +1835,17 @@ defmodule BoundedAuthorityReportAdapter do
               {:ok, {:issuer | :holder, key_id :: binary(), public_key :: binary()}}
               | {:error, term()}
 
-  @optional_callbacks [key_identity: 1, signing_identity: 1]
+  @doc """
+  Captures the key ID, public key and opaque reference to the same immutable signing version
+  in one read. The reference contains no private key bytes. The adapter passes it to
+  `c:sign/2`, which must sign using exactly that version or return an error. Content
+  signing verifies against the captured public key without consulting the key store again.
+
+  Optional. Required for action approval signing and ES256 content-assertion signing.
+  """
+  @callback key_snapshot(handle :: term()) ::
+              {:ok, {key_id :: binary(), public_key :: binary(), signing_reference :: term()}}
+              | {:error, term()}
+
+  @optional_callbacks [key_identity: 1, signing_identity: 1, key_snapshot: 1]
 end
