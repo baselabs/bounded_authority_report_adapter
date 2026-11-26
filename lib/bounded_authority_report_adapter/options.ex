@@ -41,7 +41,9 @@ defmodule BoundedAuthorityReportAdapter.Options do
   @role_attestation_keys [:compact, :attestor, :now]
 
   @doc false
-  @spec schema(:report | :anchor | :grant | :key_transition | :content_assertion) :: schema()
+  @spec schema(
+          :report | :anchor | :grant | :key_transition | :content_assertion | :action_approval
+        ) :: schema()
   def schema(object), do: Map.fetch!(@schemas, object)
 
   @spec normalize(term(), schema()) :: {:ok, map()} | {:error, atom()}
