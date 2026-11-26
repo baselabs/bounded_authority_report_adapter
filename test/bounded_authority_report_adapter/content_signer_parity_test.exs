@@ -2,6 +2,7 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
   use ExUnit.Case, async: true
 
   alias BoundedAuthorityProtocol.ActionApproval.V1, as: Approval
+  alias BoundedAuthorityProtocol.Conformance.Cli
   alias BoundedAuthorityProtocol.ContentAssertion.ES256.V1, as: ES256
   alias BoundedAuthorityProtocol.ContentAssertion.V1, as: Ed25519
   alias BoundedAuthorityProtocol.V1.HistoricalPublicKey
@@ -111,11 +112,23 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
         assert sha256_hex(fixture_bytes(root, file)) == expected, file
       end
     end
+  end
 
-    verdicts = fixture("verdict-digests.json")["corpora"]
+  @tag :tmp_dir
+  test "the reference verifier executes every frozen Ed25519 content-assertion verdict", %{
+    tmp_dir: tmp_dir
+  } do
+    report = Path.join(tmp_dir, "legacy.json")
 
-    assert verdicts[@ed25519_root]["verdict_digest_sha256_base64url"] ==
-             "A9g9TRFJJ3y-RJgYNVnWmXGEH-c2hR4clT3M9_-XN-4"
+    assert Cli.run(["--corpus", fixture_dir(@ed25519_root), "--report", report]) == 0
+
+    assert %{
+             "agreement" => true,
+             "agreed" => 154,
+             "disagreed" => 0,
+             "total" => 154,
+             "index_sha256_base64url" => "FLdDbM98yR_s5SoVeMN2DfZyCpNJTRR-5atSPiziGHY"
+           } = report |> File.read!() |> :json.decode()
   end
 
   test "ES256 signs exact corpus JWS input, pins one version and emits low-S", %{es256: pid} do
@@ -136,6 +149,7 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
     assert r > 0 and r < @order
     assert s > 0 and s <= div(@order, 2)
     assert {:ok, _} = ES256.verify_assertion(compact, expected(:es256, input, pid))
+    assert_independent(compact, :es256, key(pid), input)
   end
 
   test "Ed25519 standalone bytes match the frozen signing input and original raw assembly", %{
@@ -153,6 +167,7 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
              Adapter.sign_content_assertion(input, {Custody, pid})
 
     assert {:ok, _} = Ed25519.verify_assertion(previous_compact, expected(:eddsa, input, pid))
+    assert_independent(previous_compact, :eddsa, key(pid), input)
   end
 
   test "both approval producers bind the same exact record and refuse foreign suites", state do
@@ -178,6 +193,7 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
         assert facts.assertion.sub == record.request_id
         assert facts.assertion.profile_digest == Approval.profile_digest()
         assert facts.trust == :not_evaluated
+        assert_independent(compact, suite, key(pid), approval_claims(input, bytes))
 
         assert {:error, :malformed} = verifier.(bytes <> "\n", compact, context)
         assert {:error, :bad_signature} = verifier.(bytes, flip_signature(compact), context)
@@ -250,7 +266,11 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
 
   test "signature mutants cannot escape assembly and captured-key verification", %{es256: pid} do
     input = fixture(@es256_root, "profile.json")["signing"]["payload"] |> assertion_input()
-    assert {:ok, _} = Adapter.V3.sign_content_assertion(input, handle(pid))
+
+    assert {:ok, %{content_assertion: compact}} =
+             Adapter.V3.sign_content_assertion(input, handle(pid))
+
+    assert_independent(compact, :es256, key(pid), input)
 
     for mode <- [:wrong_key, :double_hash, :der, :failure, :raise, :throw, :exit] do
       Agent.update(pid, &%{&1 | mode: mode})
@@ -297,6 +317,91 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
     end
   end
 
+  test "invalid raw signatures produce the closed signing failure and custody telemetry", state do
+    vector = approval_vector("es256-verified")
+    assert {:ok, record} = Approval.decode_record(raw(vector["record"]))
+    input = approval_input(record)
+    id = {__MODULE__, make_ref()}
+    parent = self()
+    event = [:bounded_authority_report_adapter, :sign, :stop]
+    :ok = :telemetry.attach(id, event, &__MODULE__.capture/4, parent)
+    on_exit(fn -> :telemetry.detach(id) end)
+
+    for {suite, signature} <- [eddsa: <<1, 0::504>>, es256: <<1::256, 1::256>>] do
+      pid = Map.fetch!(state, suite)
+      Agent.update(pid, &%{&1 | mode: {:raw, signature}})
+      signer = signer(suite)
+
+      assert {:error, :signing_failed} = signer.sign_action_approval(input, handle(pid))
+      assert_receive {:result, ^event, %{object: :action_approval, result_class: :signing_failed}}
+    end
+  end
+
+  def capture(event, _measurements, metadata, parent) when parent == self(),
+    do: send(parent, {:result, event, metadata})
+
+  def capture(_event, _measurements, _metadata, _parent), do: :ok
+
+  defp assert_independent(compact, suite, key, input) do
+    [header, payload, signature] = String.split(compact, ".")
+    {alg, typ} = header_fields(suite)
+    assert :json.decode(raw(header)) == %{"alg" => alg, "typ" => typ, "kid" => key.key_id}
+
+    claims =
+      Map.new(input, fn {field, value} -> {Atom.to_string(field), claim(field, value)} end)
+
+    assert :json.decode(raw(payload)) == Map.put(claims, "v", 1)
+
+    for segment <- [header, payload, signature] do
+      assert Base.url_encode64(raw(segment), padding: false) == segment
+    end
+
+    message = header <> "." <> payload
+    assert otp_verifies?(suite, message, raw(signature), key.public_key)
+    refute otp_verifies?(suite, message <> "x", raw(signature), key.public_key)
+  end
+
+  defp header_fields(:eddsa), do: {"EdDSA", "ba+content-assertion"}
+  defp header_fields(:es256), do: {"ES256", "ba+content-assertion-es256"}
+
+  defp claim(field, value) when field in [:profile_digest, :content_digest, :prev],
+    do: Base.url_encode64(value, padding: false)
+
+  defp claim(_field, value), do: value
+
+  defp approval_claims(%{record: record} = input, bytes) do
+    profile = fixture(@approval_root, "profile.json")
+    preimage = Base.decode16!(profile["profile_preimage_hex"], case: :lower)
+
+    input
+    |> Map.delete(:record)
+    |> Map.merge(%{
+      sub: record.request_id,
+      profile: "bap-action-approval/1",
+      profile_digest: :crypto.hash(:sha256, preimage),
+      content_digest: :crypto.hash(:sha256, ["BAP1-CONTENT", <<0>>, bytes]),
+      gen: 1,
+      prev: <<0::256>>
+    })
+  end
+
+  defp otp_verifies?(:eddsa, message, signature, key),
+    do: :crypto.verify(:eddsa, :none, message, signature, [key, :ed25519])
+
+  defp otp_verifies?(:es256, message, <<r::256, s::256>>, key) do
+    assert r > 0 and r < @order
+    assert s > 0 and s <= div(@order, 2)
+    body = der_positive_integer(r) <> der_positive_integer(s)
+    der = <<0x30, byte_size(body), body::binary>>
+    :crypto.verify(:ecdsa, :sha256, message, der, [key, :prime256v1])
+  end
+
+  defp der_positive_integer(value) do
+    bytes = :binary.encode_unsigned(value)
+    bytes = if :binary.first(bytes) >= 128, do: <<0, bytes::binary>>, else: bytes
+    <<0x02, byte_size(bytes), bytes::binary>>
+  end
+
   defp assert_record(pid, record, opts, "invalid", id) do
     before = Agent.get(pid, & &1.calls)
 
@@ -329,6 +434,7 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
     assert {:ok, facts} = Approval.verify_eddsa(bytes, compact, context), id
     assert facts.assertion.content_digest == raw(digest), id
     assert facts.record == canonical, id
+    assert_independent(compact, :eddsa, key(pid), approval_claims(input, bytes))
   end
 
   defp context(suite, pid, record) do
@@ -439,13 +545,13 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
     do: Enum.find(fixture(@approval_root, "approval-cases.json"), &(&1["id"] == id))
 
   defp fixture(root, name), do: root |> fixture_bytes(name) |> :json.decode()
-  defp fixture(name), do: fixture("", name)
 
   defp fixture_bytes(root, name) do
-    [:code.priv_dir(:bounded_authority_protocol), "conformance", root, name]
-    |> Path.join()
-    |> File.read!()
+    root |> fixture_dir() |> Path.join(name) |> File.read!()
   end
+
+  defp fixture_dir(root),
+    do: Path.join([:code.priv_dir(:bounded_authority_protocol), "conformance", root])
 
   defp atom_keys(map),
     do: Map.new(map, fn {key, value} -> {String.to_existing_atom(key), value} end)

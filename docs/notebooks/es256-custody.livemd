@@ -77,6 +77,11 @@ defmodule Demo.Ed25519Handle do
   def key_identity(key), do: {:ok, {key.key_id, key.public}}
 
   @impl true
+  def key_snapshot(key) do
+    {:ok, {key.key_id, key.public, Map.take(key, [:custody, :reference])}}
+  end
+
+  @impl true
   def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
 end
 
@@ -104,6 +109,11 @@ defmodule Demo.P256Handle do
 
   @impl true
   def key_identity(key), do: {:ok, {key.key_id, key.public}}
+
+  @impl true
+  def key_snapshot(key) do
+    {:ok, {key.key_id, key.public, Map.take(key, [:custody, :reference])}}
+  end
 
   @impl true
   def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}

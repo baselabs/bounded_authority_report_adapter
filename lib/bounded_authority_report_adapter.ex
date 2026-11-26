@@ -1110,7 +1110,8 @@ defmodule BoundedAuthorityReportAdapter do
         :eddsa,
         fn message ->
           sign_via_handle(key_handle, message)
-        end
+        end,
+        &verify_signature/3
       )
     end
   end
@@ -1194,9 +1195,14 @@ defmodule BoundedAuthorityReportAdapter do
       ContentSigner.approval(input, opts, fn assertion, bounds ->
         with {:ok, {key, signing_handle}} <-
                ContentSigner.snapshot(key_handle, &accept_key/1, &safe_callback/3) do
-          ContentSigner.produce(assertion, key, bounds, :eddsa, fn message ->
-            sign_via_handle(signing_handle, message)
-          end)
+          ContentSigner.produce(
+            assertion,
+            key,
+            bounds,
+            :eddsa,
+            &sign_via_handle(signing_handle, &1),
+            &verify_signature/3
+          )
         end
       end)
     end)

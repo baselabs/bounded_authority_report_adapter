@@ -712,11 +712,18 @@ defmodule BoundedAuthorityReportAdapter.V3 do
   defp sign_content(input, handle, bounds) do
     with {:ok, {key, signing_handle}} <-
            ContentSigner.snapshot(handle, &p256_public_key/1, &safe_callback/3) do
-      ContentSigner.produce(input, key, bounds, :es256, fn message ->
-        with {:ok, signature} <- sign_via_handle(signing_handle, message) do
-          canonicalize_low_s(signature)
-        end
-      end)
+      ContentSigner.produce(
+        input,
+        key,
+        bounds,
+        :es256,
+        fn message ->
+          with {:ok, signature} <- sign_via_handle(signing_handle, message) do
+            canonicalize_low_s(signature)
+          end
+        end,
+        &verify_es256/3
+      )
     end
   end
 

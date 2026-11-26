@@ -1,7 +1,7 @@
 defmodule BoundedAuthorityReportAdapter.RecordingHandle do
   @moduledoc false
-  # A real-key handle that records which callbacks an entry point calls. The term carries the
-  # key pair (test-only). sign/2 returns raw r || s for P-256 keys.
+  # The calling test process stores the fixture keys. Handles carry references only.
+  # sign/2 returns raw r || s for P-256 keys.
   @behaviour BoundedAuthorityReportAdapter
 
   @calls {__MODULE__, :calls}
@@ -11,13 +11,23 @@ defmodule BoundedAuthorityReportAdapter.RecordingHandle do
 
   defp record(callback), do: Process.put(@calls, [callback | Process.get(@calls, [])])
 
+  def store(key) do
+    reference = make_ref()
+    Process.put({__MODULE__, reference}, key)
+    reference
+  end
+
+  defp key(reference), do: Process.get({__MODULE__, reference})
+
   @impl true
-  def sign(message, %{suite: :ed25519, private: private}) do
+  def sign(message, reference), do: sign_key(message, key(reference))
+
+  defp sign_key(message, %{suite: :ed25519, private: private}) do
     record(:sign)
     {:ok, :crypto.sign(:eddsa, :none, message, [private, :ed25519])}
   end
 
-  def sign(message, %{suite: :p256, private: private}) do
+  defp sign_key(message, %{suite: :p256, private: private}) do
     record(:sign)
     der = :crypto.sign(:ecdsa, :sha256, message, [private, :prime256v1])
 
@@ -30,13 +40,15 @@ defmodule BoundedAuthorityReportAdapter.RecordingHandle do
   end
 
   @impl true
-  def public_key(%{public: public}) do
+  def public_key(reference) do
+    %{public: public} = key(reference)
     record(:public_key)
     {:ok, public}
   end
 
   @impl true
-  def thumbprint(%{suite: suite, public: public}) do
+  def thumbprint(reference) do
+    %{suite: suite, public: public} = key(reference)
     record(:thumbprint)
 
     jwk_module =
@@ -51,19 +63,22 @@ defmodule BoundedAuthorityReportAdapter.RecordingHandle do
   end
 
   @impl true
-  def key_identity(%{key_id: key_id, public: public}) do
+  def key_identity(reference) do
+    %{key_id: key_id, public: public} = key(reference)
     record(:key_identity)
     {:ok, {key_id, public}}
   end
 
   @impl true
-  def key_snapshot(%{key_id: key_id, public: public} = reference) do
+  def key_snapshot(reference) do
+    %{key_id: key_id, public: public} = key(reference)
     record(:key_snapshot)
     {:ok, {key_id, public, reference}}
   end
 
   @impl true
-  def signing_identity(%{role: role, key_id: key_id, public: public}) do
+  def signing_identity(reference) do
+    %{role: role, key_id: key_id, public: public} = key(reference)
     record(:signing_identity)
     {:ok, {role, key_id, public}}
   end
@@ -253,13 +268,22 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
         :p256 -> :crypto.generate_key(:ecdh, :prime256v1)
       end
 
-    %{suite: suite, key_id: key_id, role: role, public: public, private: private}
+    reference =
+      RecordingHandle.store(%{
+        suite: suite,
+        key_id: key_id,
+        role: role,
+        public: public,
+        private: private
+      })
+
+    %{key_id: key_id, public: public, reference: reference}
   end
 
-  defp handle(key), do: {RecordingHandle, key}
+  defp handle(key), do: {RecordingHandle, key.reference}
 
   defp grant_input(holder, operation_module) do
-    {:ok, holder_thumbprint} = RecordingHandle.thumbprint(holder)
+    {:ok, holder_thumbprint} = RecordingHandle.thumbprint(holder.reference)
 
     %{
       issuer: "https://issuer.example",
@@ -319,7 +343,7 @@ defmodule BoundedAuthorityReportAdapter.OptionalCallbackUsersTest do
         %{}
       )
 
-    signature = :crypto.sign(:eddsa, :none, input.message, [attestor.private, :ed25519])
+    {:ok, signature} = RecordingHandle.sign(input.message, attestor.reference)
     {:ok, compact} = RoleAttestation.V1.assemble_compact(input, signature)
 
     %{

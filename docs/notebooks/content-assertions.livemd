@@ -77,6 +77,11 @@ defmodule Demo.Ed25519Handle do
   def key_identity(key), do: {:ok, {key.key_id, key.public}}
 
   @impl true
+  def key_snapshot(key) do
+    {:ok, {key.key_id, key.public, Map.take(key, [:custody, :reference])}}
+  end
+
+  @impl true
   def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
 end
 
@@ -104,6 +109,11 @@ defmodule Demo.P256Handle do
 
   @impl true
   def key_identity(key), do: {:ok, {key.key_id, key.public}}
+
+  @impl true
+  def key_snapshot(key) do
+    {:ok, {key.key_id, key.public, Map.take(key, [:custody, :reference])}}
+  end
 
   @impl true
   def signing_identity(key), do: {:ok, {key.role, key.key_id, key.public}}
@@ -294,6 +304,113 @@ facts_of.(assertion_facts, [:sub, :gen, :verification, :trust])
 
 ```
 {:error, :invalid_content_assertion}
+```
+
+## ES256 content assertions
+
+Select the ES256 content-assertion profile explicitly. The P-256 backend hashes the exact
+signing input once and returns a raw signature. The content digest is shared by both suites.
+
+```elixir
+alias BoundedAuthorityProtocol.ContentAssertion.ES256.V1, as: ES256Content
+
+ec_publisher = p256_key.("publisher-ec-key-1", :publisher)
+ec_publisher_handle = {Demo.P256Handle, ec_publisher}
+
+{:ok, %{content_assertion: ec_assertion}} =
+  Adapter.V3.sign_content_assertion(assertion_input, ec_publisher_handle)
+
+ec_expected =
+  expected_assertion
+  |> Map.from_struct()
+  |> Map.put(:attestor, validity.(ec_publisher))
+  |> then(&struct!(ES256Content.ExpectedContentAssertion, &1))
+
+{:ok, %{trust: :not_evaluated}} = ES256Content.verify_assertion(ec_assertion, ec_expected)
+{:error, :invalid} = ContentAssertion.verify_assertion(ec_assertion, expected_assertion)
+{:error, :invalid} = ES256Content.verify_assertion(assertion, ec_expected)
+:suite_separation
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:suite_separation
+```
+
+## Action approvals
+
+The host prepares an exact request and selects eligible approver roles through its operation
+policy. The approver uses a plain signing-backend signature. Carry the exact returned record
+bytes alongside the assertion.
+
+```elixir
+alias BoundedAuthorityProtocol.ActionApproval.V1, as: Approval
+
+prepared = %{
+  request_id: "urn:example:request:field-notes-release",
+  revision_digest: :crypto.hash(:sha256, "prepared field notes revision"),
+  subject: "field notes",
+  action: "publish",
+  resources: ["observations", "summary"]
+}
+
+record = struct!(Approval.Record, Map.put(prepared, :approver_role, "reviewer"))
+issuer_id = "urn:example:reviewer"
+audience = "urn:example:archive"
+
+approval_input = %{
+  record: record,
+  jti: "urn:example:approval:field-notes-1",
+  iss: issuer_id,
+  aud: audience,
+  iat: now,
+  nbf: now,
+  exp: now + 60
+}
+
+approver = ed25519_key.("reviewer-key-1", :reviewer)
+ec_approver = p256_key.("reviewer-ec-key-1", :reviewer)
+
+{:ok, %{record: bytes, content_assertion: approval}} =
+  Adapter.sign_action_approval(approval_input, {Demo.Ed25519Handle, approver})
+
+{:ok, %{record: ^bytes, content_assertion: ec_approval}} =
+  Adapter.V3.sign_action_approval(approval_input, {Demo.P256Handle, ec_approver})
+
+context = fn suite, enrolled ->
+  Map.merge(prepared, %{
+    trust_domain: "archive",
+    audience: audience,
+    roles: ["reviewer"],
+    now: now,
+    max_staleness: 30,
+    max_lifetime: 60,
+    bounds: %{},
+    record_bounds: %{},
+    snapshot: %{
+      trust_domain: "archive",
+      suite: suite,
+      provenance: "configured-enrollment",
+      as_of: now,
+      entries: [%{issuer: issuer_id, key: validity.(enrolled), roles: ["reviewer"]}]
+    }
+  })
+end
+
+ed_context = context.(:eddsa, approver)
+ec_context = context.(:es256, ec_approver)
+{:ok, %{trust: :not_evaluated}} = Approval.verify_eddsa(bytes, approval, ed_context)
+{:ok, %{trust: :not_evaluated}} = Approval.verify_es256(bytes, ec_approval, ec_context)
+
+{:error, :scope_mismatch} =
+  Approval.verify_es256(bytes, ec_approval, %{ec_context | resources: ["summary"]})
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:error, :scope_mismatch}
 ```
 
 ## Clean up

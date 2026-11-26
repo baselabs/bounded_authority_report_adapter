@@ -6,7 +6,7 @@ Errors carry no key ids, message bytes or input content.
 
 ## Public function result contracts
 
-The type names below belong to the function's module. Signing functions also export a
+Unqualified types belong to the function’s module. Signing functions also export a
 `/2` form, equivalent to `/3` with `%{}` options, with the same result contract.
 
 | Function | Success | Error |
@@ -17,20 +17,24 @@ The type names below belong to the function's module. Signing functions also exp
 | `BoundedAuthorityReportAdapter.sign_grant/3` | `{:ok, grant_compact()}` | `{:error, grant_sign_error()}` |
 | `BoundedAuthorityReportAdapter.sign_key_transition/3` | `{:ok, transition_compact()}` | `{:error, transition_sign_error()}` |
 | `BoundedAuthorityReportAdapter.sign_content_assertion/3` | `{:ok, content_assertion_compact()}` | `{:error, content_assertion_sign_error()}` |
+| `BoundedAuthorityReportAdapter.sign_action_approval/3` | `{:ok, action_approval_compact()}` | `{:error, action_approval_sign_error()}` |
 | `BoundedAuthorityReportAdapter.public_key_thumbprint/1` | `{:ok, <<_::256>>}` | `{:error, :invalid}` |
 | `BoundedAuthorityReportAdapter.V3.sign_report/3` | `{:ok, envelope()}` | `{:error, sign_error()}` |
 | `BoundedAuthorityReportAdapter.V3.sign_anchor/3` | `{:ok, anchor_compact()}` | `{:error, anchor_sign_error()}` |
 | `BoundedAuthorityReportAdapter.V3.sign_grant/3` | `{:ok, grant_compact()}` | `{:error, grant_sign_error()}` |
 | `BoundedAuthorityReportAdapter.V3.sign_key_transition/3` | `{:ok, transition_compact()}` | `{:error, transition_sign_error()}` |
+| `BoundedAuthorityReportAdapter.V3.sign_content_assertion/3` | `{:ok, BoundedAuthorityReportAdapter.content_assertion_compact()}` | `{:error, BoundedAuthorityReportAdapter.content_assertion_sign_error()}` |
+| `BoundedAuthorityReportAdapter.V3.sign_action_approval/3` | `{:ok, BoundedAuthorityReportAdapter.action_approval_compact()}` | `{:error, BoundedAuthorityReportAdapter.action_approval_sign_error()}` |
 
 Success maps contain compact JWS strings: `envelope()` has `:grant` and `:proof`;
 `anchor_compact()` has `:anchor`; `grant_compact()` has `:grant`;
 `transition_compact()` has `:key_transition`; and `content_assertion_compact()` has
+`:content_assertion`. `action_approval_compact()` pairs `:record` bytes with a
 `:content_assertion`. A holder-proof call preserves the input grant unchanged.
 
 Each signing function has an input-shape error: `:invalid_report` for both proof
-functions, `:invalid_anchor`, `:invalid_grant`, `:invalid_transition` or
-`:invalid_content_assertion` for the corresponding object.
+functions, `:invalid_anchor`, `:invalid_grant`, `:invalid_transition`,
+`:invalid_content_assertion` or `:invalid_action_approval` for the corresponding object.
 
 Every signing error set also contains `:invalid_key_handle`, `:signing_failed` and
 `{:producer_error, :invalid}`. `grant_sign_error/0` adds `:invalid_role_attestation`.

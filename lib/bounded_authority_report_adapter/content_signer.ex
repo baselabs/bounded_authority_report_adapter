@@ -12,12 +12,13 @@ defmodule BoundedAuthorityReportAdapter.ContentSigner do
   @integer_fields [:gen, :iat, :nbf, :exp]
 
   @doc false
-  def produce(input, {key_id, public_key}, bounds, suite, sign) do
+  def produce(input, {key_id, public_key}, bounds, suite, sign, verify_signature) do
     {protocol, assertion_type, expected_type} = profile(suite)
 
     with {:ok, assertion} <- assertion(input, key_id, assertion_type),
          {:ok, signing_input} <- producer(protocol.assertion_signing_input(assertion, bounds)),
          {:ok, signature} <- sign.(signing_input.message),
+         :ok <- verify_signature.(signing_input.message, signature, public_key),
          {:ok, compact} <- producer(protocol.assemble_compact(signing_input, signature, bounds)),
          :ok <- verify(protocol, compact, assertion, public_key, bounds, expected_type) do
       {:ok, %{content_assertion: compact}}
