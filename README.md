@@ -187,7 +187,10 @@ These take Ed25519 keys (contract-major 1). `BoundedAuthorityReportAdapter.V3` p
 `sign_report/3`, `sign_grant/3`, `sign_anchor/3`, `sign_key_transition/3`,
 `sign_content_assertion/3` and `sign_action_approval/3` for the ES256 suite (contract-major 3) with P-256 keys. Select the module explicitly: the main surface
 requires a 32-byte Ed25519 public key; `V3` requires a 65-byte uncompressed P-256 point.
-Verify functions are in the protocol package (`BoundedAuthorityProtocol.*`).
+Verify functions are in the protocol package (`BoundedAuthorityProtocol.*`). Before acting on a
+verified approval, the host runs the checks in the protocol's
+[Verifying a grant before issuing it](https://github.com/baselabs/bounded_authority_protocol#verifying-a-grant-before-issuing-it)
+walkthrough.
 
 Every signing function returns `{:ok, map}` or `{:error, reason}` with a closed set of
 reasons and no values in errors. The `public_key_thumbprint/1` helper returns
