@@ -1,7 +1,9 @@
 Code.require_file("../../scripts/protocol_dependency.exs", __DIR__)
 
 defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
-  use ExUnit.Case, async: true
+  # Mix.SCM.Git.lock_status/1 changes the VM-wide working directory while it reads the
+  # checkout, so this module runs after the async modules that read relative paths.
+  use ExUnit.Case, async: false
 
   alias BoundedAuthorityReportAdapter.ProtocolDependency
   alias Mix.Dep.Lock

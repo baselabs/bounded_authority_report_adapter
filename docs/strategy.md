@@ -29,7 +29,7 @@ The direct dependency graph declared by `mix.exs` is:
 
 ```text
 bounded_authority_report_adapter
-  + bounded_authority_protocol ~> 1.0   required runtime dependency
+  + bounded_authority_protocol ~> 1.5   required runtime dependency
   + telemetry ~> 1.3                    required runtime dependency
   + igniter ~> 0.8                      optional installer dependency
   + credo, dialyxir, ex_doc, mix_audit,
