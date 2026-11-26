@@ -42,7 +42,12 @@ defmodule BoundedAuthorityReportAdapter.Options do
 
   @doc false
   @spec schema(
-          :report | :anchor | :grant | :key_transition | :content_assertion | :action_approval
+          :report
+          | :anchor
+          | :grant
+          | :key_transition
+          | :content_assertion
+          | :action_approval
         ) :: schema()
   def schema(object), do: Map.fetch!(@schemas, object)
 
