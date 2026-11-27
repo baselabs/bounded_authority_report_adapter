@@ -34,6 +34,7 @@ defmodule BoundedAuthorityReportAdapter.PackageCheck do
                         "CHANGELOG.md",
                         "CODE_OF_CONDUCT.md",
                         "CONTRIBUTING.md",
+                        "IPR.md",
                         "LICENSE",
                         "NOTICE",
                         "README.md",

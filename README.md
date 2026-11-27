@@ -1,4 +1,4 @@
-# Bounded Authority Report Adapter
+# Bounded Authority Report Adapter for Bounded Authority Protocol™
 
 [![Hex](https://img.shields.io/hexpm/v/bounded_authority_report_adapter.svg)](https://hex.pm/packages/bounded_authority_report_adapter)
 [![Docs](https://img.shields.io/badge/hexdocs-reference-blue.svg)](https://hexdocs.pm/bounded_authority_report_adapter)
@@ -263,6 +263,7 @@ steps run, so read the whole output.
 
 Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
-## Project notices
+## License
 
-See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache-2.0, maintained by BaseLabs Holdings LLC. See [LICENSE](LICENSE) and [NOTICE](NOTICE),
+and [IPR.md](IPR.md) for contributions and use of the name.

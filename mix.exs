@@ -157,6 +157,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "CHANGELOG.md",
         "CODE_OF_CONDUCT.md",
         "CONTRIBUTING.md",
+        "IPR.md",
         "LICENSE",
         "NOTICE",
         "SECURITY.md",
@@ -223,7 +224,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         ],
         Notebooks: ~r/docs\/notebooks\//,
         Reference: ~r/docs\/guides\/(faq|glossary|cheatsheet)\.md|usage-rules\.md/,
-        Project: ~r/CHANGELOG|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT|LICENSE|NOTICE/
+        Project: ~r/CHANGELOG|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT|IPR|LICENSE|NOTICE/
       ],
       extras: [
         {"README.md", title: "Overview"},
@@ -255,6 +256,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         "usage-rules.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
+        "IPR.md",
         "SECURITY.md",
         "CODE_OF_CONDUCT.md",
         "LICENSE",

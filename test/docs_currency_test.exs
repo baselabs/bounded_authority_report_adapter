@@ -203,7 +203,9 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     "test/bounded_authority_report_adapter/dependency_direction_test.exs",
     "scripts/check-bap-drift.sh",
     "Elixir 1.18 through 1.20",
-    "Erlang/OTP 27 through 29"
+    "Erlang/OTP 27 through 29",
+    "Developer Certificate of Origin sign-off (`git commit -s`)",
+    "](IPR.md)."
   ]
 
   test "the contributor guide retains protocol, dependency and environment rules" do
@@ -258,6 +260,21 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
 
     assert security =~
              "https://github.com/baselabs/bounded_authority_report_adapter/security/advisories/new"
+  end
+
+  test "the adapter identifies its steward and publishes its IP statement with the docs" do
+    notice_header = """
+    Bounded Authority Report Adapter
+    Copyright 2026 BaseLabs Holdings LLC
+
+    This product includes software developed by BaseLabs Holdings LLC
+    (https://github.com/baselabs).
+    """
+
+    assert String.starts_with?(File.read!("NOTICE"), notice_header)
+    assert File.read!("LICENSE") =~ "   Copyright 2026 BaseLabs Holdings LLC\n"
+    assert "IPR.md" in Mix.Project.config()[:docs][:extras]
+    assert File.read!("README.md") =~ "](IPR.md) for contributions and use of the name."
   end
 
   test "the docs describe how mix ci reports failure as it behaves" do

@@ -53,6 +53,10 @@ Public API changes update typespecs, executed examples, errors and migration not
 same change. Tests use real cryptography and real services. Do not add private product names,
 internal coordination, secrets or environment files to public sources.
 
+Contributions are licensed under Apache-2.0, as section 5 of the license describes, and
+every commit carries a Developer Certificate of Origin sign-off (`git commit -s`). See
+[IPR.md](IPR.md).
+
 ## Releases
 
 Contributors commit changes for maintainer review. Only maintainers land qualified commits
