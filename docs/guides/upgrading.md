@@ -3,6 +3,13 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 1.4.0
+
+Set the adapter dependency to `~> 1.4` and run `mix deps.update bounded_authority_report_adapter`.
+The [release verification instructions](../../SECURITY.md#verifying-a-release-supply-chain-provenance)
+show how to check the archives and their source commit. Some doctor messages have been
+reworded. Use the fatal or advisory classification when deciding how to act on a finding.
+
 ## 1.0.0: the stability contract takes effect
 
 Use `{:bounded_authority_report_adapter, "~> 1.0"}`. The protocol requirement is now `~> 1.0`;

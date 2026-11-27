@@ -7,12 +7,12 @@ Requires Elixir 1.18–1.20 and OTP 27–29 with access to public Hex. No secret
 
 Use a real local P-256 custodian, convert its DER signatures to raw r || s, normalize high S, and reject wrong keys and mixed suites.
 
-This notebook installs the exact published adapter 1.0.1. The adapter self-verifies every signature it produces and optionally verifies a role attestation; envelope verification is the protocol package’s job. Verification is not authorization.
+This notebook installs the exact published adapter 1.4.0. The adapter self-verifies every signature it produces and optionally verifies a role attestation; envelope verification is the protocol package’s job. Verification is not authorization.
 
 ```elixir
-Mix.install([{:bounded_authority_report_adapter, "== 1.0.1"}])
+Mix.install([{:bounded_authority_report_adapter, "== 1.4.0"}])
 
-"1.0.1" = to_string(Application.spec(:bounded_authority_report_adapter, :vsn))
+"1.4.0" = to_string(Application.spec(:bounded_authority_report_adapter, :vsn))
 :installed
 ```
 

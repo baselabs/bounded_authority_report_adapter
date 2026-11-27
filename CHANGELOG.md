@@ -1,26 +1,17 @@
 # Changelog
 
-## Unreleased
+## [1.4.0]: 2026-11-27
 
-- Refuse to publish a package whose changelog is not stamped for its version.
-
-- Keep CI and release artifacts for 7 days, the period anything reads them after their run.
-
-- Update the shared toolchain reader to the version that checks every installed runtime it reads.
-
-- Build BEAM matrices with top-level Elixir and OTP keys from the shared toolchain reader.
-
-- Read CI toolchains and check installed versions through the shared toolchain reader.
-  Preserve every supported Elixir and OTP pair and the primary runtime in release jobs.
-
-- Limit new-ref identifier checks to commits outside the pushing remote's tracking refs.
-  Keep full-history checks for unconfigured remotes and remotes without tracking refs.
-
-- Add generic local identifier hooks for staged content, commit messages and outgoing Git
-  objects, with ignored owner policy and synthetic real-Git guard tests in CI.
-
-- Use plain US English without em dashes in public prose and doctor diagnostics.
-  Check all tracked text for literal and escaped em dashes.
+- Hex publication uses a short-lived, package-scoped token issued through GitHub Actions
+  workload identity. Publication checks the package provenance and reads back both the
+  package and documentation archives against the exact bytes qualified in CI.
+- Publication checks that the packaged changelog has a nonempty entry for the version
+  being uploaded, with no unreleased entries above it.
+- Qualification checks installed Elixir and Erlang/OTP versions against the declared
+  toolchain. Release evidence in Actions is available for seven days. The GitHub release
+  carries the archives, checksums and CycloneDX SBOM for later verification.
+- The integration guides clarify handle preflight, replay reservation and archive
+  verification. Doctor findings use clearer diagnostic text.
 
 ## [1.0.1]: 2026-11-18
 
