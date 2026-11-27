@@ -6,7 +6,7 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
   defp unabridged(term), do: inspect(term, limit: :infinity, printable_limit: :infinity)
 
   @package "bounded_authority_report_adapter"
-  @hex_action "baselabs/.github/.github/actions/hex-publish@3bfbb84692a65b4d2c03dc3b7932353026fe6943"
+  @hex_action "baselabs/.github/.github/actions/hex-publish@654fcd0ef63daf8e3f79dfeb4ca900adffd0d4e2"
 
   test "only the upload in the publish environment can exchange a Hex write token" do
     workflow = read(".github/workflows/publish.yml")
