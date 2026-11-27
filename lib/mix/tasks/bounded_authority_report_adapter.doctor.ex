@@ -42,11 +42,10 @@ defmodule Mix.Tasks.BoundedAuthorityReportAdapter.Doctor do
       P-256 handle, a high-S probe return is its own advisory: the adapter
       normalizes it, but a custodian that can emit low-S directly should.
 
-  `--ref` is an Elixir term, evaluated in the doctor's VM (`--ref "{:demo, 1}"`).
-  a dev-tool affordance over your own configuration, nothing more. Read/probe
-  only: the doctor never writes, never configures, and never signs caller
-  material. The probes call the handle in the doctor's process with no timeout,
-  as the adapter does, so a handle that hangs hangs the doctor.
+  The doctor evaluates `--ref` as Elixir code in its VM (`--ref "{:demo, 1}"`).
+  Pass a trusted expression that produces an opaque reference. The live probe signs only
+  its own synthetic message. Probes call the handle in the doctor's process, so the handle
+  must set its own deadlines.
 
   ## Stability
 

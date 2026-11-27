@@ -20,7 +20,7 @@ edge_agent/
     edge_agent/demo_issuer.ex   # DEMO grant minter (prod = your authority service)
     edge_agent/receiver.ex      # the consumer: a Plug (Bandit) that verifies
     edge_agent/receiver/
-      nonce_ledger.ex           # the §9 replay ledger (an ETS table)
+      nonce_ledger.ex           # in-memory nonce state (an ETS table)
   config/config.exs             # shared config (agent + receiver in sync)
   test/edge_agent_test.exs      # the round-trip + the four rejection classes
   test/local_loopback_test.exs  # the loopback profile over IPv4 and IPv6
@@ -53,8 +53,8 @@ The local-loopback profile (development listeners) has its own pair of commands.
 is challenge-first: the agent GETs a single-use nonce that the listener reserved, signs it
 with `sign_local_loopback_report/3`, and POSTs. The receiver derives its expected target
 from its own bound address and port, refuses to boot on a non-loopback interface, and
-consumes the challenge when it verifies. Loopback HTTP is plain HTTP, not equivalent to
-HTTPS.
+consumes the challenge before verifying the proof. For production admission, follow the
+[integration guide](../../docs/guides/framework-integration.md#11-complete-host-admission-before-any-effect).
 
 ```bash
 # 1. terminal one: the loopback receiver on 127.0.0.1:4002 (the configured loopback URL)
@@ -86,7 +86,7 @@ The receiver (`EdgeAgent.Receiver`) runs ONE `with` that fails closed to a unifo
 3. **Identity binding (§8)**: the verified envelope's `holder_thumbprint` must
    equal the configured identity key's thumbprint. Without this, a captured
    envelope is replayable under a different identity.
-4. **Nonce dedup (§9)**: the nonce is claimed on a replay ledger. Without this,
+4. **Nonce dedup (§9)**: the receiver claims the nonce in ETS. Without this,
    a byte-identical request is re-accepted within `proof_max_age`.
 
 The envelope rides as two headers (`X-BA-Grant`, `X-BA-Proof`); the raw report
@@ -103,7 +103,7 @@ mix test
 hand-built envelope) plus the four rejection classes that prove the defenses are real, not vacuous: a
 tampered proof, a stranger's proof, a wrong identity (the §8 binding catches an
 envelope `check_envelope` would otherwise accept), and a replayed nonce (the §9
-ledger catches a second request with the same nonce). It also rejects repeated/empty
+nonce check catches a second request with the same nonce). It also rejects repeated/empty
 credential headers and a mismatched method, path or query before claiming replay state.
 `test/local_loopback_test.exs` runs the
 loopback profile flow over real IPv4 and IPv6 listeners, and
@@ -139,7 +139,7 @@ See [Contributing](../../CONTRIBUTING.md) for project layout and validation comm
 - **Not production key custody.** `EdgeAgent.Handle` holds a `{pub, priv}` tuple in
   memory. A production edge agent implements the handle callbacks against an HSM,
   the OS keychain, or a key server: that swap is the ONE place custody enters.
-- **Not a production replay ledger.** `NonceLedger` is an in-memory ETS table. A
+- **Replay storage.** The example keeps nonce state in ETS. A
   production consumer atomically reserves nonce and `(trusted issuer, grant id, invocation
   id)` identities in shared durable storage, with retention through their acceptance windows.
 - **The receiver uses the protocol package for verification.** It does not call the

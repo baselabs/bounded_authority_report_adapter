@@ -11,7 +11,9 @@ execution decision. See [host admission](framework-integration.md#11-complete-ho
    bounds, clock skew and proof-age policy at startup.
 2. Resolve immutable custody references. Run the doctor with the intended major and a
    nonproduction probe key first. A live probe signs synthetic bytes and may incur a real
-   provider operation; apply your custody policy. Refuse deployment on fatal findings.
+   provider operation. Refuse deployment on fatal findings. The doctor reports a failed
+   live signature check as an advisory with exit status zero. Resolve that failure and
+   any missing callback needed by your signing entry points before enabling signing.
 3. Exercise real signing and verification for each required object and a wrong-context
    refusal. The [preflight notebook](../notebooks/production-preflight.livemd) demonstrates
    this locally; it does not certify an external provider.

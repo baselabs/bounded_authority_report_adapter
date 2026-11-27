@@ -82,7 +82,7 @@ defmodule BoundedAuthorityReportAdapter.DocsContractTest do
       for [_, function, result] <-
             Regex.scan(~r/^\| `([^`]+\/\d+)` \| `([^`]+)` \|$/m, reference),
           into: %{},
-          do: {function, result}
+          do: {function, String.replace(result, "\\|", "|")}
 
     {:ok, modules} = :application.get_key(:bounded_authority_report_adapter, :modules)
     filter = Mix.Project.config()[:docs][:filter_modules]

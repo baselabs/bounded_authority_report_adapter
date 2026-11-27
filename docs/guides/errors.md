@@ -141,7 +141,7 @@ return `{:ok, map}` or a closed signing error.
 | `BoundedAuthorityReportAdapter.Telemetry.classes/0` | `[atom()]` |
 | `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.check/3` | `%{fatals: [String.t()], advisories: [String.t()]}` |
 | `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.check/4` | `%{fatals: [String.t()], advisories: [String.t()]}` |
-| `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.shape_report/3` | `String.t() | nil` |
+| `Mix.Tasks.BoundedAuthorityReportAdapter.Doctor.shape_report/3` | `String.t() \| nil` |
 
 The telemetry helpers return the documented atom lists without an error result.
 The doctor's `check/3` and `check/4` always return both finding lists for their documented

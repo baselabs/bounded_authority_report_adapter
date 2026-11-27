@@ -2,8 +2,9 @@
 
 ## Supported versions
 
-Security fixes land in the latest release of the current major. Version 1.0.1 is released;
-the [stability contract](docs/guides/upgrading.md#stability-contract) has applied since 1.0.0.
+Security fixes land in the latest release of the current major. See the
+[package on Hex](https://hex.pm/packages/bounded_authority_report_adapter) for available versions.
+The [stability contract](docs/guides/upgrading.md#stability-contract) has applied since 1.0.0.
 Wire compatibility follows the protocol package's contract-major discipline.
 
 ## Security invariants (what a report is measured against)
@@ -47,33 +48,37 @@ A report should include:
 
 ## Verifying a release (supply-chain provenance)
 
-Every `kci/<sha>` qualification run builds and checks the Hex package and HTML docs
-archives. It records the package checksum and calls the reusable supply-chain workflow
-for build-provenance and CycloneDX SBOM attestations. Publication verifies the qualified
-package attestation before upload. Read-back verifies both served archives byte for byte
-and checks that the docs' `release.json` names the exact release commit. The release
-operator tags that commit and attaches the archives, `SHA256SUMS` and `release.cdx.json` to
-this repository's GitHub release `baselabs_bounded_authority_report_adapter-v<version>`.
-No workflow runs on a tag.
-To verify the files downloaded from that GitHub release:
+For releases published using workload identity, the `kci/<sha>` run builds and checks
+the Hex package and HTML docs archives. It records the package checksum and calls the
+reusable supply-chain workflow for build-provenance and CycloneDX SBOM attestations.
+Publication verifies the qualified package attestation before upload. Read-back compares
+the served archives byte for byte and checks that the docs' `release.json` names the exact
+release commit. The release operator tags that commit and attaches the archives,
+`SHA256SUMS` and `release.cdx.json` to the GitHub release
+`baselabs_bounded_authority_report_adapter-v<version>`.
+
+Set `version` to the release version and `commit` to the full commit identified by the
+release tag. Run these commands in a directory for the downloaded archives.
 
 ```sh
-# 1. Download the GitHub release files and compare checksums:
-gh release download baselabs_bounded_authority_report_adapter-v<version> \
+version=VERSION
+commit=FULL_COMMIT_SHA
+
+gh release download "baselabs_bounded_authority_report_adapter-v${version}" \
   --repo baselabs/bounded_authority_report_adapter \
   --pattern '*.tar' --pattern '*-docs.tar.gz' --pattern SHA256SUMS --pattern '*.cdx.json'
 sha256sum -c SHA256SUMS
 
-# 2. Bind the archive to the qualification signer and exact source commit:
-gh attestation verify bounded_authority_report_adapter-<version>.tar \
+gh attestation verify "bounded_authority_report_adapter-${version}.tar" \
   --repo baselabs/bounded_authority_report_adapter \
   --signer-workflow baselabs/bounded_authority_report_adapter/.github/workflows/supply-chain.yml \
-  --source-digest <commit> --deny-self-hosted-runners
+  --source-digest "$commit" --deny-self-hosted-runners
 
-# 3. Cross-check against hex.pm's published checksum for the release
-#    (hex.pm shows the archive checksum on the version page: it must
-#    equal the SHA-256 in SHA256SUMS for the same bytes).
+curl -fsS "https://hex.pm/api/packages/bounded_authority_report_adapter/releases/${version}" \
+  | jq -er .checksum
 ```
+
+Compare the checksum returned by Hex with the package archive's entry in `SHA256SUMS`.
 
 Locally, before any release, `mix ci` runs the same reproducibility gate the
 workflow uses: two cache-isolated builds of the exact archive must agree byte

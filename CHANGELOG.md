@@ -109,10 +109,8 @@ The 1.0 stability contract takes effect (see the upgrading guide).
   override is gone and hex_core 0.21.1 arrives dev/test-only through sbom. CI moves to
   actions/checkout 7.0.1, upload-pages-artifact 5.0.0 and deploy-pages 5.0.1. Nothing shipped
   changes.
-- Release reproducibility: the Hex client is pinned in `.hex-version` (2.7.0). CI, the
-  supply-chain attestation and the reproducibility gate use it, and the gate refuses another
-  client, because Hex writes its own version into the archive metadata and a different client
-  builds different archive bytes. The release runbook builds and publishes on that client.
+- This release pinned Hex 2.7.0 for reproducibility. Hex writes its client version into
+  the archive metadata, so a different client produces different archive bytes.
 
 ## [0.12.0]: 2026-10-31
 
@@ -354,27 +352,7 @@ time, so the registry page kept showing the release-log prose the rewrite had
 removed. This release carries the rewritten README, so the registry page and
 the repository match.
 
-The registry-checksum ledger moves here from the README: the ladder read as
-release-log prose at the top of the README and was removed by the rewrite,
-which also orphaned the 0.9.0 pin made after that publish. Each value is the
-SHA-256 of the published tarball, read back from the registry API:
-
-| Version | Registry checksum |
-|---|---|
-| 1.0.0 | `b8a163fa12e7ff45e7032f77d43b0da438b8b4c9a65318b2d963be5dd4175351` |
-| 0.12.0 | `39ef67bd10913ba83af495b2c225b5eaceaf470c0ae97ffb3ff7eef755047ae2` |
-| 0.11.0 | `ab088564a58a2e5a4bfa6db3e69b79005fdb338178b69336df27474855475926` |
-| 0.10.0 | `a2a4637630e492f0eca152b4c0dc0919166a17980aff96832da389d0b1890c5d` |
-| 0.9.1 | `b2c7222ee60c4fcbc688e9f76933832b73e7a9169d5ea6e973e3ad79c7e66b85` |
-| 0.9.0 | `fdaedbf9e58c615aebc253145d8e43c09a64fd9596792a65a79d1e6261589496` |
-| 0.8.2 | `7f4dc9c37cbd9fe33a98aa0da70581976f41e6ce129fa487534f94887f4ba3e5` |
-| 0.8.1 | `fc3ae2ddf75e4f51c6268f8fd955e3adf8250931ba1af914701944b72ea473654` |
-| 0.8.0 | `e4d5936da55f5ddbbbb86da0c842e377602d1c4902ab7fcbdc9f4c18f39d3288` |
-| 0.7.0 | `39ec21ffabe981059b9940d17f86a782e12a9148fddefbf14cc7f4a2c96bfc0d` |
-
-This release's own checksum is read back after publish and added by the
-docs-currency commit that follows it. No code, API, or dependency changes; the
-protocol pin stays `== 0.7.0`.
+The protocol pin for this release was `== 0.7.0`.
 
 ## [0.9.0]: 2026-09-28
 
@@ -780,8 +758,8 @@ the Igniter installer, the doctor preflight, and the supply-chain workflow.
   sections by durable identity, the conformance corpus as the oracle: closes the
   "signing beyond Elixir" residual as documentation, not a second-language SDK). The
   security doc's named misuses each state the consequence: caller-supplied key ids,
-  skipped identity binding, no nonce ledger, trusting the declared issuer role as role
-  separation, value-carrying telemetry, and shipping the test-support handle.
+  skipped identity binding, missing replay reservation, trusting the declared issuer role as
+  role separation, value-carrying telemetry, and shipping the test-support handle.
 - Doc-currency tripwires (`test/docs_currency_test.exs`) + the regression-pinned
   Livebook: the round-trip notebook now commits its expected cell outputs
   (`persist_outputs`; verdicts and counts pinned: volatile bytes like thumbprints

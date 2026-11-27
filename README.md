@@ -2,7 +2,6 @@
 
 [![Hex](https://img.shields.io/hexpm/v/bounded_authority_report_adapter.svg)](https://hex.pm/packages/bounded_authority_report_adapter)
 [![Docs](https://img.shields.io/badge/hexdocs-reference-blue.svg)](https://hexdocs.pm/bounded_authority_report_adapter)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 The Elixir signer for the [Bounded Authority Protocol](https://hex.pm/packages/bounded_authority_protocol).
 
@@ -244,8 +243,11 @@ Runnable notebooks (each installs the exact public release):
 
 ## Development
 
+Follow the [toolchain setup in Contributing](CONTRIBUTING.md#validation) before running the
+reproducibility check.
+
 ```bash
-mix deps.get
+mix deps.get --check-locked
 MIX_ENV=test mix ci
 ```
 
@@ -261,6 +263,6 @@ steps run, so read the whole output.
 
 Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
-## License
+## Project notices
 
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+See [LICENSE](LICENSE) and [NOTICE](NOTICE).

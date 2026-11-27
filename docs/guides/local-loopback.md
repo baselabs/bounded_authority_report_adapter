@@ -19,4 +19,7 @@ is a development convenience, not a production transport guarantee.
 
 Run the [loopback notebook](../notebooks/local-loopback.livemd) or the
 [tested HTTP example](https://github.com/baselabs/bounded_authority_report_adapter/tree/master/examples/edge_agent).
-The example's in-memory state is lost at restart and is not a production admission store.
+The example consumes the challenge before verifying the proof and keeps only in-memory
+nonce state. For a host that enables effects, use the
+[admission order and durable storage](framework-integration.md#11-complete-host-admission-before-any-effect)
+described in the integration guide.

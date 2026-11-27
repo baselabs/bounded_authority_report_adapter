@@ -41,7 +41,7 @@ can verify an optional Ed25519 role attestation.
 
 ## 1. A development key handle
 
-A development handle needs five callbacks. This one derives each Ed25519 key from its name
+This development handle implements all five callbacks. It derives each Ed25519 key from its name
 in process, which is acceptable only for development. The repository's own test-only
 handles live under `test/support/` and are not shipped in the package.
 
@@ -227,13 +227,16 @@ rejects any other declared role, but it cannot check that the declaration is tru
 issuer keys in issuer custody, or require a role attestation
 ([Usage rules](../../usage-rules.md), rule 3).
 
-Check a handle module against the contract before you use it:
+Save the example `MyApp.DevKey` module to `lib/my_app/dev_key.ex` in your Mix project before
+running the doctor. The command starts a separate VM and needs the module on its code path.
 
 ```sh
-mix bounded_authority_report_adapter.doctor --handle MyApp.DevKey --ref '{:holder, "holder-key-1"}' --live
+mix bounded_authority_report_adapter.doctor --handle MyApp.DevKey \
+  --ref '{:holder, "holder-key-1"}' --major 1 --live
 ```
 
-For an ES256 (P-256) handle, see `BoundedAuthorityReportAdapter.V3` and [Key custody](key-custody.md).
+The live probe signs a synthetic message. Review its findings even when the command exits zero.
+For an ES256 (P-256) handle, use `--major 3` and see [Key custody](key-custody.md).
 
 ## Host admission before effects
 

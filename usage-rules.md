@@ -33,10 +33,9 @@
    raw map is refused (`{:producer_error, :invalid}`). Decoding different bytes on the two
    sides, or a re-encoding instead of the bytes sent, is the mismatch this rule prevents
    ([consumer integration §3 and §4](docs/guides/framework-integration.md)).
-7. Identity binding and a nonce ledger are verifying-service obligations. This library
-   signs; the service must bind the holder thumbprint to the identity it authenticated
-   and reject a nonce it has seen ([consumer integration §8 and
-   §9](docs/guides/framework-integration.md)).
+7. The verifying service binds the holder thumbprint to the identity it authenticated
+   and atomically reserves the nonce and invocation identities before any effect. See
+   [identity binding and replay reservation](docs/guides/framework-integration.md#8-bind-the-envelope-to-the-authenticated-identity-required).
 8. Signing errors use closed atoms or the fixed tuple `{:producer_error, :invalid}`,
    with no input values; key ids, message bytes and report content never appear in an error. Do not add
    them back by logging the inputs on failure ([Errors](docs/guides/errors.md)).

@@ -24,7 +24,7 @@ both locks, version notes, examples and tests together.
 
 Before running the reproducibility check in `mix ci`, install the version in
 `.github/actions/hex-publish/hex-version` in [`baselabs/.github`](https://github.com/baselabs/.github)
-at the commit pinned by the `package` job in the checkout's `.github/workflows/ci.yml`. Run
+at the commit pinned by the `hex-qualification` job in `.github/workflows/ci.yml`. Run
 `mix local.hex VERSION --force` from a directory without `mix.exs`, substituting the
 version from that file. The check fetches the pin with `curl` at the commit specified in
 the checkout's CI workflow and checks the running Hex version against it.

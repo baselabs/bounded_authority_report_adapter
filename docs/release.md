@@ -14,7 +14,8 @@ Throughout, `X.Y.Z` is the version being released and `SHA` is the release commi
 One commit on `master` carries:
 
 - `@version "X.Y.Z"` in `mix.exs`;
-- the CHANGELOG's `[Unreleased]` section renamed to `[X.Y.Z]: YYYY-MM-DD`;
+- the CHANGELOG's `## Unreleased` heading replaced by `## [X.Y.Z]: YYYY-MM-DD`,
+  with a nonempty release entry and no unreleased entries above it;
 - the upgrading notes for anything a caller must change;
 - the install lines in the README and `docs/guides/getting-started.md` (`~> X.Y`), every notebook's exact
   `Mix.install` pin and version assertion, and the landing page's Hex badge
@@ -59,14 +60,15 @@ Run each and keep its output.
 4. **Supply-chain attestation of `SHA`.** The same `kci/**` qualification run builds and
    inspects the exact package and HTML docs archives. It records the package checksum,
    generates the release SBOM, and calls `supply-chain.yml` after the gates pass.
-   Only the reusable attestation job holds signing permissions. `qualified` needs both jobs.
+   The reusable workflow holds the attestation permissions. `qualified` requires both jobs.
+   Actions retains qualification archives and release evidence for seven days.
 5. **The qualified archives are published.** Publication verifies the package attestation
    against the signer workflow and source digest before upload. The shared Hex action checks
    qualification, the archive files and checksums, the stamped changelog, and registry state
    before it exchanges a short-lived workload token. It refuses an existing version tag,
-   a retired release, or differing registry bytes. A held response is incomplete. After
-   approval on Hex, dispatch the same commit with `qualification_run` set to the original
-   CI run ID. The action preserves matching uploads and completes missing archives.
+   a retired release, or differing registry bytes. If publication needs a retry, dispatch
+   the same commit with `qualification_run` set to the original CI run ID. The action
+   preserves matching uploads and completes missing archives.
    Public read-back requires both served archives to match the qualified bytes and the docs'
    `release.json` to name `SHA`. It prepares `release-assets` with the archives, checksums and
    release SBOM. The separate `published-livebooks` job then runs every notebook unchanged
@@ -113,9 +115,3 @@ Run each and keep its output.
 If any read-back fails inside the hour, a release maintainer obtains authorization before reverting the
 publication, then fixes the release and starts again from step 1. After the hour, fix
 forward as `X.Y.(Z+1)`.
-
-## 5. Evidence commit
-
-13. Add the release's row to the registry-checksum ledger (the table in the CHANGELOG's
-    `[0.9.1]` section), with the checksum read back in step 8, and record the gate outputs
-    in the commit message.

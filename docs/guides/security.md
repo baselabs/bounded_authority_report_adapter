@@ -51,9 +51,10 @@ captured envelope replays under a different authenticated identity until it expi
 (framework-integration.md §8). The verifier must bind the verified holder to the
 authenticated identity; the adapter cannot do it.
 
-**Misuse: running without a nonce ledger.** Within the proof's freshness window the same
-valid envelope verifies again. Without a ledger, a same-identity replay window is as wide
-as `proof_max_age` (§9). The proof carries a nonce so the verifier can close that window.
+**Misuse: accepting requests without reserving replay identities.** The same valid envelope
+can verify again during its acceptance window. Reserve the nonce through that window plus
+clock skew and the invocation identity through grant expiry plus skew. See
+[replay reservation](framework-integration.md#9-reserve-replay-identities).
 
 **Misuse: treating the declared role as role separation.** `sign_grant/3` refuses a handle
 that does not declare `:issuer`, but it cannot check which key the handle actually holds.
