@@ -410,6 +410,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
     assert install["with"] ==
              Map.merge(versions, %{"version-type" => "strict", "install-hex" => false})
+
     assert check["working-directory"] == "${{ github.workspace }}"
     assert check["run"] == @installed_check
 
