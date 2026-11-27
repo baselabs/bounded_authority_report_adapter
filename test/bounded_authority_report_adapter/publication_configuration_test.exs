@@ -93,8 +93,9 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
 
   test "qualification checks and attests the exact archive that can be uploaded" do
     ci = read(".github/workflows/ci.yml")
+    qualification = ci["jobs"]["hex-qualification"]
     package = ci["jobs"]["package"]
-    step = hex_step(package)
+    step = hex_step(qualification)
 
     assert step["with"] == %{
              "operation" => "qualify",
@@ -103,15 +104,26 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
            }
 
     assert step["env"]["HEX_DOCS_SOURCE_REF"] == "${{ github.sha }}"
-    refute Map.has_key?(package, "environment")
-    refute (package["permissions"] || %{})["id-token"] == "write"
+    assert List.last(qualification["steps"]) == step
+    refute Map.has_key?(step, "if")
+
+    assert package["needs"] == "hex-qualification"
+    assert package["permissions"] == %{"actions" => "read", "contents" => "read"}
+
+    for job <- [qualification, package] do
+      refute Map.has_key?(job, "if")
+      refute Map.has_key?(job, "environment")
+      refute (job["permissions"] || %{})["id-token"] == "write"
+    end
 
     [_, commit] = String.split(step["uses"], "@")
 
     pin_url =
       "https://raw.githubusercontent.com/baselabs/.github/#{commit}/.github/actions/hex-publish/hex-version"
 
-    assert Enum.any?(package["steps"], &String.contains?(&1["run"] || "", pin_url))
+    for job <- [qualification, package] do
+      assert Enum.any?(job["steps"], &String.contains?(&1["run"] || "", pin_url))
+    end
 
     for workflow <- [ci, read(".github/workflows/publish.yml")],
         {_name, job} <- workflow["jobs"],
@@ -121,23 +133,44 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
       assert command =~ pin_url
     end
 
-    [download] = Enum.filter(package["steps"], &uses?(&1, "actions/download-artifact@"))
-    assert download["with"]["name"] == "hex-hexpm-#{@package}"
-    assert download["with"]["digest-mismatch"] == "error"
+    steps = package["steps"]
+    [download] = Enum.filter(steps, &uses?(&1, "actions/download-artifact@"))
 
-    [extract] = Enum.filter(package["steps"], &(&1["id"] == "archive"))
-    assert extract["run"] =~ ~s("$RUNNER_TEMP/qualified-hex/package.tar")
+    assert download["with"] == %{
+             "name" => "hex-hexpm-#{@package}",
+             "path" => "${{ runner.temp }}/qualified-hex",
+             "github-token" => "${{ github.token }}",
+             "run-id" => "${{ github.run_id }}",
+             "digest-mismatch" => "error"
+           }
 
-    check = Enum.find(package["steps"], &String.contains?(&1["run"] || "", "check_package.exs"))
-    assert check["run"] =~ "artifacts/#{@package}-$VERSION.tar"
+    archive = "artifacts/#{@package}-$VERSION.tar"
+    [extract] = Enum.filter(steps, &(&1["id"] == "archive"))
+    assert extract["run"] =~ ~s(cp "$RUNNER_TEMP/qualified-hex/package.tar" "#{archive}")
+
+    check = Enum.find(steps, &String.contains?(&1["run"] || "", "check_package.exs"))
+    assert check["run"] =~ ~s("#{archive}")
+
+    checksum = Enum.find(steps, &(&1["name"] == "Record archive checksum"))
+    manifest = ~S("$RUNNER_TEMP/qualified-hex/qualified.json")
+    assert checksum["run"] =~ ~s(sha256sum "#{@package}-$VERSION.tar" > SHA256SUMS)
+    assert checksum["run"] =~ ~s(jq -er .package_sha256 #{manifest})
+    assert checksum["run"] =~ ~S|test "$(cut -d' ' -f1 SHA256SUMS)" = "$expected"|
+
+    [upload] = Enum.filter(steps, &uses?(&1, "actions/upload-artifact@"))
+    assert upload["with"]["if-no-files-found"] == "error"
+    assert upload["with"]["retention-days"] == 7
 
     indexes =
-      Enum.map([step, download, extract, check], fn expected ->
-        Enum.find_index(package["steps"], &(&1 == expected))
+      Enum.map([download, extract, check, checksum, upload], fn expected ->
+        refute Map.has_key?(expected, "if")
+        Enum.find_index(steps, &(&1 == expected))
       end)
 
     assert indexes == Enum.sort(indexes)
-    refute Enum.any?(package["steps"], &String.contains?(&1["run"] || "", "mix hex.build"))
+    refute Enum.any?(steps, &String.contains?(&1["run"] || "", "mix hex.build"))
+    assert List.last(steps)["if"] == "always()"
+    assert List.last(steps)["run"] == ~s(rm -rf -- "$RUNNER_TEMP/qualified-hex")
 
     declared = ".github/hex-packages.json" |> File.read!() |> :json.decode()
     assert Map.keys(declared) == [@package]
@@ -282,6 +315,9 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     assert Map.keys(supply["on"]) == ["workflow_call"]
     assert Map.keys(supply["jobs"]) == ["attest"]
     steps = supply["jobs"]["attest"]["steps"]
+    [download | _] = steps
+    assert uses?(download, "actions/download-artifact@")
+    assert download["with"]["digest-mismatch"] == "error"
     assert Enum.all?(steps, &Map.has_key?(&1, "uses"))
     assert Enum.count(steps, &uses?(&1, "actions/attest@")) == 2
     assert supply["jobs"]["attest"]["permissions"]["artifact-metadata"] == "write"

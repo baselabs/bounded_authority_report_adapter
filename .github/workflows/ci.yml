@@ -208,11 +208,44 @@ jobs:
       - name: Execute every notebook against local dependencies
         run: elixir scripts/check_livebooks.exs --local
 
-  package:
-    name: Build checked release package evidence
+  hex-qualification:
+    name: Qualify Hex archives
     needs: [gate, example, livebooks-local]
     runs-on: ubuntu-24.04
-    timeout-minutes: 15 # No green run yet with Hex docs and consumer compilation.
+    timeout-minutes: 15 # No green run yet for this job.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-beam
+
+      - name: Install the Hex client pinned by the release action
+        working-directory: ${{ runner.temp }}
+        run: |
+          version="$(curl -fsSL 'https://raw.githubusercontent.com/baselabs/.github/3bfbb84692a65b4d2c03dc3b7932353026fe6943/.github/actions/hex-publish/hex-version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test ! -e mix.exs
+          mix local.hex "$version" --force
+
+      - name: Qualify the Hex package and documentation
+        uses: baselabs/.github/.github/actions/hex-publish@3bfbb84692a65b4d2c03dc3b7932353026fe6943
+        env:
+          HEX_DOCS_SOURCE_REF: ${{ github.sha }}
+        with:
+          operation: qualify
+          package: bounded_authority_report_adapter
+          package-directory: .
+
+  package:
+    name: Build checked release package evidence
+    needs: hex-qualification
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15 # No green run yet for the archive handoff.
     outputs:
       version: ${{ steps.archive.outputs.version }}
     # This job runs project code with read-only permissions and no signing identity.
@@ -241,20 +274,14 @@ jobs:
           command -v git >/dev/null
           mix privacy.hooks
 
-      - name: Qualify the Hex package and documentation
-        uses: baselabs/.github/.github/actions/hex-publish@3bfbb84692a65b4d2c03dc3b7932353026fe6943
-        env:
-          HEX_DOCS_SOURCE_REF: ${{ github.sha }}
-        with:
-          operation: qualify
-          package: bounded_authority_report_adapter
-          package-directory: .
-
+      # Use the Actions API to read the completed qualification job's artifact in this run.
       - name: Download the exact archive for package checks and attestation
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: hex-hexpm-bounded_authority_report_adapter
           path: ${{ runner.temp }}/qualified-hex
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
           digest-mismatch: error
 
       - name: Name the archive using the qualified version
@@ -271,7 +298,10 @@ jobs:
 
       - name: Record archive checksum
         working-directory: artifacts
-        run: sha256sum "bounded_authority_report_adapter-$VERSION.tar" > SHA256SUMS
+        run: |
+          sha256sum "bounded_authority_report_adapter-$VERSION.tar" > SHA256SUMS
+          expected="$(jq -er .package_sha256 "$RUNNER_TEMP/qualified-hex/qualified.json")"
+          test "$(cut -d' ' -f1 SHA256SUMS)" = "$expected"
 
       - name: Generate CycloneDX SBOM
         run: mix sbom.generate
@@ -307,7 +337,7 @@ jobs:
 
   qualified:
     if: always()
-    needs: [toolchain, gate, example, livebooks-local, package, attest]
+    needs: [toolchain, gate, example, livebooks-local, hex-qualification, package, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 5 # run 44208265114
     steps:

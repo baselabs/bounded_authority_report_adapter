@@ -259,6 +259,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
 
     for {path, job_name} <- [
           {".github/workflows/ci.yml", "livebooks-local"},
+          {".github/workflows/ci.yml", "hex-qualification"},
           {".github/workflows/ci.yml", "package"},
           {".github/workflows/publish.yml", "published-livebooks"}
         ] do
