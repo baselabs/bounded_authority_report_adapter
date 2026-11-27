@@ -21,6 +21,7 @@ runs:
         elixir-version: ${{ inputs.elixir-version || steps.versions.outputs.elixir }}
         otp-version: ${{ inputs.otp-version || steps.versions.outputs.otp }}
         version-type: strict
+        install-hex: false
 
     - name: Check installed toolchains
       shell: bash

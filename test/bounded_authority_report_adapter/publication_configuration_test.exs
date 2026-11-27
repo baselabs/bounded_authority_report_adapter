@@ -92,7 +92,8 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
   end
 
   test "qualification checks and attests the exact archive that can be uploaded" do
-    package = read(".github/workflows/ci.yml")["jobs"]["package"]
+    ci = read(".github/workflows/ci.yml")
+    package = ci["jobs"]["package"]
     step = hex_step(package)
 
     assert step["with"] == %{
@@ -105,10 +106,20 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     refute Map.has_key?(package, "environment")
     refute (package["permissions"] || %{})["id-token"] == "write"
 
-    assert Enum.any?(
-             package["steps"],
-             &String.contains?(&1["run"] || "", "hex-publish/hex-version")
-           )
+    [_, commit] = String.split(step["uses"], "@")
+
+    pin_url =
+      "https://raw.githubusercontent.com/baselabs/.github/#{commit}/.github/actions/hex-publish/hex-version"
+
+    assert Enum.any?(package["steps"], &String.contains?(&1["run"] || "", pin_url))
+
+    for workflow <- [ci, read(".github/workflows/publish.yml")],
+        {_name, job} <- workflow["jobs"],
+        install <- job["steps"] || [],
+        command = install["run"] || "",
+        command =~ "mix local.hex" do
+      assert command =~ pin_url
+    end
 
     [download] = Enum.filter(package["steps"], &uses?(&1, "actions/download-artifact@"))
     assert download["with"]["name"] == "hex-hexpm-#{@package}"
@@ -158,7 +169,11 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     end
 
     proof = Enum.find(steps, &(&1["id"] == "provenance"))
-    assert proof["run"] =~ ~s(git tag --list "v$VERSION" "$VERSION")
+
+    assert proof["run"] =~
+             ~s(git tag --list "v$VERSION" "$VERSION" "baselabs_#{@package}-v$VERSION")
+
+    assert proof["run"] =~ ~s(test -z "$version_tags")
     assert proof["run"] =~ ~s(cmp "$archive" "$evidence/#{@package}-$VERSION.tar")
     assert proof["run"] =~ "gh attestation verify"
     assert proof["run"] =~ ".github/workflows/supply-chain.yml"

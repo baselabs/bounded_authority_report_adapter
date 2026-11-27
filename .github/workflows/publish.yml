@@ -97,7 +97,7 @@ jobs:
         run: |
           VERSION="$(sed -n 's/^  @version "\(.*\)"$/\1/p' mix.exs)"
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.+-]+)?$ ]]
-          version_tags="$(git tag --list "v$VERSION" "$VERSION")"
+          version_tags="$(git tag --list "v$VERSION" "$VERSION" "baselabs_bounded_authority_report_adapter-v$VERSION")"
           test -z "$version_tags"
           archive="$RUNNER_TEMP/qualified-hex/package.tar"
           evidence="$RUNNER_TEMP/qualification-evidence"
@@ -279,10 +279,13 @@ jobs:
 
       - uses: ./.github/actions/setup-beam
 
-      - name: Pin the Hex client
+      - name: Install the Hex client pinned by the release action
+        working-directory: ${{ runner.temp }}
         run: |
-          hex_version="$(cat .hex-version)"
-          mix local.hex "$hex_version" --force
+          version="$(curl -fsSL 'https://raw.githubusercontent.com/baselabs/.github/3bfbb84692a65b4d2c03dc3b7932353026fe6943/.github/actions/hex-publish/hex-version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test ! -e mix.exs
+          mix local.hex "$version" --force
 
       - name: Wait until the Hex repository serves the release
         run: |

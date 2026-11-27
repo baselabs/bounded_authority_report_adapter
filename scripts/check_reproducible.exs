@@ -79,17 +79,34 @@ defmodule BoundedAuthorityReportAdapter.ReproducibleCheck do
     end
   end
 
-  # The Hex client writes its own version into the archive's metadata.config (build_env), so the
-  # same source builds different bytes under different Hex releases. .hex-version pins the client
-  # that CI and the supply-chain attestation use; a local build must match it to reproduce the
-  # attested archive.
+  # Hex records its version in the archive metadata. Reproduce qualification with the same client.
   defp assert_hex_pinned!(source_root) do
-    pinned = source_root |> Path.join(".hex-version") |> File.read!() |> String.trim()
+    workflow = source_root |> Path.join(".github/workflows/ci.yml") |> File.read!()
+
+    action =
+      ~r|^[ \t]+(?:- )?uses: baselabs/\.github/\.github/actions/hex-publish@([0-9a-f]{40})[ \t]*(?:#.*)?$|m
+
+    commit =
+      case Regex.scan(action, workflow, capture: :all_but_first) do
+        [[commit]] -> commit
+        _ -> raise("release candidate check failed: expected one pinned Hex action in CI")
+      end
+
+    url =
+      "https://raw.githubusercontent.com/baselabs/.github/#{commit}/.github/actions/hex-publish/hex-version"
+
+    {output, status} = System.cmd("curl", ["-fsSL", url])
+    pinned = String.trim(output)
+
+    unless status == 0 and Regex.match?(~r/\A[0-9]+\.[0-9]+\.[0-9]+\z/, pinned) do
+      raise("release candidate check failed: could not read the shared action's Hex version pin")
+    end
+
     running = to_string(Application.spec(:hex, :vsn) || "none")
 
     unless running == pinned do
       raise(
-        "release candidate check failed: Hex #{running} is running but .hex-version pins " <>
+        "release candidate check failed: Hex #{running} is running but the shared action pins " <>
           "#{pinned}; the archive would not match CI's attested bytes. Run " <>
           "`mix local.hex #{pinned} --force` and retry."
       )

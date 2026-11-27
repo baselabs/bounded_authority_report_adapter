@@ -80,12 +80,13 @@ jobs:
           elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
 
-      - name: Pin the Hex client
-        # The Hex version is written into the archive metadata; .hex-version keeps CI, the
-        # attestation and a local release build on the same client.
+      - name: Install the Hex client pinned by the release action
+        working-directory: ${{ runner.temp }}
         run: |
-          hex_version="$(cat .hex-version)"
-          mix local.hex "$hex_version" --force
+          version="$(curl -fsSL 'https://raw.githubusercontent.com/baselabs/.github/3bfbb84692a65b4d2c03dc3b7932353026fe6943/.github/actions/hex-publish/hex-version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test ! -e mix.exs
+          mix local.hex "$version" --force
 
       - name: Install deps
         run: mix deps.get --check-locked
@@ -160,6 +161,14 @@ jobs:
           elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
 
+      - name: Install the Hex client pinned by the release action
+        working-directory: ${{ runner.temp }}
+        run: |
+          version="$(curl -fsSL 'https://raw.githubusercontent.com/baselabs/.github/3bfbb84692a65b4d2c03dc3b7932353026fe6943/.github/actions/hex-publish/hex-version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test ! -e mix.exs
+          mix local.hex "$version" --force
+
       - name: Install deps
         run: mix deps.get --check-locked
 
@@ -189,10 +198,13 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-beam
-      - name: Pin the Hex client
+      - name: Install the Hex client pinned by the release action
+        working-directory: ${{ runner.temp }}
         run: |
-          hex_version="$(cat .hex-version)"
-          mix local.hex "$hex_version" --force
+          version="$(curl -fsSL 'https://raw.githubusercontent.com/baselabs/.github/3bfbb84692a65b4d2c03dc3b7932353026fe6943/.github/actions/hex-publish/hex-version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test ! -e mix.exs
+          mix local.hex "$version" --force
       - name: Execute every notebook against local dependencies
         run: elixir scripts/check_livebooks.exs --local
 
