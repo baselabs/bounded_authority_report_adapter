@@ -1,0 +1,72 @@
+{
+  "bounded_authority_report_adapter": {
+    "directory": ".",
+    "app": "bounded_authority_report_adapter",
+    "files": [
+      ".formatter.exs",
+      "CHANGELOG.md",
+      "CODE_OF_CONDUCT.md",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "NOTICE",
+      "README.md",
+      "SECURITY.md",
+      "docs/guides/anchors-and-rotation.md",
+      "docs/guides/cheatsheet.md",
+      "docs/guides/content-assertions.md",
+      "docs/guides/errors.md",
+      "docs/guides/faq.md",
+      "docs/guides/framework-integration.md",
+      "docs/guides/getting-started.md",
+      "docs/guides/glossary.md",
+      "docs/guides/grants-and-roles.md",
+      "docs/guides/holder-requests.md",
+      "docs/guides/key-custody.md",
+      "docs/guides/local-loopback.md",
+      "docs/guides/operations.md",
+      "docs/guides/recipes.md",
+      "docs/guides/security.md",
+      "docs/guides/telemetry.md",
+      "docs/guides/testing.md",
+      "docs/guides/upgrading.md",
+      "docs/notebooks/anchors-and-rotation.livemd",
+      "docs/notebooks/content-assertions.livemd",
+      "docs/notebooks/es256-custody.livemd",
+      "docs/notebooks/holder-request.livemd",
+      "docs/notebooks/issuer-grants.livemd",
+      "docs/notebooks/local-loopback.livemd",
+      "docs/notebooks/production-preflight.livemd",
+      "docs/notebooks/registry.txt",
+      "examples/files/signing-flow.svg",
+      "lib/bounded_authority_report_adapter.ex",
+      "lib/bounded_authority_report_adapter/optional_callbacks.ex",
+      "lib/bounded_authority_report_adapter/options.ex",
+      "lib/bounded_authority_report_adapter/telemetry.ex",
+      "lib/bounded_authority_report_adapter/v3.ex",
+      "lib/mix/tasks/bounded_authority_report_adapter.doctor.ex",
+      "lib/mix/tasks/bounded_authority_report_adapter.install.ex",
+      "mix.exs",
+      "usage-rules.md"
+    ],
+    "requirements": {
+      "bounded_authority_protocol": {
+        "app": "bounded_authority_protocol",
+        "optional": false,
+        "requirement": "~> 1.0",
+        "repository": "hexpm"
+      },
+      "igniter": {
+        "app": "igniter",
+        "optional": true,
+        "requirement": "~> 0.8",
+        "repository": "hexpm"
+      },
+      "telemetry": {
+        "app": "telemetry",
+        "optional": false,
+        "requirement": "~> 1.3",
+        "repository": "hexpm"
+      }
+    }
+  }
+}

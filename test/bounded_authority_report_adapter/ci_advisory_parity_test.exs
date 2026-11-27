@@ -260,7 +260,6 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     for {path, job_name} <- [
           {".github/workflows/ci.yml", "livebooks-local"},
           {".github/workflows/ci.yml", "package"},
-          {".github/workflows/publish.yml", "publish"},
           {".github/workflows/publish.yml", "published-livebooks"}
         ] do
       workflow = YamlElixir.read_from_file!(path)
@@ -281,36 +280,27 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     end
   end
 
-  test "publication confirms the package exists before checking its version or publishing" do
-    workflow = YamlElixir.read_from_file!(".github/workflows/publish.yml")
-    steps = workflow["jobs"]["publish"]["steps"]
-    identity = Enum.find_index(steps, &(&1["name"] == "Read the package identity"))
-    lookup = Enum.find_index(steps, &(&1["run"] == "python3 scripts/check_hex_release.py name"))
-    tag = Enum.find_index(steps, &(&1["name"] == "Refuse an existing version tag"))
-    build = Enum.find_index(steps, &(&1["name"] == "Build documentation"))
-    assert is_integer(identity) and is_integer(lookup) and is_integer(tag) and is_integer(build)
-    assert lookup < identity and identity < tag and tag < build
+  test "publication reads the qualified toolchain before entering the upload environment" do
+    jobs = YamlElixir.read_from_file!(".github/workflows/publish.yml")["jobs"]
+    verify = jobs["verify-provenance"]
 
-    assert Enum.at(steps, identity)["run"] =~
-             "package = to_string(Keyword.get(config[:package] || [], :name, config[:app]))"
+    assert Enum.any?(
+             verify["steps"],
+             &(&1["run"] == ~s|scripts/toolchain.sh >> "$GITHUB_OUTPUT"|)
+           )
 
-    source = File.read!("scripts/check_hex_release.py")
+    for name <- ["upload", "read-back"] do
+      steps = jobs[name]["steps"]
+      setup = Enum.find(steps, &String.starts_with?(&1["uses"] || "", "erlef/setup-beam@"))
+      assert setup["with"]["version-type"] == "strict"
+      assert setup["with"]["elixir-version"] == "${{ needs.verify-provenance.outputs.elixir }}"
+      assert setup["with"]["otp-version"] == "${{ needs.verify-provenance.outputs.otp }}"
 
-    for pattern <- [
-          ~r/if response.status != 200:\s+refuse\(/,
-          ~r/if error.code == 404:\s+return None/,
-          ~r/except \(OSError, http.client.HTTPException\):\s+refuse\(/,
-          ~r/if fetch\(package_url\) is None:\s+refuse\(/
-        ] do
-      assert source =~ pattern
-      mutated = Regex.replace(pattern, source, "")
-      refute mutated == source
-      refute mutated =~ pattern
+      drift = Enum.find(steps, &(&1["name"] == "Refuse BEAM runtime drift"))
+      assert drift["working-directory"] == "${{ runner.temp }}"
+      assert drift["run"] =~ ~s(test "$elixir_version" = "$EXPECTED_ELIXIR")
+      assert drift["run"] =~ ~s(test "$otp_version" = "$EXPECTED_OTP")
     end
-
-    assert source =~ "{package} has never been published to Hex.pm: "
-    assert source =~ "this workflow publishes new versions of existing packages only. "
-    assert source =~ "A first publication is the owner's decision."
   end
 
   test "every job in every workflow runs on the pinned GitHub-hosted image" do
@@ -336,8 +326,9 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
         path = if String.ends_with?(ref, ".yml"), do: ref, else: Path.join(ref, "action.yml")
         assert File.regular?(path)
       else
-        assert ref =~ @pinned_action,
-               "#{path} uses #{ref}; pin it to a 40-hex commit SHA with its release comment"
+        assert ref =~ @pinned_action or
+                 ref =~ ~r|\Abaselabs/\.github/\.github/actions/hex-publish@[0-9a-f]{40}\z|,
+               "#{path} uses #{ref}; pin it to a 40-hex commit SHA"
       end
     end
 
@@ -370,17 +361,17 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     refute workflow =~ "--published"
     refute aliases =~ "--published"
 
-    publish = File.read!(".github/workflows/publish.yml")
-    [keyed, after_upload] = String.split(publish, "\n  published-livebooks:\n", parts: 2)
-    assert keyed =~ "secrets.HEX_API_KEY"
-    assert after_upload =~ "    needs: publish\n"
+    publish = YamlElixir.read_from_file!(".github/workflows/publish.yml")["jobs"]
+    published = publish["published-livebooks"]
+    assert published["needs"] == "read-back"
+    assert published["if"] == publish["upload"]["if"]
+    refute Map.has_key?(published, "environment")
+    refute inspect(published) =~ "secrets."
 
-    # Every job in publish.yml carries exactly the same actor condition.
-    [publish_if] = Regex.run(~r/^    if: .+$/m, keyed)
-    assert Regex.scan(~r/^    if: .+$/m, after_upload) == [[publish_if]]
-    assert after_upload =~ "run: elixir scripts/check_livebooks.exs --published"
-    refute after_upload =~ "secrets."
-    refute after_upload =~ "environment:"
+    assert Enum.any?(
+             published["steps"],
+             &(&1["run"] == "elixir scripts/check_livebooks.exs --published")
+           )
   end
 
   defp workflows, do: Path.wildcard(".github/workflows/*.yml")

@@ -33,7 +33,7 @@ python3 scripts/check_doc_links.py doc
 advisories, package contents and reproducibility, notebooks and the example app. It runs
 checks in order and exits non-zero if any step failed. Some failures allow later checks to
 run; read all output. CI runs the supported toolchain matrix and the local notebook mode; `publish.yml` runs the
-notebooks unchanged against Hex after each upload.
+notebooks unchanged against Hex after package and docs read-back.
 
 Every authored Elixir fence is discovered recursively with a CommonMark parser and executed.
 HTTP examples execute in the example app, which supplies Plug. No compile-only fragments
@@ -49,7 +49,10 @@ internal coordination, secrets or environment files to public sources.
 ## Releases
 
 Contributors commit changes for maintainer review. Only maintainers land qualified commits
-and run publication or site deployment. Never publish or tag as part of a contribution.
+and run publication or site deployment. Hex publication takes the full qualified commit
+and uploads its archives using workload identity.
+See the [release runbook](https://github.com/baselabs/bounded_authority_report_adapter/blob/master/docs/release.md).
+Never publish or tag as part of a contribution.
 Report vulnerabilities through [SECURITY.md](SECURITY.md).
 
 ## Maintainer checks

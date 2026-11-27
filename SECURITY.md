@@ -47,23 +47,21 @@ A report should include:
 
 ## Verifying a release (supply-chain provenance)
 
-Every `kci/<sha>` qualification run builds and checks the exact Hex archive, records its
-SHA-256 in `SHA256SUMS`, and calls the reusable supply-chain workflow for build-provenance
-and CycloneDX SBOM attestations. Publication verifies the rebuilt archive against that
-attestation and reads the package bytes back from Hex. Docs are a rendering of the package
-and an ExDoc build is not byte-stable, so docs are never compared by bytes. The docs archive
-carries `release.json` naming the package, version and commit that built it; served docs must
-name this package and version and the dispatched commit or its ancestor on `master`. That
-commit is the published commit, and read-back saves the served docs archive in the
-`release-assets` bundle. The release operator then tags the published commit and attaches the
-archive, `SHA256SUMS` and `release.cdx.json` to this repository's GitHub release `v<version>`.
+Every `kci/<sha>` qualification run builds and checks the Hex package and HTML docs
+archives. It records the package checksum and calls the reusable supply-chain workflow
+for build-provenance and CycloneDX SBOM attestations. Publication verifies the qualified
+package attestation before upload. Read-back verifies both served archives byte for byte
+and checks that the docs' `release.json` names the exact release commit. The release
+operator tags that commit and attaches the archives, `SHA256SUMS` and `release.cdx.json` to
+this repository's GitHub release `baselabs_bounded_authority_report_adapter-v<version>`.
 No workflow runs on a tag.
 To verify the files downloaded from that GitHub release:
 
 ```sh
 # 1. Download the GitHub release files and compare checksums:
-gh release download v<version> --repo baselabs/bounded_authority_report_adapter \
-  --pattern '*.tar' --pattern SHA256SUMS --pattern '*.cdx.json'
+gh release download baselabs_bounded_authority_report_adapter-v<version> \
+  --repo baselabs/bounded_authority_report_adapter \
+  --pattern '*.tar' --pattern '*-docs.tar.gz' --pattern SHA256SUMS --pattern '*.cdx.json'
 sha256sum -c SHA256SUMS
 
 # 2. Bind the archive to the qualification signer and exact source commit:

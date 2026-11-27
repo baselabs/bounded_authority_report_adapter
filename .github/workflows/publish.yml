@@ -1,9 +1,16 @@
 name: Publish to Hex.pm
 
-# Maintainers dispatch from the qualified default-branch head. Publication resumes
-# held uploads on the same commit; only a complete byte-exact read-back succeeds.
 on:
   workflow_dispatch:
+    inputs:
+      release_commit:
+        description: Qualified release commit (40 lowercase hexadecimal characters)
+        required: true
+        type: string
+      qualification_run:
+        description: Original CI run ID when retrying publication
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -17,208 +24,257 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  verify-provenance:
     if: contains(fromJSON('["corepay","palermo-git"]'), github.actor) && contains(fromJSON('["corepay","palermo-git"]'), github.triggering_actor)
-    environment: publish
     runs-on: ubuntu-24.04
-    timeout-minutes: 5 # 5-minute floor; green 1.6 min, run 44619032017.
+    timeout-minutes: 5 # No green run yet.
     permissions:
       contents: read
       actions: read
       attestations: read
+    outputs:
+      qualification-run: ${{ steps.qualification.outputs.run }}
+      package-sha256: ${{ steps.provenance.outputs.package-sha256 }}
+      elixir: ${{ steps.toolchain.outputs.elixir }}
+      otp: ${{ steps.toolchain.outputs.otp }}
     steps:
-      - name: Require the default branch
+      - name: Require a default-branch dispatch and a full release commit
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
         run: |
-          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
-            echo "Publication must be dispatched from the default branch." >&2
-            exit 1
-          fi
-
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
+          [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
-          # Read-back places the served docs' commit on the default branch's history.
+          ref: ${{ inputs.release_commit }}
           fetch-depth: 0
-
-      - name: Refuse a package name the registry has never had
-        env:
-          PACKAGE: bounded_authority_report_adapter
-        run: python3 scripts/check_hex_release.py name
-
-      - uses: ./.github/actions/setup-beam
-
-      - name: Pin the Hex client
-        run: |
-          hex_version="$(cat .hex-version)"
-          mix local.hex "$hex_version" --force
-
-      - name: Install dependencies
-        run: mix deps.get --check-locked
-
-      - name: Read the package identity
-        run: |
-          mkdir -p artifacts
-          mix run --no-start -e '
-            config = Mix.Project.config()
-            package = to_string(Keyword.get(config[:package] || [], :name, config[:app]))
-            version = config[:version]
-            Version.parse!(version)
-            File.write!(System.fetch_env!("GITHUB_ENV"),
-              "PACKAGE=#{package}\nVERSION=#{version}\n" <>
-              "PACKAGE_ARCHIVE=#{System.fetch_env!("GITHUB_WORKSPACE")}/artifacts/#{package}-#{version}.tar\n" <>
-              "DOCS_ARCHIVE=#{System.fetch_env!("RUNNER_TEMP")}/hex-docs.tar.gz\n", [:append])
-          '
-
-      - name: Refuse an existing version tag
-        run: |
-          tags="$(git ls-remote --tags origin "refs/tags/v$VERSION" "refs/tags/v$VERSION^{}" \
-            "refs/tags/$VERSION" "refs/tags/$VERSION^{}")"
-          if [ -n "$tags" ]; then
-            echo "::error::Tag for $VERSION already exists on origin."
-            exit 1
-          fi
-
-      - name: Build documentation
-        run: |
-          mix docs --warnings-as-errors --formatter html
-          test -s doc/index.html
-          printf '{"package": "%s", "version": "%s", "commit": "%s"}\n' \
-            "$PACKAGE" "$VERSION" "$GITHUB_SHA" > doc/release.json
-          tar -C doc --format=gnu --sort=name --mtime='2000-01-01 00:00Z' \
-            --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' -cf - . \
-            | gzip -n > "$DOCS_ARCHIVE"
-          tar -tzf "$DOCS_ARCHIVE" > /dev/null
-
-      - name: Build the package archive
-        run: mix hex.build --output "$PACKAGE_ARCHIVE"
-
-      - name: Check package identity, exact files and a consumer build
-        run: mix run --no-start scripts/check_package.exs "$PACKAGE_ARCHIVE"
-
-      - name: Verify the built archive against qualification and collect its SBOMs
+          persist-credentials: false
+      - name: Check release ancestry and select the qualification run
+        id: qualification
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          QUALIFICATION_RUN: ${{ inputs.qualification_run }}
         run: |
-          gh attestation verify "$PACKAGE_ARCHIVE" \
+          git merge-base --is-ancestor "$RELEASE_COMMIT" "refs/remotes/origin/$DEFAULT_BRANCH"
+          if [ -z "$QUALIFICATION_RUN" ]; then
+            runs="$(gh api --paginate --slurp \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$RELEASE_COMMIT&status=success&per_page=100")"
+            QUALIFICATION_RUN="$(jq -er --arg sha "$RELEASE_COMMIT" '
+              [.[].workflow_runs[] | select(.head_sha == $sha and .head_branch == ("kci/" + $sha)
+                and .event == "push" and .conclusion == "success")]
+              | max_by([.run_started_at, .id]).id
+            ' <<< "$runs")"
+          fi
+          [[ "$QUALIFICATION_RUN" =~ ^[1-9][0-9]*$ ]]
+          printf 'run=%s\n' "$QUALIFICATION_RUN" >> "$GITHUB_OUTPUT"
+      - name: Read toolchain versions
+        id: toolchain
+        run: scripts/toolchain.sh >> "$GITHUB_OUTPUT"
+      - name: Download qualified Hex archives
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hex-hexpm-bounded_authority_report_adapter
+          path: ${{ runner.temp }}/qualified-hex
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.qualification.outputs.run }}
+          digest-mismatch: error
+      - name: Download package attestation evidence
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bounded-authority-report-adapter-${{ inputs.release_commit }}
+          path: ${{ runner.temp }}/qualification-evidence
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.qualification.outputs.run }}
+          digest-mismatch: error
+      - name: Verify the qualified package attestation and refuse existing version tags
+        id: provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+        run: |
+          VERSION="$(sed -n 's/^  @version "\(.*\)"$/\1/p' mix.exs)"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.+-]+)?$ ]]
+          version_tags="$(git tag --list "v$VERSION" "$VERSION")"
+          test -z "$version_tags"
+          archive="$RUNNER_TEMP/qualified-hex/package.tar"
+          evidence="$RUNNER_TEMP/qualification-evidence"
+          cmp "$archive" "$evidence/bounded_authority_report_adapter-$VERSION.tar"
+          (cd "$evidence" && sha256sum --check SHA256SUMS)
+          gh attestation verify "$archive" \
             --repo "$GITHUB_REPOSITORY" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/supply-chain.yml" \
-            --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
-          artifact_id="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/artifacts" \
-            -f "name=bounded-authority-report-adapter-$GITHUB_SHA" \
-            --jq '.artifacts | map(select(.expired == false)) | max_by(.id) | .id // empty')"
-          if [ -z "$artifact_id" ]; then
-            echo "::error::Qualification evidence is missing or expired."
-            exit 1
-          fi
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" \
-            > "$RUNNER_TEMP/qualification-evidence.zip"
-          unzip -q "$RUNNER_TEMP/qualification-evidence.zip" -d "$RUNNER_TEMP/qualification-evidence"
-          cmp "$PACKAGE_ARCHIVE" "$RUNNER_TEMP/qualification-evidence/$PACKAGE-$VERSION.tar"
-          cp "$RUNNER_TEMP/qualification-evidence/SHA256SUMS" artifacts/
-          cp "$RUNNER_TEMP/qualification-evidence/release.cdx.json" artifacts/
-          (cd artifacts && sha256sum --check SHA256SUMS)
+            --source-digest "$RELEASE_COMMIT" --deny-self-hosted-runners
+          package_sha="$(sha256sum "$archive" | cut -d' ' -f1)"
+          printf 'package-sha256=%s\n' "$package_sha" >> "$GITHUB_OUTPUT"
+      - name: Remove qualification downloads
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/qualified-hex" "$RUNNER_TEMP/qualification-evidence"
 
-      - name: Refuse a package whose changelog is not stamped for its version
-        shell: bash
+  upload:
+    if: contains(fromJSON('["corepay","palermo-git"]'), github.actor) && contains(fromJSON('["corepay","palermo-git"]'), github.triggering_actor)
+    needs: verify-provenance
+    environment: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10 # No green run yet.
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    outputs:
+      qualification-run: ${{ steps.upload.outputs.qualification-run }}
+      qualification-sha256: ${{ steps.upload.outputs.qualification-sha256 }}
+      package-sha256: ${{ steps.upload.outputs.package-sha256 }}
+      version: ${{ steps.upload.outputs.version }}
+    steps:
+      - name: Require a default-branch dispatch and a full release commit
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
         run: |
-          python3 -I - "$PACKAGE_ARCHIVE" "$VERSION" <<'PY'
-          import io, re, sys, tarfile
-          archive, version = sys.argv[1], sys.argv[2]
-          def refuse(message):
-              raise SystemExit(f'{archive}: {message}; publication refused')
-          with tarfile.open(archive, 'r:*') as outer:
-              if 'contents.tar.gz' in outer.getnames():
-                  package = tarfile.open(fileobj=io.BytesIO(outer.extractfile('contents.tar.gz').read()), mode='r:gz')
-                  root = ''
-              else:
-                  package, root = outer, 'package/'
-              found = [member for member in package.getmembers() if member.isfile()
-                       and re.fullmatch(re.escape(root) + r'(?i:changelog(?:\.md|\.markdown|\.txt)?)', member.name)]
-              if len(found) != 1:
-                  refuse('the package must ship exactly one root CHANGELOG')
-              try:
-                  lines = package.extractfile(found[0]).read().decode('utf-8').splitlines()
-              except UnicodeDecodeError:
-                  refuse('the packaged CHANGELOG is not UTF-8')
-          headings, fence = {}, False
-          for index, line in enumerate(lines):
-              if re.match(r' {0,3}(```|~~~)', line):
-                  fence = not fence
-              elif not fence and (match := re.match(r' {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$', line)):
-                  headings[index] = (len(match.group(1)), match.group(2) or '')
-          token = re.compile(r'(?<![0-9A-Za-z.+-])v?' + re.escape(version) + r'(?![0-9A-Za-z.+-])')
-          stamped = [index for index, (_, title) in headings.items() if token.search(title)]
-          if not stamped:
-              refuse(f'the packaged CHANGELOG has no section for {version}')
-          at, level = stamped[0], headings[stamped[0]][0]
-          def written(start):
-              end = next((index for index, (depth, _) in headings.items() if index > start and depth <= level), len(lines))
-              return any(line.strip() for index, line in enumerate(lines[start + 1:end], start + 1) if index not in headings)
-          if not written(at):
-              refuse(f'the packaged CHANGELOG section for {version} is empty')
-          for start, (depth, title) in headings.items():
-              if start < at and depth == level and written(start):
-                  refuse(f'the packaged CHANGELOG has entries above {version}, under "{title}"')
-          print(f'{archive}: the packaged CHANGELOG is stamped for {version}')
-          PY
-
-      - name: Prepare upload and inspect any existing release bytes
-        run: |
-          sha256sum "$PACKAGE_ARCHIVE" "$DOCS_ARCHIVE" > "$RUNNER_TEMP/hex-publish.sha256"
-          python3 scripts/check_hex_release.py prepare
-
-      - name: Upload only the missing inspected package and documentation
-        id: upload
+          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
+          [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up BEAM
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          version-type: strict
+          elixir-version: ${{ needs.verify-provenance.outputs.elixir }}
+          otp-version: ${{ needs.verify-provenance.outputs.otp }}
+          install-hex: false
+          install-rebar: false
+      - name: Refuse BEAM runtime drift
         working-directory: ${{ runner.temp }}
         env:
-          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+          EXPECTED_ELIXIR: ${{ needs.verify-provenance.outputs.elixir }}
+          EXPECTED_OTP: ${{ needs.verify-provenance.outputs.otp }}
         run: |
-          test -n "$HEX_API_KEY"
           test ! -e mix.exs
-          sha256sum --check "$RUNNER_TEMP/hex-publish.sha256"
-          mix run --no-mix-exs --no-start "$GITHUB_WORKSPACE/scripts/publish_hex_artifacts.exs" \
-            "$PACKAGE" "$VERSION" "$PACKAGE_ARCHIVE" "$DOCS_ARCHIVE"
+          elixir_version="$(elixir -e 'IO.write(System.version() <> "-otp-" <> System.build_info()[:otp_release])')"
+          otp_version="$(erl -noshell -noinput -eval '{ok, V} = file:read_file(filename:join([code:root_dir(), "releases", erlang:system_info(otp_release), "OTP_VERSION"])), io:put_chars(string:trim(V)), halt().')"
+          test "$elixir_version" = "$EXPECTED_ELIXIR"
+          test "$otp_version" = "$EXPECTED_OTP"
+      - name: Install the Hex client pinned by the release action
+        working-directory: ${{ runner.temp }}
+        run: |
+          version="$(curl -fsSL 'https://raw.githubusercontent.com/baselabs/.github/3bfbb84692a65b4d2c03dc3b7932353026fe6943/.github/actions/hex-publish/hex-version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test ! -e mix.exs
+          mix local.hex "$version" --force
+      - name: Upload qualified Hex archives
+        id: upload
+        uses: baselabs/.github/.github/actions/hex-publish@3bfbb84692a65b4d2c03dc3b7932353026fe6943
+        with:
+          operation: upload
+          package: bounded_authority_report_adapter
+          package-directory: .
+          release-commit: ${{ inputs.release_commit }}
+          qualification-run: ${{ needs.verify-provenance.outputs.qualification-run }}
+          organization-read-key: ${{ secrets.HEX_ORG_KEY_PUBLISH_API_READ }}
 
-      - name: Read back both uploads and refuse a held or differing release
+  read-back:
+    if: contains(fromJSON('["corepay","palermo-git"]'), github.actor) && contains(fromJSON('["corepay","palermo-git"]'), github.triggering_actor)
+    needs: [verify-provenance, upload]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10 # No green run yet.
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up BEAM
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          version-type: strict
+          elixir-version: ${{ needs.verify-provenance.outputs.elixir }}
+          otp-version: ${{ needs.verify-provenance.outputs.otp }}
+          install-hex: false
+          install-rebar: false
+      - name: Refuse BEAM runtime drift
+        working-directory: ${{ runner.temp }}
         env:
-          PUBLICATION_HELD: ${{ steps.upload.outputs.held }}
-          SERVED_DOCS_ARCHIVE: artifacts/bounded_authority_report_adapter-${{ env.VERSION }}-docs.tar.gz
-        run: python3 scripts/check_hex_release.py read-back
-
-      # After read-back: the served docs archive names the published commit infra tags.
+          EXPECTED_ELIXIR: ${{ needs.verify-provenance.outputs.elixir }}
+          EXPECTED_OTP: ${{ needs.verify-provenance.outputs.otp }}
+        run: |
+          test ! -e mix.exs
+          elixir_version="$(elixir -e 'IO.write(System.version() <> "-otp-" <> System.build_info()[:otp_release])')"
+          otp_version="$(erl -noshell -noinput -eval '{ok, V} = file:read_file(filename:join([code:root_dir(), "releases", erlang:system_info(otp_release), "OTP_VERSION"])), io:put_chars(string:trim(V)), halt().')"
+          test "$elixir_version" = "$EXPECTED_ELIXIR"
+          test "$otp_version" = "$EXPECTED_OTP"
+      - name: Install the Hex client pinned by the release action
+        working-directory: ${{ runner.temp }}
+        run: |
+          version="$(curl -fsSL 'https://raw.githubusercontent.com/baselabs/.github/3bfbb84692a65b4d2c03dc3b7932353026fe6943/.github/actions/hex-publish/hex-version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test ! -e mix.exs
+          mix local.hex "$version" --force
+      - name: Verify served Hex archives
+        id: served
+        uses: baselabs/.github/.github/actions/hex-publish@3bfbb84692a65b4d2c03dc3b7932353026fe6943
+        with:
+          operation: read-back
+          package: bounded_authority_report_adapter
+          package-directory: .
+          release-commit: ${{ inputs.release_commit }}
+          qualification-run: ${{ needs.upload.outputs.qualification-run }}
+          qualification-sha256: ${{ needs.upload.outputs.qualification-sha256 }}
+          release-assets-directory: ${{ runner.temp }}/release-assets
+      - name: Download package attestation evidence
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bounded-authority-report-adapter-${{ steps.served.outputs.commit }}
+          path: ${{ runner.temp }}/qualification-evidence
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.upload.outputs.qualification-run }}
+          digest-mismatch: error
+      - name: Match the served release to qualification evidence
+        env:
+          VERSION: ${{ needs.upload.outputs.version }}
+          ATTESTED_SHA256: ${{ needs.verify-provenance.outputs.package-sha256 }}
+          UPLOADED_SHA256: ${{ needs.upload.outputs.package-sha256 }}
+        run: |
+          [[ "$ATTESTED_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$ATTESTED_SHA256" = "$UPLOADED_SHA256"
+          assets="$RUNNER_TEMP/release-assets"
+          evidence="$RUNNER_TEMP/qualification-evidence"
+          cmp "$assets/bounded_authority_report_adapter-$VERSION.tar" "$evidence/bounded_authority_report_adapter-$VERSION.tar"
+          (cd "$evidence" && sha256sum --check SHA256SUMS)
+          (
+            cd "$assets"
+            sha256sum --check SHA256SUMS
+            printf '%s  %s\n' "$ATTESTED_SHA256" "bounded_authority_report_adapter-$VERSION.tar" | sha256sum --check
+            cp "$evidence"/release.cdx.json .
+          )
       - name: Upload the consumer release files
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-assets
-          path: |
-            artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar
-            artifacts/bounded_authority_report_adapter-${{ env.VERSION }}-docs.tar.gz
-            artifacts/SHA256SUMS
-            artifacts/release.cdx.json
+          path: ${{ runner.temp }}/release-assets/
           if-no-files-found: error
           retention-days: 7
-
-      - name: Remove publication scratch
+      - name: Remove publication downloads
         if: always()
-        run: |
-          rm -rf "$RUNNER_TEMP/qualification-evidence"
-          rm -f "$RUNNER_TEMP/qualification-evidence.zip" "$RUNNER_TEMP/hex-publish.sha256" \
-            "$RUNNER_TEMP/hex-docs.tar.gz"
+        run: rm -rf -- "$RUNNER_TEMP/release-assets" "$RUNNER_TEMP/qualification-evidence"
 
-  # Qualification never installs this package from Hex: a version commit names a version Hex
-  # does not serve yet. The published release is checked here, after the upload, in a job with
-  # no environment and no secrets, so project and dependency code never share the keyed job.
   published-livebooks:
-    needs: publish
+    needs: read-back
     if: contains(fromJSON('["corepay","palermo-git"]'), github.actor) && contains(fromJSON('["corepay","palermo-git"]'), github.triggering_actor)
     runs-on: ubuntu-24.04
     timeout-minutes: 5 # 5-minute floor; green 1.0 min, run 44619032017.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.release_commit }}
           persist-credentials: false
 
       - uses: ./.github/actions/setup-beam
@@ -237,7 +293,7 @@ jobs:
             if curl -fsSIo /dev/null "$tarball"; then exit 0; fi
             sleep 10
           done
-          echo "::error::Hex did not serve ${tarball} within two minutes of publication"
+          echo "::error::Hex did not serve ${tarball} within two minutes of read-back"
           exit 1
 
       - name: Execute every notebook unchanged against the published release

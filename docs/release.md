@@ -52,54 +52,45 @@ Run each and keep its output.
    the maintainer-controlled landing process. A `kci/**` push runs the complete
    qualification suite; `qualified` must be green before `master` moves to that exact
    commit. Contributors prepare commits; maintainers own landing and publication.
-3. **Publication authorization.** The release maintainer obtains publication authorization for dispatching
-   `publish.yml` from `master`, with no inputs, in environment `publish`. Only accounts allowlisted in the workflow may be
-   both the actor and triggering actor. The workflow refuses any other ref, installs
-   the exact toolchain and pinned Hex client, fetches with `mix deps.get --check-locked`,
-   and refuses an existing version tag or a retired Hex release. It relies on the default-branch
-   ruleset for qualification and does not rerun CI.
+3. **Publication authorization.** The release maintainer obtains authorization to dispatch
+   `publish.yml` from `master`, with `release_commit` set to the full qualified SHA.
+   Both the actor and the triggering actor must be allowlisted. The upload job alone uses
+   the `publish` environment and can exchange a package-scoped workload token.
 4. **Supply-chain attestation of `SHA`.** The same `kci/**` qualification run builds and
-   inspects the exact package archive, records its checksum, generates its release SBOM,
-   and calls `supply-chain.yml` after the gates pass. Only the reusable attestation job
-   holds signing permissions; it runs no project code. `qualified` needs both jobs.
-5. **The inspected archive is the published archive.** `publish.yml` builds HTML docs
-   with warnings as errors and fixed tar/gzip metadata, builds and inspects the Hex package,
-   and verifies its qualification attestation with the signer workflow and source digest.
-   It collects the qualification checksum and SBOM alongside the matching archive.
-   The upload step verifies both archive checksums and uploads only missing bytes through
-   the Hex APIs. `HEX_API_KEY` exists only in that step's environment, in a directory with
-   no `mix.exs`; project and dependency code do not run in the process holding it.
-   A held response is incomplete. After approval on Hex, dispatch again from `master`: an
-   identical existing package is left in place, missing uploads are completed, and a differing
-   package or a retired version is refused. Docs are a rendering of the package and an ExDoc
-   build is not byte-stable, so docs are never compared by bytes: the docs archive carries
-   `release.json` naming the package, version and commit that built it, and served docs must
-   name this package and version and the dispatched commit or its ancestor on `master`. That
-   commit is the published commit. The workflow never replaces a package or served docs, and
-   succeeds only after an unkeyed read-back proves the package matches and the docs are served.
-   Read-back saves the served docs archive in the `release-assets` bundle. A separate job,
-   `published-livebooks`, then runs every notebook unchanged against the release. It
-   has no environment and no key; qualification never installs this package from Hex,
-   because a version commit names a release Hex does not serve yet.
+   inspects the exact package and HTML docs archives. It records the package checksum,
+   generates the release SBOM, and calls `supply-chain.yml` after the gates pass.
+   Only the reusable attestation job holds signing permissions. `qualified` needs both jobs.
+5. **The qualified archives are published.** Publication verifies the package attestation
+   against the signer workflow and source digest before upload. The shared Hex action checks
+   qualification, the archive files and checksums, the stamped changelog, and registry state
+   before it exchanges a short-lived workload token. It refuses an existing version tag,
+   a retired release, or differing registry bytes. A held response is incomplete. After
+   approval on Hex, dispatch the same commit with `qualification_run` set to the original
+   CI run ID. The action preserves matching uploads and completes missing archives.
+   Public read-back requires both served archives to match the qualified bytes and the docs'
+   `release.json` to name `SHA`. It prepares `release-assets` with the archives, checksums and
+   release SBOM. The separate `published-livebooks` job then runs every notebook unchanged
+   against that release.
 
 ## 3. Publish and tag
 
 6. After the gates above, the authorized release operator dispatches `publish.yml` and reads the run to
    completion. The workflow creates no tag or GitHub release. Hex's one-hour revert window starts at publication.
 7. After the read-back, the release operator compares the publication's archive with the
-   registry, creates `vX.Y.Z` on the published commit that the served docs' `release.json`
-   names, and creates the GitHub release
-   with the archive, `SHA256SUMS` and `release.cdx.json`. Consumers obtain all three files
+   registry, creates `baselabs_bounded_authority_report_adapter-vX.Y.Z` on the commit named in the
+   served docs' `release.json`, and creates the GitHub release with both archives,
+   `SHA256SUMS` and `release.cdx.json`. Consumers obtain those files
    from that GitHub release. No workflow runs on a tag or creates a GitHub release.
 
 ## 4. Read-back, within the hour
 
-8. Download the archive, checksum and SBOM from this repository's GitHub release `vX.Y.Z`.
+8. Download the package and docs archives, checksums and SBOM from the GitHub release.
    The registry checksum must equal the attested archive digest:
 
    ```sh
-   gh release download vX.Y.Z --repo baselabs/bounded_authority_report_adapter \
-     --pattern '*.tar' --pattern SHA256SUMS --pattern '*.cdx.json'
+   gh release download baselabs_bounded_authority_report_adapter-vX.Y.Z \
+     --repo baselabs/bounded_authority_report_adapter \
+     --pattern '*.tar' --pattern '*-docs.tar.gz' --pattern SHA256SUMS --pattern '*.cdx.json'
    sha256sum --check SHA256SUMS
    gh attestation verify bounded_authority_report_adapter-X.Y.Z.tar \
      --repo baselabs/bounded_authority_report_adapter \

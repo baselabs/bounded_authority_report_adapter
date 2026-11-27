@@ -180,9 +180,12 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
   end
 
   defp docs do
+    source_ref = System.get_env("HEX_DOCS_SOURCE_REF")
+
     [
       main: "readme",
-      source_ref: "v#{@version}",
+      source_ref: source_ref || "v#{@version}",
+      formatters: if(source_ref, do: ["html"]),
       source_url: @source_url,
       assets: %{"examples/files" => "files"},
       # CI builds the docs under MIX_ENV=test, which also compiles test/support/; only the

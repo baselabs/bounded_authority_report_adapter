@@ -5,128 +5,230 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
   defp uses?(step, action), do: String.starts_with?(step["uses"] || "", action)
   defp unabridged(term), do: inspect(term, limit: :infinity, printable_limit: :infinity)
 
-  test "only the isolated upload holds the registry key, between inspection and read-back" do
-    workflow = read(".github/workflows/publish.yml")
-    job = workflow["jobs"]["publish"]
-    steps = job["steps"]
-    assert workflow["on"] == %{"workflow_dispatch" => nil}
-    assert workflow["permissions"] == %{"contents" => "read"}
-    assert job["environment"] == "publish"
-    assert job["timeout-minutes"] == 5
-    assert hd(steps)["name"] == "Require the default branch"
-    assert hd(steps)["run"] =~ ~s("refs/heads/$DEFAULT_BRANCH")
+  @package "bounded_authority_report_adapter"
+  @hex_action "baselabs/.github/.github/actions/hex-publish@3bfbb84692a65b4d2c03dc3b7932353026fe6943"
 
-    assert job["if"] ==
+  test "only the upload in the publish environment can exchange a Hex write token" do
+    workflow = read(".github/workflows/publish.yml")
+    jobs = workflow["jobs"]
+    upload = jobs["upload"]
+    dispatch = workflow["on"]["workflow_dispatch"]
+    assert Map.keys(workflow["on"]) == ["workflow_dispatch"]
+    assert dispatch["inputs"]["release_commit"]["required"] == true
+    assert dispatch["inputs"]["release_commit"]["type"] == "string"
+    assert dispatch["inputs"]["qualification_run"]["required"] == false
+    assert workflow["permissions"] == %{"contents" => "read"}
+    refute Map.has_key?(workflow, "env")
+    assert upload["needs"] == "verify-provenance"
+    assert upload["environment"] == "publish"
+
+    assert upload["permissions"] == %{
+             "contents" => "read",
+             "actions" => "read",
+             "id-token" => "write"
+           }
+
+    assert upload["if"] ==
              ~s|contains(fromJSON('["corepay","palermo-git"]'), github.actor) && contains(fromJSON('["corepay","palermo-git"]'), github.triggering_actor)|
 
-    notebooks = workflow["jobs"]["published-livebooks"]
-    assert notebooks["needs"] == "publish"
-    assert notebooks["timeout-minutes"] == 5
-    assert notebooks["if"] == job["if"]
-    refute Map.has_key?(notebooks, "environment")
-    refute unabridged(notebooks) =~ "secrets."
-    [upload] = Enum.filter(steps, &Map.has_key?(&1["env"] || %{}, "HEX_API_KEY"))
-    assert upload["env"] == %{"HEX_API_KEY" => "${{ secrets.HEX_API_KEY }}"}
-    assert upload["id"] == "upload"
-    assert upload["working-directory"] == "${{ runner.temp }}"
-    assert upload["run"] =~ "test ! -e mix.exs"
-    assert upload["run"] =~ "sha256sum --check"
+    for {name, job} <- jobs do
+      assert job["if"] == upload["if"]
+      refute Map.has_key?(job, "env")
 
-    assert upload["run"] =~
-             ~s(mix run --no-mix-exs --no-start "$GITHUB_WORKSPACE/scripts/publish_hex_artifacts.exs")
-
-    assert upload["run"] =~ ~s("$PACKAGE" "$VERSION" "$PACKAGE_ARCHIVE" "$DOCS_ARCHIVE")
-    refute upload["run"] =~ "mix hex.publish"
-    without_upload = put_in(workflow, ["jobs", "publish", "steps"], steps -- [upload])
-    refute unabridged(without_upload) =~ "HEX_API_KEY"
-
-    for path <- Path.wildcard(".github/workflows/*.yml") -- [".github/workflows/publish.yml"] do
-      refute File.read!(path) =~ "HEX_API_KEY"
+      if name != "upload" do
+        refute Map.has_key?(job, "environment")
+        refute (job["permissions"] || %{})["id-token"] == "write"
+        refute unabridged(job) =~ "secrets."
+      end
     end
 
-    commands = Enum.map(steps, &(&1["run"] || ""))
-    name = Enum.find_index(commands, &(&1 == "python3 scripts/check_hex_release.py name"))
-    deps = Enum.find_index(commands, &(&1 == "mix deps.get --check-locked"))
-    docs = Enum.find_index(commands, &String.contains?(&1, "mix docs --warnings-as-errors"))
-    build = Enum.find_index(commands, &String.starts_with?(&1, "mix hex.build --output"))
+    for job <- [jobs["verify-provenance"], upload] do
+      [refusal | _] = job["steps"]
+      refute Map.has_key?(refusal, "uses")
+      refute Map.has_key?(refusal, "if")
+      sha = String.duplicate("a", 40)
 
-    check =
-      Enum.find_index(
-        commands,
-        &String.starts_with?(&1, "mix run --no-start scripts/check_package.exs")
-      )
+      for {ref, commit, accepted?} <- [
+            {"refs/heads/master", sha, true},
+            {"refs/heads/kci/candidate", sha, false},
+            {"refs/tags/v1.0.0", sha, false},
+            {"refs/heads/master", String.upcase(sha), false},
+            {"refs/heads/master", "deadbeef", false}
+          ] do
+        {_, status} =
+          System.cmd("bash", ["-e", "-c", refusal["run"]],
+            env: [{"DEFAULT_BRANCH", "master"}, {"GITHUB_REF", ref}, {"RELEASE_COMMIT", commit}]
+          )
 
-    verify = Enum.find_index(commands, &String.contains?(&1, "gh attestation verify"))
-    prepare = Enum.find_index(commands, &String.contains?(&1, "check_hex_release.py prepare"))
-    keyed = Enum.find_index(steps, &(&1 == upload))
+        assert {ref, commit, status == 0} == {ref, commit, accepted?}
+      end
+    end
 
-    read_back =
-      Enum.find_index(commands, &(&1 == "python3 scripts/check_hex_release.py read-back"))
+    step = hex_step(upload)
+    assert step["id"] == "upload"
 
-    assert Enum.all?(
-             [name, deps, docs, build, check, verify, prepare, keyed, read_back],
-             &is_integer/1
+    assert step["with"] == %{
+             "operation" => "upload",
+             "package" => @package,
+             "package-directory" => ".",
+             "release-commit" => "${{ inputs.release_commit }}",
+             "qualification-run" => "${{ needs.verify-provenance.outputs.qualification-run }}",
+             "organization-read-key" => "${{ secrets.HEX_ORG_KEY_PUBLISH_API_READ }}"
+           }
+
+    assert List.last(upload["steps"]) == step
+    without_upload = put_in(jobs, ["upload", "steps"], upload["steps"] -- [step])
+    refute unabridged(without_upload) =~ "secrets."
+    refute Enum.any?(upload["steps"], &String.starts_with?(&1["uses"] || "", "./"))
+
+    for step <- upload["steps"], command = step["run"] || "" do
+      refute command =~ "scripts/"
+      refute command =~ ~r/mix (?:run|compile|deps|docs|hex\.build)/
+    end
+
+    for path <- Path.wildcard(".github/workflows/*.yml") do
+      refute File.read!(path) =~ "HEX_API_KEY"
+    end
+  end
+
+  test "qualification checks and attests the exact archive that can be uploaded" do
+    package = read(".github/workflows/ci.yml")["jobs"]["package"]
+    step = hex_step(package)
+
+    assert step["with"] == %{
+             "operation" => "qualify",
+             "package" => @package,
+             "package-directory" => "."
+           }
+
+    assert step["env"]["HEX_DOCS_SOURCE_REF"] == "${{ github.sha }}"
+    refute Map.has_key?(package, "environment")
+    refute (package["permissions"] || %{})["id-token"] == "write"
+
+    assert Enum.any?(
+             package["steps"],
+             &String.contains?(&1["run"] || "", "hex-publish/hex-version")
            )
 
-    assert name < deps and deps < docs
-    assert Enum.at(steps, name)["env"] == %{"PACKAGE" => "bounded_authority_report_adapter"}
-    assert docs < build and build < check and check < verify and verify < prepare
-    assert prepare < keyed and keyed < read_back
+    [download] = Enum.filter(package["steps"], &uses?(&1, "actions/download-artifact@"))
+    assert download["with"]["name"] == "hex-hexpm-#{@package}"
+    assert download["with"]["digest-mismatch"] == "error"
 
-    assert Enum.at(steps, read_back)["env"]["PUBLICATION_HELD"] ==
-             "${{ steps.upload.outputs.held }}"
+    [extract] = Enum.filter(package["steps"], &(&1["id"] == "archive"))
+    assert extract["run"] =~ ~s("$RUNNER_TEMP/qualified-hex/package.tar")
 
-    assert Enum.at(commands, docs) =~ "--formatter html"
-    assert Enum.at(commands, docs) =~ "--sort=name --mtime="
-    assert Enum.at(commands, docs) =~ "gzip -n"
+    check = Enum.find(package["steps"], &String.contains?(&1["run"] || "", "check_package.exs"))
+    assert check["run"] =~ "artifacts/#{@package}-$VERSION.tar"
 
-    # The docs archive names the package, version and commit that built it, before it is packed.
-    docs_command = Enum.at(commands, docs)
-    assert docs_command =~ ~s("$PACKAGE" "$VERSION" "$GITHUB_SHA" > doc/release.json)
-    [before_pack, _] = String.split(docs_command, "tar -C doc", parts: 2)
-    assert before_pack =~ "doc/release.json"
-    assert Enum.at(commands, check) =~ ~s("$PACKAGE_ARCHIVE")
-    assert Enum.at(commands, prepare) =~ ~s(sha256sum "$PACKAGE_ARCHIVE" "$DOCS_ARCHIVE")
+    indexes =
+      Enum.map([step, download, extract, check], fn expected ->
+        Enum.find_index(package["steps"], &(&1 == expected))
+      end)
 
-    verifier = Enum.at(steps, verify)
-    assert verifier["env"] == %{"GH_TOKEN" => "${{ github.token }}"}
-    assert verifier["run"] =~ "--signer-workflow"
-    assert verifier["run"] =~ "--source-digest"
-    assert verifier["run"] =~ "--deny-self-hosted-runners"
-    assert verifier["run"] =~ "cmp"
-    assert verifier["run"] =~ "qualification-evidence/release.cdx.json"
-    assert Enum.all?(Map.values(job["permissions"]), &(&1 == "read"))
-    refute Enum.any?(steps, &uses?(&1, "actions/attest@"))
+    assert indexes == Enum.sort(indexes)
+    refute Enum.any?(package["steps"], &String.contains?(&1["run"] || "", "mix hex.build"))
+
+    declared = ".github/hex-packages.json" |> File.read!() |> :json.decode()
+    assert Map.keys(declared) == [@package]
+    assert %{"app" => @package, "directory" => ".", "files" => files} = declared[@package]
+    assert files == Enum.sort(Enum.uniq(files))
+    assert Enum.all?(["CHANGELOG.md", "mix.exs", "lib/#{@package}.ex"], &(&1 in files))
+  end
+
+  test "upload uses the same run whose archive was verified before publication" do
+    jobs = read(".github/workflows/publish.yml")["jobs"]
+    verify = jobs["verify-provenance"]
+    steps = verify["steps"]
+    lookup = Enum.find(steps, &(&1["id"] == "qualification"))
+    assert lookup["run"] =~ "git merge-base --is-ancestor"
+    assert lookup["run"] =~ "actions/workflows/ci.yml/runs?head_sha="
+    assert lookup["run"] =~ ~s|.head_branch == ("kci/" + $sha)|
+
+    assert Enum.map(
+             Enum.filter(steps, &uses?(&1, "actions/download-artifact@")),
+             & &1["with"]["name"]
+           ) == [
+             "hex-hexpm-#{@package}",
+             "bounded-authority-report-adapter-${{ inputs.release_commit }}"
+           ]
+
+    for step <- Enum.filter(steps, &uses?(&1, "actions/download-artifact@")) do
+      assert step["with"]["run-id"] == "${{ steps.qualification.outputs.run }}"
+      assert step["with"]["digest-mismatch"] == "error"
+    end
+
+    proof = Enum.find(steps, &(&1["id"] == "provenance"))
+    assert proof["run"] =~ ~s(git tag --list "v$VERSION" "$VERSION")
+    assert proof["run"] =~ ~s(cmp "$archive" "$evidence/#{@package}-$VERSION.tar")
+    assert proof["run"] =~ "gh attestation verify"
+    assert proof["run"] =~ ".github/workflows/supply-chain.yml"
+    assert proof["run"] =~ ~s(--source-digest "$RELEASE_COMMIT" --deny-self-hosted-runners)
+    assert verify["outputs"]["qualification-run"] == "${{ steps.qualification.outputs.run }}"
+    assert verify["outputs"]["package-sha256"] == "${{ steps.provenance.outputs.package-sha256 }}"
     assert List.last(steps)["if"] == "always()"
   end
 
-  test "consumer files leave publication in exactly one release-assets bundle" do
-    publish = read(".github/workflows/publish.yml")["jobs"]["publish"]
-    [assets] = Enum.filter(publish["steps"], &uses?(&1, "actions/upload-artifact@"))
-    assert assets["with"]["name"] == "release-assets"
-    assert assets["with"]["if-no-files-found"] == "error"
+  test "consumer files leave the read-back job in exactly one release-assets bundle" do
+    jobs = read(".github/workflows/publish.yml")["jobs"]
+    read_back = jobs["read-back"]
+    assert read_back["needs"] == ["verify-provenance", "upload"]
+    assert read_back["permissions"] == %{"contents" => "read", "actions" => "read"}
+    step = hex_step(read_back)
+    assert step["id"] == "served"
 
-    assert String.split(assets["with"]["path"], "\n", trim: true) == [
-             "artifacts/bounded_authority_report_adapter-${{ env.VERSION }}.tar",
-             "artifacts/bounded_authority_report_adapter-${{ env.VERSION }}-docs.tar.gz",
-             "artifacts/SHA256SUMS",
-             "artifacts/release.cdx.json"
-           ]
+    assert step["with"] == %{
+             "operation" => "read-back",
+             "package" => @package,
+             "package-directory" => ".",
+             "release-commit" => "${{ inputs.release_commit }}",
+             "qualification-run" => "${{ needs.upload.outputs.qualification-run }}",
+             "qualification-sha256" => "${{ needs.upload.outputs.qualification-sha256 }}",
+             "release-assets-directory" => "${{ runner.temp }}/release-assets"
+           }
 
-    # The bundle follows read-back, which saves the served docs that name the published commit
-    # and needs the default branch's history to place that commit.
-    steps = publish["steps"]
+    for name <- ["verify-provenance", "upload", "read-back"] do
+      [checkout] = Enum.filter(jobs[name]["steps"], &uses?(&1, "actions/checkout@"))
+      assert checkout["with"]["fetch-depth"] == 0
+      assert checkout["with"]["persist-credentials"] == false
+      assert checkout["with"]["ref"] == "${{ inputs.release_commit }}"
+    end
 
-    read_back =
-      Enum.find_index(steps, &(&1["run"] == "python3 scripts/check_hex_release.py read-back"))
+    steps = read_back["steps"]
+    [download] = Enum.filter(steps, &uses?(&1, "actions/download-artifact@"))
 
-    assert Enum.find_index(steps, &(&1 == assets)) > read_back
+    assert download["with"]["name"] ==
+             "bounded-authority-report-adapter-${{ steps.served.outputs.commit }}"
 
-    assert Enum.at(steps, read_back)["env"]["SERVED_DOCS_ARCHIVE"] ==
-             "artifacts/bounded_authority_report_adapter-${{ env.VERSION }}-docs.tar.gz"
+    assert download["with"]["run-id"] == "${{ needs.upload.outputs.qualification-run }}"
 
-    [checkout] = Enum.filter(steps, &uses?(&1, "actions/checkout@"))
-    assert checkout["with"]["fetch-depth"] == 0
+    compare = Enum.find(steps, &String.contains?(&1["run"] || "", "ATTESTED_SHA256"))
+
+    assert compare["env"]["ATTESTED_SHA256"] ==
+             "${{ needs.verify-provenance.outputs.package-sha256 }}"
+
+    assert compare["env"]["UPLOADED_SHA256"] == "${{ needs.upload.outputs.package-sha256 }}"
+    assert compare["run"] =~ ~s(test "$ATTESTED_SHA256" = "$UPLOADED_SHA256")
+    assert compare["run"] =~ "sha256sum --check SHA256SUMS"
+    assert compare["run"] =~ "release.cdx.json"
+
+    assert [assets] =
+             for(
+               {_name, job} <- jobs,
+               step <- job["steps"],
+               uses?(step, "actions/upload-artifact@"),
+               do: step
+             )
+
+    assert assets["with"] == %{
+             "name" => "release-assets",
+             "path" => "${{ runner.temp }}/release-assets/",
+             "if-no-files-found" => "error",
+             "retention-days" => 7
+           }
+
+    assert Enum.find_index(steps, &(&1 == step)) < Enum.find_index(steps, &(&1 == compare))
+    assert Enum.find_index(steps, &(&1 == compare)) < Enum.find_index(steps, &(&1 == assets))
+    assert List.last(steps)["if"] == "always()"
 
     for path <- Path.wildcard(".github/workflows/*.yml") do
       source = File.read!(path)
@@ -146,64 +248,10 @@ defmodule BoundedAuthorityReportAdapter.PublicationConfigurationTest do
     end
   end
 
-  test "resumption compares the package bytes, places served docs on the default branch, and refuses retirement" do
-    source = File.read!("scripts/check_hex_release.py")
-
-    for required <- [
-          "if release.get(\"retirement\") is not None:",
-          "checksum.lower() != expected",
-          "if served != expected:",
-          "https://repo.hex.pm/tarballs/{package}-{version}.tar",
-          "https://repo.hex.pm/docs/{package}-{version}.tar.gz",
-          "docs, published = served_docs(",
-          "tarfile.open(fileobj=io.BytesIO(served), mode=\"r:gz\")",
-          "if \"index.html\" not in members:",
-          "if \"release.json\" not in members or not members[\"release.json\"].isfile():",
-          "head = os.environ[\"GITHUB_SHA\"]",
-          "set(built) != {\"package\", \"version\", \"commit\"}",
-          "[\"git\", \"merge-base\", \"--is-ancestor\", commit, head]",
-          "if not descends(head, commit):",
-          "Path(os.environ[\"SERVED_DOCS_ARCHIVE\"]).write_bytes(docs)",
-          "PUBLISH_PACKAGE={str(not package_served).lower()}",
-          "PUBLISH_DOCS={str(not docs_served).lower()}",
-          "if held or not (release is not None and package_served and docs_served):",
-          "Publication is held or not yet served",
-          "dispatch publish.yml again from the default branch"
-        ] do
-      assert source =~ required
-      mutated = String.replace(source, required, "", global: false)
-      refute mutated == source
-      refute mutated =~ required
-    end
-
-    # An ExDoc build is not byte-stable: docs are read back as present, never compared by bytes.
-    [_, docs_check] = String.split(source, "docs, published = served_docs(", parts: 2)
-    [docs_check, _] = String.split(docs_check, ")", parts: 2)
-    refute docs_check =~ "DOCS_ARCHIVE"
-    refute source =~ ~r/compare\(\s*f"https:\/\/repo\.hex\.pm\/docs\//
-
-    upload = File.read!("scripts/publish_hex_artifacts.exs")
-    assert upload =~ "def main([name, version, archive, docs])"
-    assert upload =~ "if Mix.Project.get(), do: raise("
-    assert upload =~ "exists!(Hex.API.Package.get_anonymous(nil, name), name)"
-    assert upload =~ ~S(#{name} is not on Hex; first publication is the owner's decision)
-    assert upload =~ ~S(could not confirm #{name} exists on Hex; publication refused)
-    [before_upload, _] = String.split(upload, "Hex.API.Release.publish(", parts: 2)
-    assert before_upload =~ "package_bytes = File.read!(archive)"
-    assert before_upload =~ "docs_bytes = File.read!(docs)"
-    assert upload =~ "Hex.API.Release.publish("
-    assert upload =~ "Hex.API.ReleaseDocs.publish("
-    assert upload =~ "replace: false"
-    refute upload =~ "replace: true"
-    assert upload =~ ~S|System.fetch_env!("PUBLISH_PACKAGE") == "true"|
-    assert upload =~ ~S|System.fetch_env!("PUBLISH_DOCS") == "true"|
-    assert upload =~ ~s(state in ["staged", "held", "pending"])
-    assert upload =~ "status == 202"
-    assert upload =~ "held for approval on Hex; publication is incomplete"
-    refute upload =~ "Mix.Project.config"
-    refute upload =~ "Mix.Task"
-    refute upload =~ "Hex.API.Release.get("
-    refute upload =~ "do not redispatch"
+  defp hex_step(job) do
+    assert [step] = Enum.filter(job["steps"], &uses?(&1, @hex_action))
+    assert step["uses"] == @hex_action
+    step
   end
 
   test "qualification gates its reusable attestation and never writes caches" do
