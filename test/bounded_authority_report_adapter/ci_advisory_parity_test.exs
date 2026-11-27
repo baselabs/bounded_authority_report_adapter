@@ -408,7 +408,8 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
       "otp-version" => "${{ inputs.otp-version || steps.versions.outputs.otp }}"
     }
 
-    assert install["with"] == Map.put(versions, "version-type", "strict")
+    assert install["with"] ==
+             Map.merge(versions, %{"version-type" => "strict", "install-hex" => false})
     assert check["working-directory"] == "${{ github.workspace }}"
     assert check["run"] == @installed_check
 

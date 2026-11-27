@@ -34,7 +34,7 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       ],
       deps: deps(),
       package: package(),
-      docs: docs(),
+      docs: qualified_docs(docs(), System.get_env("HEX_DOCS_SOURCE_REF")),
       name: "Bounded Authority Report Adapter",
       description:
         "Signer for the Bounded Authority Protocol: signs holder proofs, grants, boundary " <>
@@ -179,13 +179,16 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
     String.starts_with?(source, Path.join(__DIR__, "lib") <> "/")
   end
 
-  defp docs do
-    source_ref = System.get_env("HEX_DOCS_SOURCE_REF")
+  # Release qualification builds the HTML docs with source links to the qualified commit.
+  defp qualified_docs(docs, nil), do: docs
 
+  defp qualified_docs(docs, source_ref),
+    do: Keyword.merge(docs, source_ref: source_ref, formatters: ["html"])
+
+  defp docs do
     [
       main: "readme",
-      source_ref: source_ref || "v#{@version}",
-      formatters: if(source_ref, do: ["html"]),
+      source_ref: "v#{@version}",
       source_url: @source_url,
       assets: %{"examples/files" => "files"},
       # CI builds the docs under MIX_ENV=test, which also compiles test/support/; only the
