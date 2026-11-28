@@ -225,13 +225,19 @@ jobs:
         run: elixir scripts/check_livebooks.exs --local
 
   hex-qualification:
-    # Both Mix projects must resolve the same Hex release before qualification.
-    if: startsWith(needs.gate.outputs.protocol_identity, 'hex:') && needs.gate.outputs.protocol_identity == needs.example.outputs.protocol_identity
     name: Qualify Hex archives
     needs: [gate, example, livebooks-local]
     runs-on: ubuntu-24.04
     timeout-minutes: 15 # No green run yet for this job.
     steps:
+      # Both Mix projects must resolve the same Hex release; a mismatch fails qualification.
+      - name: Require both projects to resolve the same Hex protocol release
+        env:
+          LIBRARY_PROTOCOL: ${{ needs.gate.outputs.protocol_identity }}
+          EXAMPLE_PROTOCOL: ${{ needs.example.outputs.protocol_identity }}
+        run: |
+          [[ "$LIBRARY_PROTOCOL" == hex:* && "$LIBRARY_PROTOCOL" == "$EXAMPLE_PROTOCOL" ]]
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

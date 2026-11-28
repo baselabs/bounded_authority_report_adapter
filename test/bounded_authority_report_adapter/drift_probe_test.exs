@@ -14,10 +14,12 @@ defmodule BoundedAuthorityReportAdapter.DriftProbeTest do
     bin = Path.join(base, "bin")
 
     File.mkdir_p!(Path.join(repo, "scripts"))
+    File.mkdir_p!(Path.join(repo, "examples/edge_agent"))
     File.mkdir_p!(bin)
     File.cp!("scripts/check-bap-drift.sh", Path.join(repo, "scripts/check-bap-drift.sh"))
     File.cp!("mix.exs", Path.join(repo, "mix.exs"))
     File.cp!("mix.lock", Path.join(repo, "mix.lock"))
+    File.cp!("examples/edge_agent/mix.lock", Path.join(repo, "examples/edge_agent/mix.lock"))
     write_executable!(Path.join(bin, "git"), "#!/bin/sh\nexit 0\n")
 
     on_exit(fn -> File.rm_rf!(base) end)

@@ -73,9 +73,16 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     assert jobs["hex-qualification"]["needs"] == ~w(gate example livebooks-local)
     assert jobs["package"]["needs"] == "hex-qualification"
 
-    assert jobs["hex-qualification"]["if"] ==
-             "startsWith(needs.gate.outputs.protocol_identity, 'hex:') && " <>
-               "needs.gate.outputs.protocol_identity == needs.example.outputs.protocol_identity"
+    refute Map.has_key?(jobs["hex-qualification"], "if")
+
+    assert hd(jobs["hex-qualification"]["steps"]) == %{
+             "name" => "Require both projects to resolve the same Hex protocol release",
+             "env" => %{
+               "LIBRARY_PROTOCOL" => "${{ needs.gate.outputs.protocol_identity }}",
+               "EXAMPLE_PROTOCOL" => "${{ needs.example.outputs.protocol_identity }}"
+             },
+             "run" => ~s([[ "$LIBRARY_PROTOCOL" == hex:* && "$LIBRARY_PROTOCOL" == "$EXAMPLE_PROTOCOL" ]]\n)
+           }
   end
 
   test "mix ci boots through the env guard before any step" do
