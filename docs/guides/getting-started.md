@@ -8,7 +8,7 @@ the test suite runs them the same way.
 ## Install
 
 ```elixir
-{:bounded_authority_report_adapter, "~> 1.4"}
+{:bounded_authority_report_adapter, "~> 1.5"}
 ```
 
 Add that line to `deps/0` in `mix.exs` and run `mix deps.get`. The package supports Elixir

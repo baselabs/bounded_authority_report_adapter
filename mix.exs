@@ -1,7 +1,7 @@
 defmodule BoundedAuthorityReportAdapter.MixProject do
   use Mix.Project
 
-  @version "1.4.0"
+  @version "1.5.0"
   @protocol_release {:bounded_authority_protocol, "~> 1.5"}
   @source_url "https://github.com/baselabs/bounded_authority_report_adapter"
 

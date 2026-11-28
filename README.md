@@ -36,13 +36,13 @@ Add the package to `deps/0` in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:bounded_authority_report_adapter, "~> 1.4"}
+    {:bounded_authority_report_adapter, "~> 1.5"}
   ]
 end
 ```
 
-Requires Elixir 1.18, 1.19 or 1.20 on Erlang/OTP 27 through 29. The protocol package
-resolves with it.
+Requires Elixir 1.18, 1.19 or 1.20 on Erlang/OTP 27 through 29. Mix also resolves
+`bounded_authority_protocol` from Hex using `~> 1.5`.
 
 ## Quick start
 

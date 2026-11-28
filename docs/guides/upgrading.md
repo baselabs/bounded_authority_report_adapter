@@ -3,6 +3,19 @@
 Per-version notes, newest first. For the protocol package's own release notes, see its
 CHANGELOG; this page covers THIS library's releases.
 
+## 1.5.0
+
+Set the adapter dependency to `~> 1.5` and run
+`mix deps.update bounded_authority_report_adapter bounded_authority_protocol`. If your app
+also declares the protocol directly, make sure that requirement admits protocol 1.5.0 or
+a later 1.x release.
+
+Use `key_snapshot/1` on handles for either suite's `sign_action_approval/3` and for
+`BoundedAuthorityReportAdapter.V3.sign_content_assertion/3`. Return the key ID, public key
+and immutable signing reference in one call. Ed25519 action approval signing rejects a
+public key outside the prime-order subgroup as `{:error, :invalid_key_handle}` before
+calling `sign/2`. See the [key custody guide](key-custody.md) for the handle contract.
+
 ## 1.4.0
 
 Set the adapter dependency to `~> 1.4` and run `mix deps.update bounded_authority_report_adapter`.
