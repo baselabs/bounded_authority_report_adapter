@@ -1157,10 +1157,10 @@ defmodule BoundedAuthorityReportAdapter do
   qualify. Verify the returned bytes with
   `BoundedAuthorityProtocol.ActionApproval.V1.verify_eddsa/3`.
 
-  The handle supplies one immutable signing reference through `c:key_snapshot/1`. Pass
-  `:bounds` and `:record_bounds` to tighten ceilings. Resources must already be in strict
-  UTF-8 byte order unless `canonicalize_resources: true` explicitly requests sorting and
-  deduplication. The default options are empty.
+  The handle supplies one immutable signing reference and a torsion-free Ed25519 public key
+  through `c:key_snapshot/1`. Pass `:bounds` and `:record_bounds` to tighten ceilings.
+  Resources must already be in strict UTF-8 byte order unless `canonicalize_resources: true`
+  explicitly requests sorting and deduplication. The default options are empty.
 
   ```elixir
   alias BoundedAuthorityProtocol.ActionApproval.V1, as: Approval
@@ -1198,7 +1198,7 @@ defmodule BoundedAuthorityReportAdapter do
 
   defp sign_approval_content(assertion, key_handle, bounds) do
     with {:ok, {key, signing_handle}} <-
-           ContentSigner.snapshot(key_handle, &accept_key/1, &safe_callback/3) do
+           ContentSigner.snapshot(key_handle, &accept_approval_key/1, &safe_callback/3) do
       ContentSigner.produce(
         assertion,
         key,
@@ -1476,6 +1476,12 @@ defmodule BoundedAuthorityReportAdapter do
   # where P-256 point validation already applies.
   defp accept_key(public_key) do
     if BoundedAuthorityProtocol.Ed25519.acceptable_public_key?(public_key),
+      do: {:ok, public_key},
+      else: {:error, :invalid_key_handle}
+  end
+
+  defp accept_approval_key(public_key) do
+    if BoundedAuthorityProtocol.Ed25519.torsion_free?(public_key),
       do: {:ok, public_key},
       else: {:error, :invalid_key_handle}
   end

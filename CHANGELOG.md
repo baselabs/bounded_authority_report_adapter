@@ -4,6 +4,7 @@
 
 - Add ES256 content-assertion signing and action approval signing for Ed25519 and
   ES256. New entry points capture an immutable signing reference through `key_snapshot/1`.
+  Ed25519 action approval signing requires a torsion-free public key, as does approval verification.
 - Self-verify content assertions against the captured key with the selected protocol
   verifier before returning the compact.
 

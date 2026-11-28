@@ -5,6 +5,7 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
   alias BoundedAuthorityProtocol.Conformance.Cli
   alias BoundedAuthorityProtocol.ContentAssertion.ES256.V1, as: ES256
   alias BoundedAuthorityProtocol.ContentAssertion.V1, as: Ed25519
+  alias BoundedAuthorityProtocol.Ed25519, as: Ed25519Keys
   alias BoundedAuthorityProtocol.V1.HistoricalPublicKey
   alias BoundedAuthorityReportAdapter, as: Adapter
   alias BoundedAuthorityReportAdapter.TestKeys
@@ -321,6 +322,24 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
     end
   end
 
+  test "Ed25519 approval rejects a mixed-order snapshot before signing", %{eddsa: pid} do
+    public_key = Agent.get(pid, & &1.first.public)
+    mixed_order = add_order_two_point(public_key)
+
+    assert Ed25519Keys.acceptable_public_key?(mixed_order)
+    refute Ed25519Keys.torsion_free?(mixed_order)
+    assert_rejected_snapshot(Adapter, pid, mixed_order)
+  end
+
+  test "Ed25519 approval rejects a small-order snapshot before signing", %{eddsa: pid} do
+    identity = <<1, 0::248>>
+    assert_rejected_snapshot(Adapter, pid, identity)
+  end
+
+  test "ES256 approval rejects an off-curve snapshot before signing", %{es256: pid} do
+    assert_rejected_snapshot(Adapter.V3, pid, <<4, 0::512>>)
+  end
+
   test "invalid raw signatures produce the closed signing failure and custody telemetry", state do
     vector = approval_vector("es256-verified")
     assert {:ok, record} = Approval.decode_record(raw(vector["record"]))
@@ -518,6 +537,28 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
   defp key_pair(type, curve) do
     {public, private} = :crypto.generate_key(type, curve)
     %{public: public, private: private}
+  end
+
+  defp add_order_two_point(<<encoded::little-256>>) do
+    sign_bit = Bitwise.bsl(1, 255)
+    field_prime = sign_bit - 19
+    y = rem(encoded, sign_bit)
+    x_sign = div(encoded, sign_bit)
+
+    # Adding the order-two point (0, -1) maps (x, y) to (-x, -y) on Edwards25519.
+    mixed_order = field_prime - y + (1 - x_sign) * sign_bit
+    <<mixed_order::little-256>>
+  end
+
+  defp assert_rejected_snapshot(signer, pid, public_key) do
+    vector = approval_vector("eddsa-verified")
+    assert {:ok, record} = Approval.decode_record(raw(vector["record"]))
+    Agent.update(pid, fn state -> put_in(state.first.public, public_key) end)
+
+    assert {:error, :invalid_key_handle} =
+             signer.sign_action_approval(approval_input(record), handle(pid))
+
+    assert Agent.get(pid, &{&1.snapshots, &1.calls}) == {1, []}
   end
 
   defp handle(pid), do: {Custody, {pid, :current}}
