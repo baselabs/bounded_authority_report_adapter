@@ -59,8 +59,8 @@ replay reservation and revocation state.
 ## 5. Cryptographic posture
 
 The root module signs contract-major 1 using Ed25519. `BoundedAuthorityReportAdapter.V3`
-signs the four standard objects using P-256 and ES256 for contract-major 3. Local-loopback
-proofs and content assertions use their explicit Ed25519 profiles.
+signs contract-major 3 using P-256 and ES256. Content assertions and action approvals
+have explicit profiles for both suites. The local-loopback proof profile uses Ed25519.
 
 For each object, the protocol package produces the exact signing input. The adapter
 signs through the handle, checks the signature against the handle-resolved public key,
@@ -88,8 +88,8 @@ release automatically.
 
 ## 8. Following protocol releases
 
-`mix.exs` declares the supported protocol range; `mix.lock` records the release used by
-this checkout. The example app's parity test requires the same protocol lock. New protocol
-releases within the range are qualified by this repository's tests. Moving the floor or
-crossing a compatibility boundary also updates the range checks, both locks, examples
-and migration notes. Consumers choose when to adopt compatible releases.
+`mix.exs` declares the supported protocol range. The library and example app each lock
+the same Hex release. Qualification checks the installed protocol version and archive
+checksum in both projects. Moving the floor or crossing a compatibility
+boundary also updates the range checks, both locks, examples and migration notes.
+Consumers choose when to adopt compatible releases.

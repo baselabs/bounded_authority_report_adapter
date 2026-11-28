@@ -8,7 +8,7 @@ set -euo pipefail
 # test's clauses pin the range shape and the locked version). This probe
 # answers, READ-ONLY, the three questions every bump or audit session needs:
 #
-#   1. what BARA locks + requires          (this repo's mix.lock / mix.exs)
+#   1. what BARA locks + requires          (the library and example locks / mix.exs)
 #   2. what hex.pm publishes               (public API; skipped offline)
 #   3. how far the protocol's main has     (git ls-remote on the remote URL: no fetch,
 #      moved, and what lib/ says             no sibling .git writes, no tag clobber)
@@ -36,7 +36,13 @@ print_files() {
 }
 
 # --- 1. BARA's own declaration (the source of truth: never a restated version) ------
-locked="$(sed -nE "s/.*\"$APP\": [{]:hex, :$APP, \"([^\"]+)\".*/\1/p" "$REPO/mix.lock" | head -1)"
+lock_entry() {
+  sed -nE "/\"$APP\": [{]:hex, :$APP, /p" "$1"
+}
+
+library_entry="$(lock_entry "$REPO/mix.lock")"
+example_entry="$(lock_entry "$REPO/examples/edge_agent/mix.lock")"
+locked="$(sed -nE "s/.*:hex, :$APP, \"([^\"]+)\".*/\1/p" <<<"$library_entry")"
 requirement="$(sed -nE "s/.*[{:]$APP, \"([^\"]+)\".*/\1/p" "$REPO/mix.exs" | head -1)"
 
 if [ -z "$locked" ] || [ -z "$requirement" ]; then
@@ -45,6 +51,11 @@ if [ -z "$locked" ] || [ -z "$requirement" ]; then
 fi
 
 say "BARA:    locks $APP $locked (requirement $requirement)"
+if [ "$library_entry" = "$example_entry" ]; then
+  say "Example: matches the library's Hex lock entry"
+else
+  say "Example: Hex lock entry differs or is missing"
+fi
 
 # --- 2. hex.pm (public API; degrade offline) ------------------------------------------
 hex_status=0
@@ -106,20 +117,31 @@ if [ -z "$remote_refs" ]; then
 fi
 
 bap_main="$(printf '%s\n' "$remote_refs" | awk '$2 == "refs/heads/main" {print $1}')"
-locked_commit="$(
-  printf '%s\n' "$remote_refs" | awk -v t="refs/tags/v$locked^{}" '$2 == t {print $1}'
-)"
-# Lightweight-tag fallback (cross-vendor note): the peeled ^{} ref exists only
-# for annotated tags; for a lightweight tag the tag ref itself IS the commit.
-[ -z "$locked_commit" ] &&
-  locked_commit="$(printf '%s\n' "$remote_refs" | awk -v t="refs/tags/v$locked" '$2 == t {print $1}')"
+release_commit() {
+  # Prefer the current package-prefixed tag and accept legacy version tags.
+  # Annotated tags carry a peeled commit. Lightweight tags point at it directly.
+  printf '%s\n' "$remote_refs" |
+    awk -v current="refs/tags/baselabs_${APP}-v$1" -v legacy="refs/tags/v$1" '
+      $2 == current "^{}" {current_commit = $1}
+      $2 == current {current_tag = $1}
+      $2 == legacy "^{}" {legacy_commit = $1}
+      $2 == legacy {legacy_tag = $1}
+      END {
+        if (current_commit != "") print current_commit
+        else if (current_tag != "") print current_tag
+        else if (legacy_commit != "") print legacy_commit
+        else if (legacy_tag != "") print legacy_tag
+      }
+    '
+}
+locked_commit="$(release_commit "$locked")"
 
 if [ -n "$bap_main" ]; then
   say "BAP:     main ${bap_main:0:12}"
   if [ -n "$locked_commit" ]; then
-    say "         v$locked tag commit ${locked_commit:0:12}"
+    say "         release $locked tag commit ${locked_commit:0:12}"
   else
-    say "         v$locked tag commit unknown on the remote (peeled ref absent: is $locked a real release tag?)"
+    say "         release $locked tag commit unknown on the remote"
   fi
 fi
 
@@ -144,15 +166,7 @@ lib_span() {  # $1 $2 = shas; prints the lib/ file list between them (may be emp
 # Release verdict: is a newer hex release published, and what would crossing to it mean?
 if [ -n "$hex_latest" ] && [ "$hex_latest" != "?" ] && [ "$hex_latest" != "$locked" ]; then
   say "NEW HEX RELEASE: $locked -> $hex_latest is published."
-  newest_commit="$(
-    printf '%s\n' "$remote_refs" | awk -v t="refs/tags/v$hex_latest^{}" '$2 == t {print $1}'
-  )"
-  # Lightweight-tag fallback (same as the locked-version lookup above): the
-  # peeled ^{} ref exists only for annotated tags; v0.6.1 ships lightweight,
-  # and without this the release verdict read UNVERIFIED for a span both
-  # commits of which were locally diffable.
-  [ -z "$newest_commit" ] &&
-    newest_commit="$(printf '%s\n' "$remote_refs" | awk -v t="refs/tags/v$hex_latest" '$2 == t {print $1}')"
+  newest_commit="$(release_commit "$hex_latest")"
 
   if [ -n "$newest_commit" ] && [ -n "$locked_commit" ] && have_span "$locked_commit" "$newest_commit"; then
     lib_files="$(lib_span "$locked_commit" "$newest_commit")"
@@ -178,7 +192,9 @@ fi
 # eligibility question for the NEXT bump (cross-vendor note: the header
 # promised this and the script never computed it).
 if [ -n "$bap_main" ] && [ -n "$locked_commit" ]; then
-  if have_span "$locked_commit" "$bap_main"; then
+  if [ "$locked_commit" = "$bap_main" ]; then
+    say "MAIN DRIFT: main and the locked release point to the same commit."
+  elif have_span "$locked_commit" "$bap_main"; then
     main_lib="$(lib_span "$locked_commit" "$bap_main")"
 
     if [ -z "$main_lib" ]; then

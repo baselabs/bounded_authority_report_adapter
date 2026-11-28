@@ -108,7 +108,7 @@ defmodule BoundedAuthorityReportAdapter.ContentSignerParityTest do
     }
   end
 
-  test "candidate profile indexes and every indexed file match the immutable corpus" do
+  test "published profile indexes and every indexed file match the immutable corpus" do
     for {root, expected} <- @indexes do
       bytes = fixture_bytes(root, "index.json")
       assert sha256_hex(bytes) == expected, root

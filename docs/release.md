@@ -22,30 +22,27 @@ One commit on `master` carries:
   (`site/index.html`). The docs-currency and Livebook tests fail until these agree with
   `mix.exs`.
 
-When the release also moves the protocol range (for example, the 1.0.0 move from `~> 0.9.1` to `~> 1.0`), the same
-commit edits:
+Keep the following in step when changing the protocol range.
 
-- the requirement in `mix.exs`;
-- `@protocol_requirement`, `@protocol_floor` and `@protocol_ceiling` in
-  `test/bounded_authority_report_adapter/dependency_direction_test.exs` (every other probe
-  derives from them);
-- `mix.lock` and `examples/edge_agent/mix.lock`, resolved from Hex (`mix deps.update
-  bounded_authority_protocol` in both projects);
-- `@protocol_refuses_integral_float_selectors` in
-  `test/bounded_authority_report_adapter/selector_float_refusal_test.exs`, and any new
-  certified corpus in `test/bounded_authority_report_adapter/conformance_corpus_test.exs`
-  (both files mark the line);
-- the CHANGELOG line "The protocol dependency moves from `x` to `y`", which documents the dependency boundary.
+- The requirement in `mix.exs`.
+- The declared range and boundary probes in
+  `test/bounded_authority_report_adapter/dependency_direction_test.exs`.
+- The Hex locks in `mix.lock` and `examples/edge_agent/mix.lock`. Resolve them with
+  `mix deps.update bounded_authority_protocol` in both projects.
+- The dependency graph in [Strategy](strategy.md) and the package requirements in
+  `.github/hex-packages.json`.
+- The range change in the CHANGELOG and any corpus pins affected by the release.
 
 ## 2. Gates before publication
 
 Run each and keep its output.
 
-1. **The locked protocol is the attested protocol** (when the lock moved). The lock's outer
-   checksum must equal the registry's and the protocol release's attested `SHA256SUMS`:
+1. **The locked protocol is the attested protocol** (when the lock moved). Both projects
+   must have the same Hex lock entry. Its outer checksum must equal the registry's and the
+   protocol release's attested `SHA256SUMS`. Use these commands to compare the locks with Hex.
 
    ```sh
-   grep '"bounded_authority_protocol"' mix.lock
+   grep '"bounded_authority_protocol"' mix.lock examples/edge_agent/mix.lock
    curl -s https://hex.pm/api/packages/bounded_authority_protocol/releases/P.Q.R | jq -r .checksum
    ```
 

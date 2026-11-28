@@ -180,15 +180,9 @@ defmodule BoundedAuthorityReportAdapter.DocsCurrencyTest do
     assert strategy =~ "Breaking changes to its public API require a major release"
     refute strategy =~ "does not mean their APIs are 1.0-stable"
 
-    {release_app, release_requirement} = Mix.Project.config()[:protocol_release]
-
     for dep <- Mix.Project.config()[:deps] do
       {name, requirement, options} =
         case dep do
-          # The candidate pins the protocol by Git ref; the strategy names the staged release.
-          {^release_app, options} when is_list(options) ->
-            {release_app, release_requirement, options}
-
           {name, requirement} ->
             {name, requirement, []}
 

@@ -27,7 +27,6 @@ defmodule EdgeAgent.MixProject do
       # the CI example-job lanes move together in ONE commit.
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
-      lockfile: "mix.candidate.lock",
       deps: deps()
     ]
   end

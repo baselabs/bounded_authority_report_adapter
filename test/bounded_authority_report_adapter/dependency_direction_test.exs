@@ -1,9 +1,7 @@
 Code.require_file("../../scripts/protocol_dependency.exs", __DIR__)
 
 defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
-  # Mix.SCM.Git.lock_status/1 changes the VM-wide working directory while it reads the
-  # checkout, so this module runs after the async modules that read relative paths.
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias BoundedAuthorityReportAdapter.ProtocolDependency
   alias Mix.Dep.Lock
@@ -26,8 +24,8 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   @authority_family ~r/\bBounded[A-Z][A-Za-z0-9_]*\b/
   @public_namespaces ~w(BoundedAuthorityProtocol BoundedAuthorityReportAdapter)
 
-  test "the staged release requirement starts at 1.5 and stays within major 1" do
-    assert {@protocol, @release} == Mix.Project.config()[:protocol_release]
+  test "the protocol requirement starts at 1.5 and stays within major 1" do
+    assert List.keyfind(Mix.Project.config()[:deps], @protocol, 0) == {@protocol, @release}
     assert release_range?(@release)
 
     for mutated <- ["~> 1.0", "~> 1.5.0", "== 1.5.0", ">= 1.5.0"] do
@@ -38,18 +36,12 @@ defmodule BoundedAuthorityReportAdapter.DependencyDirectionTest do
   test "the active lock identifies the dependency compiled by Mix" do
     identity = ProtocolDependency.identity!()
     version = to_string(Application.spec(@protocol, :vsn))
-    lock = Map.fetch!(Lock.read(), @protocol)
 
-    case lock do
-      {:git, _, ref, [ref: ref]} ->
-        assert identity == "git:#{ref}"
-        assert version == "1.1.0"
+    assert {:hex, @protocol, ^version, _, _, _, "hexpm", outer} =
+             Map.fetch!(Lock.read(), @protocol)
 
-      {:hex, @protocol, locked_version, _, _, _, "hexpm", outer} ->
-        assert version == locked_version
-        assert identity == "hex:#{version}:#{outer}"
-        assert Version.match?(version, @release)
-    end
+    assert identity == "hex:#{version}:#{outer}"
+    assert Version.match?(version, @release)
   end
 
   test "direct and locked dependencies stay inside the adapter package boundary" do

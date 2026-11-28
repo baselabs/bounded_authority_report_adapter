@@ -33,8 +33,6 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
         # because the test-support documentation parser calls it at test time only.
         plt_add_apps: [:mix, :earmark_parser]
       ],
-      lockfile: "mix.candidate.lock",
-      protocol_release: @protocol_release,
       deps: deps(),
       package: package(),
       docs: qualified_docs(docs(), System.get_env("HEX_DOCS_SOURCE_REF")),
@@ -120,20 +118,11 @@ defmodule BoundedAuthorityReportAdapter.MixProject do
       # deps; the emitter is shape-validated and value-free
       # (lib/bounded_authority_report_adapter/telemetry.ex).
       {:telemetry, "~> 1.3"},
-      # A RANGE with a security floor, not an exact pin: a library declares the range it is
-      # compatible with and only an application locks an exact version.
-      #   * The floor is the oldest protocol release this adapter supports. Every supported
-      #     release carries the strict Ed25519 rule (BoundedAuthorityProtocol.Ed25519) that the
-      #     key refusal and self-check call, the producer-canonicality checks, and the
-      #     selector float-zero repair (erratum 6, 1.0.0 and later), so no 0.x release resolves.
-      #   * The ceiling (exclusive) is the protocol's next compatibility boundary: the next
-      #     minor while the protocol is 0.x, the next major from 1.0 on, where protocol minors
-      #     are additive or soundness repairs. Crossing it is a deliberate, reviewed change.
-      # The dependency wall test derives its probes from the floor and the ceiling, so a range
-      # move edits only this requirement, the wall's three range attributes and the locks.
-      {:bounded_authority_protocol,
-       git: "https://github.com/baselabs/bounded_authority_protocol.git",
-       ref: "2e339cec88d2831c7e5e3e848fa5ff8199764f8c"},
+      # The floor supplies the content and approval producers and the torsion-free
+      # Ed25519 key check, alongside the canonicality and selector checks from earlier releases.
+      # Protocol minors are additive or soundness repairs. The range stops at the next major.
+      # Update the dependency wall's range probes and both Hex locks when this range moves.
+      @protocol_release,
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # The install task (lib/mix/tasks) uses Igniter when present; the file
       # compiles to a Mix.raise fallback without it.

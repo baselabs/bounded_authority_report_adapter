@@ -46,12 +46,6 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     {"release reproducibility", "mix run --no-start scripts/check_reproducible.exs"}
   ]
 
-  @release_step "startsWith(steps.protocol.outputs.identity, 'hex:')"
-  @release_commands [
-    "mix run --no-start scripts/check_package.exs",
-    "mix run --no-start scripts/check_reproducible.exs"
-  ]
-
   test "release checks use the identity of the downloaded dependency in both projects" do
     jobs = YamlElixir.read_from_file!(".github/workflows/ci.yml")["jobs"]
 
@@ -82,16 +76,6 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
     assert jobs["hex-qualification"]["if"] ==
              "startsWith(needs.gate.outputs.protocol_identity, 'hex:') && " <>
                "needs.gate.outputs.protocol_identity == needs.example.outputs.protocol_identity"
-
-    for command <- @release_commands do
-      assert [%{"if" => @release_step}] =
-               Enum.filter(jobs["gate"]["steps"], &(&1["run"] == command))
-    end
-
-    source = File.read!(".github/workflows/ci.yml") |> strip_comments()
-    mutated = String.replace(source, "if: #{@release_step}", "", global: false)
-    assert mutated != source
-    refute mutated =~ Regex.compile!(workflow_battery_pattern())
   end
 
   test "mix ci boots through the env guard before any step" do
@@ -492,10 +476,7 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
   defp workflow_battery_pattern do
     @battery
     |> Enum.map_join("\\s+", fn {_name, command} ->
-      condition =
-        if command in @release_commands, do: "if: #{Regex.escape(@release_step)}\\s+", else: ""
-
-      "- name: [^\\n]+\\s+#{condition}run: #{Regex.escape(command)}"
+      "- name: [^\\n]+\\s+run: #{Regex.escape(command)}"
     end)
   end
 end

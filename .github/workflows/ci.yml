@@ -132,11 +132,9 @@ jobs:
         run: mix deps.audit
 
       - name: Package boundary (build + unpack + consumer smoke)
-        if: startsWith(steps.protocol.outputs.identity, 'hex:')
         run: mix run --no-start scripts/check_package.exs
 
       - name: Release reproducibility (two independent builds agree)
-        if: startsWith(steps.protocol.outputs.identity, 'hex:')
         run: mix run --no-start scripts/check_reproducible.exs
 
   example:
@@ -227,8 +225,7 @@ jobs:
         run: elixir scripts/check_livebooks.exs --local
 
   hex-qualification:
-    # A protocol Git candidate can pass source checks. Release qualification requires
-    # both Mix projects to resolve the same Hex release.
+    # Both Mix projects must resolve the same Hex release before qualification.
     if: startsWith(needs.gate.outputs.protocol_identity, 'hex:') && needs.gate.outputs.protocol_identity == needs.example.outputs.protocol_identity
     name: Qualify Hex archives
     needs: [gate, example, livebooks-local]
