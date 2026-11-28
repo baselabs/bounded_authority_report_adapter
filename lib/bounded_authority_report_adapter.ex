@@ -71,7 +71,9 @@ defmodule BoundedAuthorityReportAdapter do
   Key and signature shapes depend on the surface. Under this module, public keys are raw
   32-byte Ed25519 keys that pass the protocol's strict acceptance rule
   (`BoundedAuthorityProtocol.Ed25519.acceptable_public_key?/1`), and `sign/2` returns a
-  64-byte Ed25519 signature. Under `BoundedAuthorityReportAdapter.V3`, public keys are
+  64-byte Ed25519 signature. Action approval signing also requires the snapshot key to be
+  torsion free (`BoundedAuthorityProtocol.Ed25519.torsion_free?/1`), the rule approval
+  verification applies when it admits the key. Under `BoundedAuthorityReportAdapter.V3`, public keys are
   65-byte uncompressed SEC1 P-256 points (`0x04 || x || y`, checked to be on the curve),
   and `sign/2` returns the 64-byte raw `r || s` form of RFC 7518 §3.4 (a DER signature is
   refused; the adapter converts a high-S signature to low-S).
@@ -1855,7 +1857,10 @@ defmodule BoundedAuthorityReportAdapter do
   `c:sign/2`, which must sign using exactly that version or return an error. Content
   signing verifies against the captured public key without consulting the key store again.
 
-  Optional. Required for action approval signing and ES256 content-assertion signing.
+  Optional. Required for action approval signing and ES256 content-assertion signing. For
+  Ed25519 action approval signing, the captured public key must also be torsion free
+  (`BoundedAuthorityProtocol.Ed25519.torsion_free?/1`); otherwise signing returns
+  `{:error, :invalid_key_handle}` without calling `c:sign/2`.
   """
   @callback key_snapshot(handle :: term()) ::
               {:ok, {key_id :: binary(), public_key :: binary(), signing_reference :: term()}}
