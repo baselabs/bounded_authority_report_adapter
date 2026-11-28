@@ -81,7 +81,8 @@ defmodule BoundedAuthorityReportAdapter.CiAdvisoryParityTest do
                "LIBRARY_PROTOCOL" => "${{ needs.gate.outputs.protocol_identity }}",
                "EXAMPLE_PROTOCOL" => "${{ needs.example.outputs.protocol_identity }}"
              },
-             "run" => ~s([[ "$LIBRARY_PROTOCOL" == hex:* && "$LIBRARY_PROTOCOL" == "$EXAMPLE_PROTOCOL" ]]\n)
+             "run" =>
+               ~s([[ "$LIBRARY_PROTOCOL" == hex:* && "$LIBRARY_PROTOCOL" == "$EXAMPLE_PROTOCOL" ]]\n)
            }
   end
 
